@@ -1,0 +1,135 @@
+{
+  "project_name": "Jyotish AI",
+  "app_type": "hybrid_fullstack",
+  "theme": "Dark Mode Maximalism - Mystical Cosmic & Ancient Manuscript Fusion",
+  "typography": {
+    "font_pairings": "Cormorant Garamond (Headings) + Manrope (Body)",
+    "rules": {
+      "headings": {
+        "family": "Cormorant Garamond, serif",
+        "weight": "font-medium to font-bold",
+        "tracking": "tracking-tight",
+        "usage": "Use for all primary headers, astrological chart titles, and ancient text citations. Gives an authoritative, sacred, and editorial feel."
+      },
+      "body": {
+        "family": "Manrope, sans-serif",
+        "weight": "font-light to font-normal",
+        "tracking": "tracking-normal",
+        "usage": "Use for the conversational UI, chat bubbles, and dashboard data points to maintain high legibility."
+      },
+      "labels_overlines": {
+        "family": "Manrope, sans-serif",
+        "weight": "font-semibold",
+        "tracking": "tracking-[0.2em]",
+        "transform": "uppercase",
+        "usage": "Use for metadata, planet names, Dashas, and transit labels."
+      }
+    },
+    "scale": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl",
+      "h3": "text-xl sm:text-2xl",
+      "body": "text-base sm:text-sm",
+      "small": "text-xs"
+    }
+  },
+  "colors": {
+    "archetype": "Luxury / Mystical (Deep Space with Gold Accents)",
+    "palette": {
+      "background": "#080B12",
+      "surface": "#111827",
+      "surface_elevated": "#1F2937",
+      "primary": "#D4AF37",
+      "primary_hover": "#F9E596",
+      "text_primary": "#E5E7EB",
+      "text_secondary": "#9CA3AF",
+      "text_parchment": "#E0D8C3",
+      "border": "rgba(212, 175, 55, 0.2)",
+      "forbidden": ["#7351B7", "#1B93A4"]
+    },
+    "rules": {
+      "background": "Never use pure black. The background should be a deep cosmic indigo (#080B12).",
+      "borders": "Use subtle gold-tinted borders (e.g., border-[#D4AF37]/20) to separate sections, avoiding harsh white/gray lines.",
+      "contrast": "Ensure all text over dark backgrounds meets APCA standards. Use text-shadows for text layered over celestial image backgrounds.",
+      "gradients": "Avoid generic purple/blue AI gradients. If using gradients, use deep indigo fading into absolute darkness, or a very subtle metallic gold sheen."
+    }
+  },
+  "layouts": {
+    "strategy": "The 'Bento' Grid Protocol mixed with Swiss Editorial",
+    "spacing": "Generous Spacing (p-6, p-8, p-12). Create breathing room around sacred texts and charts.",
+    "dashboard_grid": {
+      "columns": "grid-cols-1 md:grid-cols-12",
+      "gap": "gap-6 or gap-8",
+      "items": "Chart visualization gets col-span-full md:col-span-8. Transits and Dashas get col-span-4."
+    },
+    "chat_interface": {
+      "sidebar": "w-72 border-r border-[#D4AF37]/20 bg-[#080B12]/80 backdrop-blur-xl (contains history and book library).",
+      "main_area": "Flex-1, centered constraints for chat bubbles. Max-width 3xl for readability."
+    },
+    "onboarding": "Centered, distraction-free layout with celestial background. Use Shadcn Form components with transparent, border-bottom only inputs."
+  },
+  "visual_enhancers": {
+    "surfaces": {
+      "glassmorphism": "Use high-end glass (bg-[#080B12]/60 backdrop-blur-xl border border-[#D4AF37]/10) for sticky headers and chat floating elements.",
+      "cards": "Flat solid surfaces (#111827) with a delicate 1px gold-tinted border. Subtle hover lift (-translate-y-1) with soft ambient gold shadow."
+    },
+    "textures": "Incorporate subtle grain/noise overlays across the background to give a tactile, ancient manuscript or cosmic dust feel.",
+    "geometry": "Incorporate subtle, low-opacity Yantra or Mandala geometric SVG patterns as absolute positioned watermarks inside dashboard cards."
+  },
+  "components": {
+    "library": "Shadcn UI + Custom Tailwind",
+    "specific_components": {
+      "buttons": "Pill-shaped or slightly rounded (rounded-md) with 1px solid gold border and transparent background, turning solid gold with dark text on hover.",
+      "chat_bubbles": "User: minimal outline. AI Astrologer: Soft elevated surface (#1F2937) with a left-accent border of gold. Inline citations must be distinct, looking like small parchment tags.",
+      "inputs": "Shadcn Input, heavily customized. Background transparent, white text, bottom border only for a sleek, mystical input feel.",
+      "forms": "Use Shadcn Form, Input, Select, and Calendar. Never use native inputs.",
+      "toasts": "Use 'sonner' for toast notifications (e.g., PDF uploaded successfully)."
+    }
+  },
+  "media": {
+    "images": [
+      {
+        "category": "Hero / Background Overlays",
+        "url": "https://images.unsplash.com/photo-1465101046530-73398c7f28ca",
+        "description": "Celestial night sky with stars, to be used with heavy dark overlay (bg-black/70) behind the main application shell or onboarding screen."
+      },
+      {
+        "category": "Sacred Geometry / Watermarks",
+        "url": "https://images.unsplash.com/photo-1659738943702-a22ddb8f87f1",
+        "description": "Gold geometry mandala, use as a very low opacity (10%) background watermark behind the Kundali chart or inside the book library cards."
+      },
+      {
+        "category": "Library / PDF Knowledge Base",
+        "url": "https://images.unsplash.com/photo-1648717008621-ee7e6acfe270",
+        "description": "Ancient manuscript texture. Can be used as a subtle texture overlay for the specific UI elements that display direct quotes/citations from the Shastras."
+      }
+    ],
+    "icons": "Use 'lucide-react' for general UI icons. For astrological symbols, use SVG assets or text-based unicode Graha symbols."
+  },
+  "accessibility": {
+    "contrast": "Ensure APCA contrast ratio is met, particularly for gold text on dark indigo.",
+    "testing": "All interactive elements (buttons, form fields, chat inputs, book cards) MUST include `data-testid` attributes (e.g., `data-testid=\"chat-submit-button\"`).",
+    "motion": "Respect `prefers-reduced-motion` for any starry background animations or card hover effects."
+  },
+  "instructions_to_main_agent": [
+    "Build out the frontend using React (Vite/Next.js structure provided) + Tailwind CSS + Shadcn UI.",
+    "Install `lucide-react` for icons and `sonner` for toast notifications.",
+    "Implement a dark theme by default, enforcing the deep cosmic indigo (#080B12) background.",
+    "Structure the app into three main views: 1) Onboarding (birth details), 2) Dashboard (Kundali chart, transits), 3) Chat/Library Interface.",
+    "Do NOT use HTML-based date pickers for the birth date; you MUST use Shadcn Calendar/Datepicker.",
+    "For the Kundali Chart, render a visual geometry (pure HTML/SVG lines) rather than just a table.",
+    "Ensure the citations in the AI chat response are styled distinctively, perhaps with a subtle manuscript background or italicized serif typography."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "Avoid generic, 'on distribution' outputs. Do not create a standard SaaS dashboard. The app must feel sacred and mystical.",
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Create depth through layered design elements with z-index hierarchy and glass-morphism effects (backdrop-blur-xl).",
+    "You MUST NOT apply universal transition (e.g., `transition: all`). Add transitions for specific interactive elements.",
+    "You MUST NOT center align the app container. Do not add `.App { text-align: center; }` in the CSS file.",
+    "Every interaction needs micro-animations - hover states, transitions, and entrance animations.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "NEVER use placeholder image URLs (like via.placeholder.com). Use the provided Unsplash URLs.",
+    "NEVER use AI assistant Emoji characters (like 🤖🧠🔮) for icons. Rely on clean Lucide icons or SVG geometry.",
+    "DO NOT use complete `transparent` background in headers, overlays, or dropdowns. Always use a solid dark color or blurred glassmorphism."
+  ]
+}
