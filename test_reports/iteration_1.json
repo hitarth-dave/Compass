@@ -1,0 +1,25 @@
+{
+  "summary": "First-pass smoke test of Jyotish AI (Vedic astrology app). Backend and frontend both healthy. All 6 requested flows verified working end-to-end: onboarding (with geocoding + Shadcn calendar DOB), dashboard (chart/dasha/transits/timeline), chat SSE streaming with citations, library browse+search, backend endpoints, and sidebar navigation + reset chart.",
+  "tested_scope": ["frontend", "backend", "integration"],
+  "passed": [
+    "GET /api/ returns 200 with expected message",
+    "GET /api/transits returns 200 with 9 planets, signs, nakshatras",
+    "GET /api/books returns 200 with 12 seeded books and chunk_count",
+    "GET /api/books/search?q=raja+yoga returns 200 with styled result set",
+    "GET /api/profile/{id} returns 200 for seed profile (Arjuna)",
+    "GET /api/profile/{id}/chart returns 200 with ascendant Kanya/Virgo + planets",
+    "POST /api/chat streams SSE: `event: citations` arrives immediately followed by delta events; assistant message accumulated 379+ chars",
+    "Dashboard renders: dashboard-title, kundali-chart (SVG North-Indian), current-dasha (Rahu), transits-card (9 live), dasha-timeline",
+    "Chat page: chat-input focus works, send triggers stream, 5 citation chips render (data-testid=citation-1..5), assistant-message populates",
+    "Library page: book-card-0 visible, search input+btn returns styled results for 'raja yoga'",
+    "Sidebar nav: nav-dashboard, nav-chat, nav-library all route correctly",
+    "Reset chart (signout-btn) clears localStorage (profile_id -> None) and routes to /onboarding",
+    "Onboarding: name/tob/place fields accept input, geocode-btn returned 'Found: New Delhi, Delhi, India', Shadcn calendar day pickable, submit-btn enables and routes to /dashboard on click"
+  ],
+  "failed": [],
+  "action_items": [],
+  "success_rate": {"backend": "100% (6/6 critical endpoints)", "frontend": "100% (all 6 flows)"},
+  "retest_needed": false,
+  "full_testing_deferred": true,
+  "notes": "PDF upload (POST /api/books/upload) not exercised in this pass — endpoint exists but not smoke-tested. Deferred to full testing agent. LLM (Claude Sonnet 4.5) integration confirmed working via real SSE stream (not mocked)."
+}
