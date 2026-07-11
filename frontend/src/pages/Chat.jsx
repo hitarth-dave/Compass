@@ -138,7 +138,7 @@ export default function Chat() {
         )}
 
         {messages.map((m, i) => (
-          <MessageBubble key={i} msg={m} />
+          <MessageBubble key={i} msg={m} idx={i} />
         ))}
         {streaming && <div className="text-[color:var(--jai-text-muted)] text-sm flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> reading the stars…</div>}
         <div ref={endRef} />
@@ -214,7 +214,7 @@ function MessageBubble({ msg }) {
               <button
                 onClick={() => setShowPassages((v) => !v)}
                 className="inline-flex items-center gap-1 text-xs text-[color:var(--jai-gold)] hover:text-[color:var(--jai-green-deep)] transition-colors ml-1"
-                data-testid={`toggle-passages-${msg.citations[0]?.idx || 0}`}
+                data-testid={`toggle-passages-${idx}`}
               >
                 {showPassages ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                 {showPassages ? "Hide retrieved passages" : "Show retrieved passages"}

@@ -26,11 +26,21 @@ User wants a Vedic astrology conversational web app. Backend uses ~100 Sanatan/H
 - P0: seed corpus (12 books, 20 passages) + PDF upload + BM25 search
 - P0: Mystical dark UI (Cormorant Garamond + Manrope), gold/indigo palette
 
+## Iteration 2 (2026-07-11) — Chart-aware + light theme
+- Palette flipped to parchment / bottle-green light theme (Cormorant + Manrope preserved)
+- KundaliChart renders planet name + degree + dignity codes (↑ Exalted, ↓ Debilitated, MT, OWN, VG) with color coding
+- astrology.py adds: house_lords (12), Vimshottari Antardasha computation, Navamsa (D9) chart, yoga detection (Gaja Kesari, Chandra Mangala, Budha-Aditya, Kemadruma, Raja Yoga), transits with house_from_lagna + house_from_moon
+- Chat handler uses skill-derived system prompt with structured response (Acknowledge/Chart Factors/Shastra Analysis/Synthesis/Prediction/Remedy)
+- Conversation memory: prior turns summarized into system prompt for continuity
+- Retrieval raised from k=5 → k=8; citations include BM25 score
+- Dashboard adds panels: D9 Navamsa chart, House Lords with lord's placement, Detected Yogas, Antardasha alongside Mahadasha
+- Chat adds "Show retrieved passages" toggle per assistant message revealing full excerpts on a parchment panel
+
 ## Backlog / Next Actions
-- P1: Divisional charts (Navamsa D9, Dashamsa D10)
-- P1: Antardasha (sub-period) computation & display
-- P1: Panchanga (tithi, yoga, karana) daily card
-- P2: User accounts & multi-chart storage
-- P2: Muhurta / auspicious timing recommendations
+- P1: Multi-chart profiles + Emergent Google Auth (user login) — next up
+- P1: Panchanga daily card (tithi, yoga, karana, hora, rahu kala)
+- P1: More divisional charts (D10 Dashamsa career, D7 Saptamsa children, D24 Chaturvimshamsa learning)
 - P2: Kundali matching (Ashtakoot) for two natives
-- P2: Vector embeddings for semantic retrieval (upgrade from BM25)
+- P2: Muhurta / auspicious timing recommendations
+- P2: Vector embeddings (upgrade from BM25) as corpus grows past ~500 chunks
+- P2: Ashtakavarga (SAV/BAV) transit strength scoring
