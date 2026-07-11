@@ -151,6 +151,7 @@ def compute_chart(dob_iso: str, tob: str, tz_offset_hours: float, lat: float, lo
     )
     asc_lon = ascmc[0] % 360
     asc_sign, asc_deg = _rashi_from_lon(asc_lon)
+    asc_nak_idx, asc_pada = _nakshatra_from_lon(asc_lon)
 
     planets_out: List[Dict] = []
     for name, pid in PLANETS:
@@ -235,6 +236,8 @@ def compute_chart(dob_iso: str, tob: str, tz_offset_hours: float, lat: float, lo
             "sign": RASHIS[asc_sign],
             "sign_en": RASHI_EN[asc_sign],
             "degree_in_sign": round(asc_deg, 2),
+            "nakshatra": NAKSHATRAS[asc_nak_idx],
+            "pada": asc_pada,
             "lord": SIGN_LORDS[asc_sign],
         },
         "planets": planets_out,
@@ -465,6 +468,7 @@ def build_navamsa(planets: List[Dict], ascendant_longitude: float) -> Dict:
             "sign": RASHIS[nav_sign],
             "sign_en": RASHI_EN[nav_sign],
             "degree_in_sign": p["degree_in_sign"],  # keep D1 degree for reference
+            "nakshatra": p.get("nakshatra", ""),
             "house": house,
             "retrograde": p.get("retrograde", False),
             "dignity": [],

@@ -1,0 +1,41 @@
+{
+  "summary": "Iteration 3 verified all 3 bug fixes + Parashara's Light chart notation end-to-end. Backend: 12/12 pytest passed (95s), now with additional assertions that chart.ascendant carries {nakshatra:'Uttara Phalguni', pada:4, lord:'Mercury'} and that every navamsa D9 planet copies nakshatra from D1. Frontend BUG FIX 1: 'idx is not defined' ReferenceError is GONE — Chat.jsx MessageBubble now destructures {msg,idx}; sent 'What is my Lagna in one sentence?' with 0 pageerrors, 0 console errors. BUG FIX 1 error-surfacing improvement verified — assistant bubble now shows the actual specific error text ('_(Error from Claude API: Failed to start streaming completion: litellm.BadRequestError: OpenAIException - Budget has been exceeded! Current cost: 0.463095, Max budget: 0.4)_') instead of generic 'Conversation failed'. BUG FIX 2: All 12 kundali-house-num text elements have DISTINCT positions matching the specified coordinates exactly — H1(280,42), H2(55,20), H3(20,55), H4(42,280), H5(20,505), H6(55,540), H7(280,518), H8(505,540), H9(540,505), H10(518,280), H11(540,55), H12(505,20). Numbers 6..5 rotate correctly for Virgo ascendant. BUG FIX 3: All 10 planet text elements (9 planets + 'As' ascendant) render with 3 tspans each and correct Parashara notation. Exact matches for Arjuna: 'As07:01UPh'(fill=#0A2E23), 'Mo01:53UAs'(#4A6FA5), 'SaR01:31UAs'(#1F3A5F), 'Ra17:37Shr'(#6B3410), 'Ma24:31PBh'(#C0392B), 'Ve18:56Rev'(#B03060), 'MeR14:18Bha'(#2E7D32), 'Su00:33Kri'(#B0341A), 'Ju15:47Ard'(#B8860B), 'KeR17:37Asl'(#5D6D6E). Retrograde markers 'SaR', 'MeR', 'KeR' correctly appended. All PLANET_COLOR mappings verified pixel-accurate. D9 chart renders 9 planets without nakshatra suffix and 12 house numbers. Regression: navamsa-card, house-lords-card, yogas-card, current-dasha, transits-card all present; 8 citation chips still populated even when LLM streaming fails; toggle-passages opens/closes retrieved-passages panel correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Chat SSE token-by-token streaming (UI)", "issue": "unverified: budget-exhausted — EMERGENT_LLM_KEY (via litellm) responded 'Budget has been exceeded! Current cost: 0.463095, Max budget: 0.4' when the browser-side chat send was tested. The stream-error path itself rendered correctly (specific error text + 8 citations + toggle passages panel), and pytest a few minutes prior successfully drove SSE end-to-end (12/12 backend tests incl. chart-aware career reply + follow-up memory, ~4000 chars). Actual token streaming from the UI is unverified only because of upstream budget exhaustion — no code issue on our side.", "affected_selectors": ["[data-testid=assistant-message]"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Top up / raise the EMERGENT_LLM_KEY budget (currently capped at $0.4 and exhausted at $0.463). Once increased, live UI chat streaming will resume — no code change needed."
+  ],
+  "critical_code_review_comments": [
+    "KundaliChart.jsx line 118: `p.name.slice(0,2)` fallback for unknown planet names could collide (e.g. 'Uranus'/'Uttara' both give 'Ur'/'Ut'); acceptable since PLANET_INITIAL covers all 9 grahas but worth adding a warn.",
+    "KundaliChart.jsx uses <text> key={p.name} but ascendant 'As' shares the H1 group — currently unique because 'As' name never collides with grahas; if a user re-orders planets in future, prefer key={`${h}-${i}-${p.name}`}.",
+    "Chat.jsx toast on stream error uses `Conversation error: ${err}` — user-friendly but may leak raw fetch messages ('Failed to fetch'). Consider a friendlier map for common network errors while keeping detail in the bubble.",
+    "backend/.env EMERGENT_LLM_KEY budget cap of $0.4 is too low for iterative testing — recommend raising to at least $5 for dev/preview.",
+    "astrology.py build_navamsa now correctly copies nakshatra to D9 planets; consider also copying nakshatra_lord for parity with D1 if downstream needs it."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py"
+  ],
+  "success_rate": {
+    "backend": "100% (12/12 pytest passed)",
+    "frontend": "100% for the 3 requested bug fixes; live UI chat streaming unverified due to upstream LLM budget exhaustion (error handling path verified instead)"
+  },
+  "test_credentials": "No auth. Profile id 96eb44c1-0d76-4050-b10f-8cf5dbc215ae (Arjuna) used throughout.",
+  "seed_data_creation": "None. Chat UI test used fresh session_id 'TEST_ui_<uuid>' to avoid stale history.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All 3 bug fixes (idx ReferenceError, house-number overlap, planet dots→Parashara notation) are confirmed fixed. Assertions for planet text now use textContent (no inter-tspan whitespace) so 'Mo01:53UAs' is the exact expected string. Ascendant 'As' entry is injected into H1 as first child by KundaliChart when `ascendant` prop is passed; Dashboard passes ascendant={asc} to D1 only, not D9. Retrograde 'R' is appended to the initial (SaR, MeR, KeR). If chat UI tests continue to hit LLM budget errors, top up EMERGENT_LLM_KEY — the frontend error-handling path is already verified working and shows the raw provider error inside the bubble.",
+  "rca of the issue": "Root cause of iteration-2 chat crash: MessageBubble was invoked with <MessageBubble key={i} msg={m} idx={i} /> but the function signature was `function MessageBubble({ msg })`, so `idx` was referenced by the toggle-passages testid template `toggle-passages-${idx}` as a bare identifier → ReferenceError. Fix (already applied): destructure `{ msg, idx }` in the component signature. Verified by sending a message with page.on('pageerror') listeners — 0 idx errors. Root cause of house-number overlap: previous coordinates placed all 12 sign-numbers on a single ring near the outer square, causing multiple to fall in the same 12° arc. Fix (already applied): each house has its own dedicated (nx,ny) inside its region (top-diamond H1 above center, side-diamonds pushed to their edges, corner triangles pinned to outer corners) — verified 12 distinct coordinates. Root cause of tiny-dots planet rendering: previous version rendered each planet as a single-character glyph or symbol at chart-relative angle without tspan structure. Fix (already applied): tspan-based rendering with initial(+R)+degree+nakshatra abbrev, color-per-planet via PLANET_COLOR — verified 10 text elements with tspanCount=3 and correct fills."
+}

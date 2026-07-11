@@ -92,12 +92,29 @@ export default function Chat() {
               return c;
             });
           } else if (evtName === "error") {
-            toast.error(data.error || "Stream error");
+            toast.error(`Claude API error: ${data.error}`);
+            setMessages((m) => {
+              const c = [...m];
+              const last = c[c.length - 1];
+              if (last && last.role === "assistant" && !last.content) {
+                c[c.length - 1] = { ...last, content: `_(Error from Claude API: ${data.error})_` };
+              }
+              return c;
+            });
           }
         }
       }
     } catch (e) {
-      toast.error("Conversation failed");
+      const err = (e && e.message) || String(e);
+      toast.error(`Conversation error: ${err}`);
+      setMessages((m) => {
+        const c = [...m];
+        const last = c[c.length - 1];
+        if (last && last.role === "assistant" && !last.content) {
+          c[c.length - 1] = { ...last, content: `_(Network / stream error: ${err})_` };
+        }
+        return c;
+      });
     } finally {
       setStreaming(false);
     }
@@ -172,7 +189,7 @@ export default function Chat() {
   );
 }
 
-function MessageBubble({ msg }) {
+function MessageBubble({ msg, idx }) {
   const [showPassages, setShowPassages] = useState(false);
   if (msg.role === "user") {
     return (

@@ -180,21 +180,21 @@ body::after {
 
 .kundali-planet {
     font-family: 'Manrope', sans-serif;
-    font-size: 15px;
-    font-weight: 600;
+    font-size: 13px;
+    font-weight: 500;
     fill: var(--jai-green-deep);
 }
 
 .kundali-planet-tag {
     font-family: 'Manrope', sans-serif;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.5px;
 }
 
 .kundali-house-num {
     font-family: 'Cormorant Garamond', serif;
-    font-size: 16px;
-    fill: rgba(15, 61, 46, 0.55);
+    font-size: 14px;
+    fill: rgba(15, 61, 46, 0.65);
     font-style: italic;
 }

@@ -42,8 +42,13 @@ class TestChartEnriched:
     def test_ascendant_shape(self, chart):
         asc = chart.get("ascendant")
         assert asc, "ascendant missing"
-        for k in ("sign_en", "sign_idx", "degree_in_sign", "lord"):
+        # Iteration 3: ascendant must now include nakshatra + pada for kundali 'As' rendering
+        for k in ("sign_en", "sign_idx", "degree_in_sign", "lord", "nakshatra", "pada"):
             assert k in asc, f"asc.{k} missing"
+        # For Arjuna seed profile: Lagna is Virgo w/ Uttara Phalguni nakshatra
+        assert asc["sign_en"] == "Virgo"
+        assert asc["nakshatra"] == "Uttara Phalguni"
+        assert asc["lord"] == "Mercury"
 
     def test_current_dasha_and_antardasha(self, chart):
         md = chart.get("current_dasha")
@@ -78,6 +83,8 @@ class TestChartEnriched:
         for p in nav["planets"]:
             for k in ("name", "sign_en", "house"):
                 assert k in p
+            # Iteration 3: D9 planets must now carry nakshatra (copied from D1) so KundaliChart d9 has data
+            assert "nakshatra" in p, f"navamsa.{p['name']}.nakshatra missing"
 
     def test_yogas_list(self, chart):
         yogas = chart.get("yogas")

@@ -81,7 +81,7 @@ export default function Dashboard() {
               <div className="font-serif-display text-2xl text-[color:var(--jai-gold)]">{asc.degree_in_sign}°</div>
             </div>
           </div>
-          <KundaliChart planets={chart.planets} ascendantSign={asc.sign_idx} />
+          <KundaliChart planets={chart.planets} ascendantSign={asc.sign_idx} ascendant={asc} />
         </div>
 
         <div className="lg:col-span-4 space-y-6">
@@ -134,7 +134,7 @@ export default function Dashboard() {
               D9 reveals second-half of life & marriage
             </div>
           </div>
-          <KundaliChart planets={navamsa.planets} ascendantSign={navamsa.ascendant.sign_idx} />
+          <KundaliChart planets={navamsa.planets} ascendantSign={navamsa.ascendant.sign_idx} showNakshatra={false} testid="kundali-chart-d9" />
         </div>
 
         <div className="lg:col-span-4 card-surface p-8" data-testid="house-lords-card">
