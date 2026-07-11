@@ -1,0 +1,220 @@
+"""Backend tests for Jyotish AI enriched chart, transits with houses, SSE chat with citations,
+conversation memory, and chat history persistence."""
+import os
+import json
+import time
+import uuid
+import pytest
+import requests
+
+BASE_URL = os.environ['REACT_APP_BACKEND_URL'].rstrip('/')
+API = f"{BASE_URL}/api"
+
+# Seeded test profile (Arjuna, 1990-05-15, Varanasi)
+TEST_PROFILE_ID = "96eb44c1-0d76-4050-b10f-8cf5dbc215ae"
+
+
+# ---------- Health / basic ----------
+class TestHealth:
+    def test_root_ok(self):
+        r = requests.get(f"{API}/", timeout=15)
+        assert r.status_code == 200
+        assert "message" in r.json()
+
+    def test_seed_profile_exists(self):
+        r = requests.get(f"{API}/profile/{TEST_PROFILE_ID}", timeout=15)
+        assert r.status_code == 200, f"Seed profile missing: {r.text}"
+        data = r.json()
+        assert data["id"] == TEST_PROFILE_ID
+        assert data["name"] == "Arjuna"
+
+
+# ---------- Enriched Chart ----------
+class TestChartEnriched:
+    """chart endpoint must expose house_lords, current_antardasha, navamsa, yogas."""
+
+    @pytest.fixture(scope="class")
+    def chart(self):
+        r = requests.get(f"{API}/profile/{TEST_PROFILE_ID}/chart", timeout=30)
+        assert r.status_code == 200, r.text
+        return r.json()
+
+    def test_ascendant_shape(self, chart):
+        asc = chart.get("ascendant")
+        assert asc, "ascendant missing"
+        for k in ("sign_en", "sign_idx", "degree_in_sign", "lord"):
+            assert k in asc, f"asc.{k} missing"
+
+    def test_current_dasha_and_antardasha(self, chart):
+        md = chart.get("current_dasha")
+        assert md is not None, "current_dasha missing"
+        for k in ("lord", "start", "end", "years"):
+            assert k in md
+        ad = chart.get("current_antardasha")
+        assert ad is not None, "current_antardasha missing"
+        for k in ("lord", "start", "end", "years"):
+            assert k in ad, f"antardasha.{k} missing"
+        # antardasha must be within mahadasha window
+        assert md["start"] <= ad["start"] <= md["end"]
+
+    def test_house_lords_12(self, chart):
+        hl = chart.get("house_lords")
+        assert hl is not None, "house_lords missing"
+        assert len(hl) == 12
+        for row in hl:
+            for k in ("house", "sign_en", "lord", "lord_sits_in_house", "lord_sits_in_sign_en"):
+                assert k in row, f"house_lord row missing {k}: {row}"
+            assert 1 <= row["house"] <= 12
+            assert 1 <= row["lord_sits_in_house"] <= 12
+
+    def test_navamsa_present(self, chart):
+        nav = chart.get("navamsa")
+        assert nav is not None, "navamsa missing"
+        assert "ascendant" in nav
+        assert "sign_en" in nav["ascendant"]
+        assert isinstance(nav["planets"], list)
+        # Should have 9 planets (Sun..Ketu)
+        assert len(nav["planets"]) == 9
+        for p in nav["planets"]:
+            for k in ("name", "sign_en", "house"):
+                assert k in p
+
+    def test_yogas_list(self, chart):
+        yogas = chart.get("yogas")
+        assert yogas is not None, "yogas missing"
+        assert isinstance(yogas, list)
+        # May be empty; if present items must have name and detail
+        for y in yogas:
+            assert "name" in y and "detail" in y
+
+
+# ---------- Transits with house tags ----------
+class TestTransits:
+    def test_transits_with_profile_id_has_houses(self):
+        r = requests.get(f"{API}/transits", params={"profile_id": TEST_PROFILE_ID}, timeout=20)
+        assert r.status_code == 200, r.text
+        data = r.json()
+        assert "planets" in data
+        # 9 planets incl Ketu
+        assert len(data["planets"]) == 9
+        for t in data["planets"]:
+            assert "house_from_lagna" in t, f"missing house_from_lagna for {t.get('name')}"
+            assert "house_from_moon" in t, f"missing house_from_moon for {t.get('name')}"
+            assert 1 <= t["house_from_lagna"] <= 12
+            assert 1 <= t["house_from_moon"] <= 12
+
+    def test_transits_without_profile_id_ok(self):
+        r = requests.get(f"{API}/transits", timeout=20)
+        assert r.status_code == 200
+        data = r.json()
+        # No house tags when natal not provided
+        for t in data["planets"]:
+            assert "house_from_lagna" not in t
+
+
+# ---------- SSE Chat: citations, deltas, done, chart-aware ----------
+def _read_sse(response, max_seconds=90):
+    """Iterate SSE stream, return list of (event, data)."""
+    events = []
+    buf = ""
+    deadline = time.time() + max_seconds
+    for chunk in response.iter_content(chunk_size=None, decode_unicode=True):
+        if not chunk:
+            continue
+        buf += chunk
+        while "\n\n" in buf:
+            block, buf = buf.split("\n\n", 1)
+            lines = block.split("\n")
+            evt = next((l[6:].strip() for l in lines if l.startswith("event:")), None)
+            data_line = next((l[5:].strip() for l in lines if l.startswith("data:")), None)
+            if data_line is None:
+                continue
+            try:
+                data = json.loads(data_line)
+            except Exception:
+                data = data_line
+            events.append((evt, data))
+            if evt == "done":
+                return events
+        if time.time() > deadline:
+            break
+    return events
+
+
+class TestChatSSE:
+    session_id = f"TEST_{uuid.uuid4()}"
+
+    def test_chat_career_question_chart_aware(self):
+        payload = {
+            "profile_id": TEST_PROFILE_ID,
+            "session_id": self.session_id,
+            "message": "Why is my career stuck? What does my 10th house say?",
+        }
+        with requests.post(f"{API}/chat", json=payload, stream=True, timeout=120) as r:
+            assert r.status_code == 200, r.text
+            events = _read_sse(r, max_seconds=120)
+
+        # Assert we saw citations, deltas, and done
+        evt_names = [e for e, _ in events]
+        assert "citations" in evt_names, f"no citations event, events={evt_names[:8]}"
+        assert "delta" in evt_names, f"no delta events, events={evt_names[:8]}"
+        assert "done" in evt_names, f"no done event, events={evt_names[-5:]}"
+
+        # Citations structure
+        cits = next(d for e, d in events if e == "citations")
+        assert isinstance(cits, list)
+        assert len(cits) > 0
+        for c in cits:
+            for k in ("idx", "book", "chapter", "text", "score"):
+                assert k in c, f"citation missing {k}: {c}"
+
+        # Accumulate delta text
+        full = "".join(d.get("text", "") for e, d in events if e == "delta")
+        assert len(full) > 100, f"assistant reply too short ({len(full)} chars): {full!r}"
+        low = full.lower()
+        # Chart-aware: mention 10th house/lord AND current dasha (Rahu) or antardasha planet
+        mentions_10th = "10th" in low or "tenth" in low or "10 th" in low
+        mentions_dasha = ("rahu" in low) or ("mahadasha" in low) or ("antardasha" in low) or ("dasha" in low)
+        mentions_mercury_or_lord = "mercury" in low or "10th lord" in low or "tenth lord" in low
+        assert mentions_10th, f"reply not chart-aware (no 10th house): {full[:400]}"
+        assert mentions_dasha, f"reply not dasha-aware: {full[:400]}"
+        assert mentions_mercury_or_lord, f"reply doesn't mention 10th lord/Mercury: {full[:400]}"
+
+        # Save session_id for the follow-up memory test
+        TestChatSSE._first_full = full
+
+    def test_conversation_memory_followup(self):
+        # Use the same session used above
+        payload = {
+            "profile_id": TEST_PROFILE_ID,
+            "session_id": self.session_id,
+            "message": "And what remedy?",
+        }
+        with requests.post(f"{API}/chat", json=payload, stream=True, timeout=120) as r:
+            assert r.status_code == 200, r.text
+            events = _read_sse(r, max_seconds=120)
+        assert any(e == "done" for e, _ in events)
+        full = "".join(d.get("text", "") for e, d in events if e == "delta")
+        assert len(full) > 50, f"follow-up too short: {full!r}"
+        low = full.lower()
+        # Must NOT be an off-topic clarifier like 'remedy for what?'
+        clarify_signal = "remedy for what" in low or "which topic" in low or "please specify" in low
+        assert not clarify_signal, f"assistant asked for clarification instead of continuing context: {full[:400]}"
+        # Must reference context: career/10th/mercury/rahu remedy hints
+        topical = any(k in low for k in ["mercury", "career", "10th", "tenth", "rahu"])
+        assert topical, f"follow-up not context-aware: {full[:400]}"
+
+    def test_history_persisted(self):
+        # Give MongoDB a moment
+        time.sleep(1)
+        r = requests.get(f"{API}/chat/{self.session_id}/history", timeout=20)
+        assert r.status_code == 200
+        msgs = r.json().get("messages", [])
+        # At least 4 messages: 2 user + 2 assistant
+        assert len(msgs) >= 4, f"expected >=4 messages, got {len(msgs)}"
+        roles = [m["role"] for m in msgs]
+        assert roles.count("user") >= 2
+        assert roles.count("assistant") >= 2
+        # Assistant messages must carry citations
+        assistants = [m for m in msgs if m["role"] == "assistant"]
+        assert any((m.get("citations") or []) for m in assistants), "no citations persisted on any assistant message"

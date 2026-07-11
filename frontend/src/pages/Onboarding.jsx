@@ -88,15 +88,14 @@ export default function Onboarding() {
     <div className="relative min-h-screen flex items-center justify-center px-6 py-16" data-testid="onboarding-page">
       <div className="absolute inset-0 -z-10">
         <div
-          className="absolute inset-0 opacity-40"
+          className="absolute inset-0 opacity-25"
           style={{
-            backgroundImage: "url(https://images.unsplash.com/photo-1465101046530-73398c7f28ca?w=1920&q=80)",
+            backgroundImage: "url(https://images.unsplash.com/photo-1648717008621-ee7e6acfe270?w=1920&q=80)",
             backgroundSize: "cover",
             backgroundPosition: "center",
           }}
         />
-        <div className="absolute inset-0 bg-[color:var(--jai-bg)]/85" />
-        <div className="starfield opacity-70" />
+        <div className="absolute inset-0 bg-[color:var(--jai-bg)]/80" />
       </div>
 
       <div className="relative w-full max-w-2xl">

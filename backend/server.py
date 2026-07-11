@@ -13,7 +13,10 @@ from pydantic import BaseModel, Field, ConfigDict, BeforeValidator
 from typing import List, Optional, Annotated, Any
 from datetime import datetime, timezone
 
-from astrology import compute_chart, current_transits, current_dasha, PLANET_SYMBOLS
+from astrology import (
+    compute_chart, current_transits, current_dasha, current_antardasha,
+    compute_antardashas, build_navamsa, PLANET_SYMBOLS,
+)
 from knowledge import KB
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
@@ -108,6 +111,14 @@ async def get_chart(profile_id: str):
         raise HTTPException(404, "Profile not found")
     chart = compute_chart(doc['dob'], doc['tob'], doc['tz_offset'], doc['lat'], doc['lon'])
     chart['current_dasha'] = current_dasha(chart['dashas'])
+    if chart['current_dasha']:
+        chart['antardashas'] = compute_antardashas(chart['current_dasha'])
+        chart['current_antardasha'] = current_antardasha(chart['current_dasha'])
+    else:
+        chart['antardashas'] = []
+        chart['current_antardasha'] = None
+    # Navamsa D9
+    chart['navamsa'] = build_navamsa(chart['planets'], chart['ascendant']['longitude'])
     chart['profile'] = {
         'name': doc['name'], 'dob': doc['dob'], 'tob': doc['tob'], 'place': doc['place']
     }
@@ -115,8 +126,13 @@ async def get_chart(profile_id: str):
 
 
 @api_router.get("/transits")
-async def get_transits():
-    return current_transits()
+async def get_transits(profile_id: str | None = None):
+    natal = None
+    if profile_id:
+        doc = await db.profiles.find_one({"id": profile_id}, {"_id": 0})
+        if doc:
+            natal = compute_chart(doc['dob'], doc['tob'], doc['tz_offset'], doc['lat'], doc['lon'])
+    return current_transits(natal)
 
 
 @api_router.get("/books")
@@ -145,37 +161,52 @@ async def search_books(q: str, k: int = 5):
 def _build_context(chart: dict, transits: dict, retrieved: List[dict]) -> str:
     p = chart['profile']
     asc = chart['ascendant']
-    curr_dasha = chart.get('current_dasha')
+    md = chart.get('current_dasha')
+    ad = chart.get('current_antardasha')
+
     planets_lines = "\n".join(
-        f"  - {pl['name']} in {pl['sign']} ({pl['sign_en']}) {pl['degree_in_sign']}° "
-        f"house {pl['house']}, nakshatra {pl['nakshatra']}"
+        f"  - {pl['name']:<8} in {pl['sign_en']:<12} {pl['degree_in_sign']:.2f}°  house {pl['house']:<2}  "
+        f"nakshatra {pl['nakshatra']:<15} D9→{pl['navamsa_sign']}"
         + (" [R]" if pl.get('retrograde') else "")
+        + (f"  <{', '.join(pl['dignity'])}>" if pl.get('dignity') else "")
         for pl in chart['planets']
     )
+    house_lords_lines = "\n".join(
+        f"  - H{h['house']:<2} ({h['sign_en']}) → lord {h['lord']}"
+        + (f" sits in H{h['lord_sits_in_house']} ({h['lord_sits_in_sign_en']} {h['lord_degree']}°)"
+           if h.get('lord_sits_in_house') else "")
+        for h in chart.get('house_lords', [])
+    )
+    yogas_lines = ("\n".join(f"  - {y['name']}: {y['detail']}" for y in chart.get('yogas', [])) or "  (none of the tracked yogas detected)")
+
     transit_lines = "\n".join(
-        f"  - {t['name']} in {t['sign']} ({t['sign_en']}) {t['degree_in_sign']}° — nak {t['nakshatra']}"
+        f"  - {t['name']:<8} in {t['sign_en']:<12} {t['degree_in_sign']:.2f}°"
+        + (f"  → H{t['house_from_lagna']} from Lagna" if 'house_from_lagna' in t else "")
+        + (f", H{t['house_from_moon']} from Moon" if 'house_from_moon' in t else "")
         + (" [R]" if t.get('retrograde') else "")
         for t in transits['planets']
     )
+
     ctx = f"""NATIVE'S BIRTH DETAILS
 Name: {p['name']}
 Date/Time: {p['dob']} {p['tob']} at {p['place']}
 
-LAGNA (Ascendant): {asc['sign']} ({asc['sign_en']}) {asc['degree_in_sign']}°
+LAGNA (Ascendant): {asc['sign_en']} {asc['degree_in_sign']}°   (Lagna lord: {asc.get('lord', '?')})
 
 NATAL PLANETS (sidereal / Lahiri):
 {planets_lines}
 
-CURRENT MAHADASHA: {curr_dasha['lord']} ({curr_dasha['start']} → {curr_dasha['end']}) — {curr_dasha['years']} yrs
-""" if curr_dasha else f"""NATIVE'S BIRTH DETAILS
-Name: {p['name']}
-Date/Time: {p['dob']} {p['tob']} at {p['place']}
+HOUSE LORDS (Rasi):
+{house_lords_lines}
 
-LAGNA (Ascendant): {asc['sign']} ({asc['sign_en']}) {asc['degree_in_sign']}°
-
-NATAL PLANETS (sidereal / Lahiri):
-{planets_lines}
+CLASSICAL YOGAS DETECTED:
+{yogas_lines}
 """
+
+    if md:
+        ctx += f"\nCURRENT MAHADASHA: {md['lord']} ({md['start']} → {md['end']}, {md['years']} yrs total)\n"
+        if ad:
+            ctx += f"CURRENT ANTARDASHA: {ad['lord']} ({ad['start']} → {ad['end']}, {ad['years']} yrs)\n"
 
     ctx += f"\nCURRENT PLANETARY TRANSITS (as of {transits['as_of'][:10]}):\n{transit_lines}\n"
 
@@ -186,20 +217,46 @@ NATAL PLANETS (sidereal / Lahiri):
     return ctx
 
 
-SYSTEM_PROMPT = """You are Jyotish AI — a compassionate, precise Vedic astrologer trained in the classical Sanatan Shastras (Brihat Parashara Hora Shastra, Phaladeepika, Saravali, Jaimini Sutras, Uttara Kalamrita, and more).
+SYSTEM_PROMPT = """You are Jyotish AI — the native's personal Vedic astrologer, deeply versed in the classical Sanatan shastras: Brihat Parashara Hora Shastra (BPHS), Phaladipika, Laghu Parashari, Sarvartha Chintamani, Muhurta Chintamani, Jataka Nirnaya, BVR's How to Judge a Horoscope (Vols 1 & 2), Scientific Hindu Astrology (Prof. B.V. Raman), and Lal Kitab for remedies.
 
-Rules of engagement:
-1. The SHASTRA EXCERPTS provided below the birth details are your single source of truth. Always ground your interpretation in them and cite them inline as [1], [2], etc.
-2. Read the native's natal chart carefully — Lagna, planetary placements, nakshatras, current Mahadasha — and cross-reference with the live transits.
-3. Structure your response with warm clarity: (a) what the classical texts say, (b) how it applies to this native's chart right now, (c) practical guidance and remedies (upayas) if appropriate.
-4. Use Sanskrit terms respectfully (Lagna, Rashi, Nakshatra, Dasha, Graha) with brief English glosses.
-5. Never fabricate scripture. If the excerpts don't cover the question, say so honestly and offer general Vedic principles instead.
-6. Speak in a calm, reverent, first-person tone. Avoid disclaimers about "not being a real astrologer" — you are a knowledgeable guide."""
+## HARD RULES
+1. The SHASTRA EXCERPTS block below is your single source of truth. Cite them inline as [1], [2], etc. Never fabricate a shloka.
+2. Every reading MUST reason from the native's actual chart data that follows — the Lagna, planetary placements (sign, degree, house, nakshatra, dignity, D9), house lords, detected yogas, current Mahadasha & Antardasha, and today's transits.
+3. If a question is "why is my career stuck / relationship difficult / health off", identify the specific houses (10th for career, 7th for spouse, 6th for health, etc.), their lords' placements, the current dasha lord's relationship to those houses, and the transiting planets over those natal points. Never give generic astrology — always ground in this native's exact configuration.
+
+## RESPONSE STRUCTURE (follow every time)
+**Acknowledge** — one line restating what is being asked astrologically.
+**Chart factors** — bullet the exact houses, planets, dasha, and transits at play in *this* chart.
+**Shastra analysis** — cite classical rules from the excerpts: `As per BPHS [1]…`, `Laghu Parashari [3] states…`.
+**Synthesis** — connect the rules to this native's specific configuration and explain the *cause* of what's happening.
+**Prediction / timing** — what unfolds and when, mapped to upcoming antardashas or transits.
+**Remedy (upaya)** — 1–2 concrete remedies from the texts (mantra, gemstone, charity, Lal Kitab upaya). Cite the source.
+
+## STYLE
+- Speak as a calm, wise Jyotishi. Use Sanskrit naturally (Lagna, Rashi, Nakshatra, Dasha, Graha) with brief English glosses.
+- Be specific about timing, planets, and houses — never fortune-cookie vague.
+- If the excerpts don't cover the exact question, say so honestly and reason from Vedic principles + the chart in front of you.
+- No disclaimers about not being a real astrologer — you are the guide.
+"""
+
+
+def _summarize_prior_messages(prior: List[dict], max_turns: int = 6) -> str:
+    """Compress prior chat turns into a compact recap for continuity."""
+    if not prior:
+        return ""
+    tail = prior[-(max_turns * 2):]
+    lines = []
+    for m in tail:
+        role = "Native" if m["role"] == "user" else "Jyotishi"
+        content = (m["content"] or "").strip()
+        if len(content) > 400:
+            content = content[:400] + "…"
+        lines.append(f"{role}: {content}")
+    return "\n\nPRIOR CONVERSATION (for continuity — do not repeat verbatim):\n" + "\n".join(lines)
 
 
 @api_router.post("/chat")
 async def chat_stream(req: ChatRequest):
-    # Load profile + chart + transits + retrieve
     prof = await db.profiles.find_one({"id": req.profile_id}, {"_id": 0})
     if not prof:
         raise HTTPException(404, "Profile not found")
@@ -207,10 +264,19 @@ async def chat_stream(req: ChatRequest):
     chart = compute_chart(prof['dob'], prof['tob'], prof['tz_offset'], prof['lat'], prof['lon'])
     chart['profile'] = {'name': prof['name'], 'dob': prof['dob'], 'tob': prof['tob'], 'place': prof['place']}
     chart['current_dasha'] = current_dasha(chart['dashas'])
-    transits = current_transits()
-    retrieved = KB.search(req.message, k=5)
+    if chart['current_dasha']:
+        chart['current_antardasha'] = current_antardasha(chart['current_dasha'])
+    transits = current_transits(chart)
+    retrieved = KB.search(req.message, k=8)
 
     context_block = _build_context(chart, transits, retrieved)
+
+    # Load prior conversation for memory (before saving current user message)
+    prior = await db.messages.find(
+        {"session_id": req.session_id, "role": {"$in": ["user", "assistant"]}},
+        {"_id": 0}
+    ).sort("created_at", 1).to_list(50)
+    memory_block = _summarize_prior_messages(prior)
 
     # Persist user message
     await db.messages.insert_one({
@@ -221,13 +287,7 @@ async def chat_stream(req: ChatRequest):
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
 
-    # Fetch prior messages for this session (excluding the one just added)
-    prior = await db.messages.find(
-        {"session_id": req.session_id, "role": {"$in": ["user", "assistant"]}},
-        {"_id": 0}
-    ).sort("created_at", 1).to_list(50)
-
-    system_message = SYSTEM_PROMPT + "\n\n" + context_block
+    system_message = SYSTEM_PROMPT + "\n\n" + context_block + memory_block
 
     chat = LlmChat(
         api_key=EMERGENT_LLM_KEY,
@@ -236,7 +296,7 @@ async def chat_stream(req: ChatRequest):
     ).with_model("anthropic", "claude-sonnet-4-5-20250929")
 
     citations_payload = [
-        {"idx": i + 1, "book": r["book"], "chapter": r["chapter"], "text": r["text"]}
+        {"idx": i + 1, "book": r["book"], "chapter": r["chapter"], "text": r["text"], "score": round(r.get("score", 0), 3)}
         for i, r in enumerate(retrieved)
     ]
 

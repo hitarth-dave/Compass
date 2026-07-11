@@ -5,44 +5,53 @@
 @tailwind utilities;
 
 :root {
-    --jai-bg: #080B12;
-    --jai-surface: #111827;
-    --jai-surface-2: #1F2937;
-    --jai-gold: #D4AF37;
-    --jai-gold-soft: #F9E596;
-    --jai-text: #E5E7EB;
-    --jai-text-muted: #9CA3AF;
-    --jai-parchment: #E0D8C3;
-    --jai-border: rgba(212, 175, 55, 0.22);
+    /* Parchment + Bottle Green palette */
+    --jai-bg: #F7F1E1;              /* warm cream / aged parchment */
+    --jai-bg-2: #EFE6CD;            /* slightly deeper parchment */
+    --jai-surface: #FFFDF6;         /* pure elevated surface */
+    --jai-surface-2: #FBF4DE;       /* second elevated */
+    --jai-green: #0F3D2E;           /* bottle green primary text */
+    --jai-green-deep: #0A2E23;      /* deepest ink green */
+    --jai-green-soft: #2E5D4A;      /* softer green */
+    --jai-olive: #5C6A5A;           /* muted olive */
+    --jai-gold: #B8860B;            /* dark goldenrod accent */
+    --jai-gold-soft: #DAA520;       /* lighter gold hover */
+    --jai-terracotta: #A0522D;      /* warm accent */
+    --jai-parchment-ink: #1F2A24;   /* near-black ink */
+    --jai-text: var(--jai-green);
+    --jai-text-muted: var(--jai-olive);
+    --jai-parchment: var(--jai-parchment-ink);
+    --jai-border: rgba(15, 61, 46, 0.18);
+    --jai-border-gold: rgba(184, 134, 11, 0.35);
 }
 
 @layer base {
     :root {
-        --background: 224 32% 6%;
-        --foreground: 220 14% 91%;
-        --card: 220 33% 10%;
-        --card-foreground: 220 14% 91%;
-        --popover: 220 33% 10%;
-        --popover-foreground: 220 14% 91%;
-        --primary: 44 65% 52%;
-        --primary-foreground: 224 32% 6%;
-        --secondary: 220 20% 15%;
-        --secondary-foreground: 220 14% 91%;
-        --muted: 220 20% 15%;
-        --muted-foreground: 220 9% 65%;
-        --accent: 44 65% 52%;
-        --accent-foreground: 224 32% 6%;
-        --destructive: 0 62% 45%;
-        --destructive-foreground: 220 14% 91%;
-        --border: 44 45% 30%;
-        --input: 220 20% 15%;
-        --ring: 44 65% 52%;
+        --background: 46 55% 92%;          /* parchment */
+        --foreground: 155 60% 15%;         /* bottle green */
+        --card: 46 60% 98%;
+        --card-foreground: 155 60% 15%;
+        --popover: 46 60% 98%;
+        --popover-foreground: 155 60% 15%;
+        --primary: 155 60% 15%;            /* bottle green */
+        --primary-foreground: 46 55% 96%;
+        --secondary: 46 45% 88%;
+        --secondary-foreground: 155 60% 15%;
+        --muted: 46 45% 88%;
+        --muted-foreground: 100 8% 38%;
+        --accent: 42 84% 38%;              /* gold */
+        --accent-foreground: 46 55% 96%;
+        --destructive: 8 55% 45%;
+        --destructive-foreground: 46 55% 96%;
+        --border: 155 40% 25%;
+        --input: 46 40% 82%;
+        --ring: 42 84% 38%;
         --radius: 0.5rem;
     }
 }
 
 * {
-    border-color: hsl(var(--border) / 0.35);
+    border-color: hsl(var(--border) / 0.18);
 }
 
 html, body {
@@ -60,8 +69,9 @@ body::before {
     inset: 0;
     pointer-events: none;
     z-index: 0;
-    background-image: radial-gradient(circle at 20% 10%, rgba(212, 175, 55, 0.06), transparent 40%),
-        radial-gradient(circle at 80% 80%, rgba(212, 175, 55, 0.04), transparent 45%);
+    background-image:
+        radial-gradient(circle at 15% 10%, rgba(184, 134, 11, 0.08), transparent 40%),
+        radial-gradient(circle at 85% 90%, rgba(15, 61, 46, 0.06), transparent 45%);
 }
 
 body::after {
@@ -70,13 +80,14 @@ body::after {
     inset: 0;
     pointer-events: none;
     z-index: 0;
-    opacity: 0.035;
+    opacity: 0.06;
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.6'/></svg>");
 }
 
 .font-serif-display {
     font-family: 'Cormorant Garamond', ui-serif, Georgia, serif;
     letter-spacing: -0.01em;
+    color: var(--jai-green-deep);
 }
 
 .overline {
@@ -89,27 +100,40 @@ body::after {
 }
 
 .gold-border {
-    border: 1px solid var(--jai-border);
+    border: 1px solid var(--jai-border-gold);
 }
 
 .gold-btn {
-    border: 1px solid var(--jai-gold);
-    color: var(--jai-gold);
+    border: 1px solid var(--jai-green);
+    color: var(--jai-green);
     background: transparent;
     transition: background-color 220ms ease, color 220ms ease, transform 220ms ease;
 }
 
 .gold-btn:hover {
+    background: var(--jai-green);
+    color: var(--jai-surface);
+}
+
+.gold-accent-btn {
+    border: 1px solid var(--jai-gold);
+    color: var(--jai-gold);
+    background: transparent;
+    transition: background-color 220ms ease, color 220ms ease;
+}
+
+.gold-accent-btn:hover {
     background: var(--jai-gold);
-    color: #0b0f18;
+    color: var(--jai-surface);
 }
 
 .card-surface {
-    background: linear-gradient(180deg, rgba(31, 41, 55, 0.55), rgba(17, 24, 39, 0.85));
+    background: linear-gradient(180deg, rgba(255, 253, 246, 0.98), rgba(251, 244, 222, 0.88));
     border: 1px solid var(--jai-border);
     border-radius: 14px;
     position: relative;
     overflow: hidden;
+    box-shadow: 0 1px 2px rgba(15, 61, 46, 0.04), 0 8px 24px rgba(15, 61, 46, 0.06);
 }
 
 .card-surface::before {
@@ -117,19 +141,11 @@ body::after {
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background-image: radial-gradient(circle at 100% 0%, rgba(212, 175, 55, 0.08), transparent 40%);
+    background-image: radial-gradient(circle at 100% 0%, rgba(184, 134, 11, 0.08), transparent 45%);
 }
 
-.starfield {
-    position: absolute;
-    inset: 0;
-    background-image:
-        radial-gradient(1px 1px at 20% 30%, rgba(255, 255, 255, 0.6), transparent 60%),
-        radial-gradient(1px 1px at 70% 60%, rgba(255, 255, 255, 0.5), transparent 60%),
-        radial-gradient(1.5px 1.5px at 40% 80%, rgba(212, 175, 55, 0.4), transparent 60%),
-        radial-gradient(1px 1px at 90% 20%, rgba(255, 255, 255, 0.7), transparent 60%),
-        radial-gradient(1px 1px at 10% 70%, rgba(255, 255, 255, 0.4), transparent 60%),
-        radial-gradient(1.2px 1.2px at 55% 15%, rgba(212, 175, 55, 0.5), transparent 60%);
+.parchment-tint {
+    background: linear-gradient(180deg, rgba(247, 241, 225, 0.95), rgba(239, 230, 205, 0.85));
 }
 
 @keyframes fadeUp {
@@ -143,36 +159,42 @@ body::after {
 .fade-up.delay-3 { animation-delay: 270ms; }
 
 @keyframes pulseGlow {
-    0%, 100% { box-shadow: 0 0 0 rgba(212, 175, 55, 0); }
-    50% { box-shadow: 0 0 30px rgba(212, 175, 55, 0.25); }
+    0%, 100% { box-shadow: 0 0 0 rgba(184, 134, 11, 0); }
+    50% { box-shadow: 0 0 30px rgba(184, 134, 11, 0.25); }
 }
 
 .glow-hover:hover { animation: pulseGlow 2.2s ease-in-out infinite; }
 
-/* Custom selection */
-::selection { background: rgba(212, 175, 55, 0.4); color: #0b0f18; }
+::selection { background: rgba(184, 134, 11, 0.35); color: var(--jai-green-deep); }
 
-/* Scrollbar */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(212, 175, 55, 0.25); border-radius: 8px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(212, 175, 55, 0.45); }
+::-webkit-scrollbar-thumb { background: rgba(15, 61, 46, 0.2); border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(15, 61, 46, 0.4); }
 
-/* Chart glyph */
+/* Kundali chart glyph */
 .kundali-cell {
-    stroke: rgba(212, 175, 55, 0.55);
-    fill: rgba(17, 24, 39, 0.55);
+    stroke: rgba(15, 61, 46, 0.65);
+    fill: rgba(255, 253, 246, 0.65);
 }
 
 .kundali-planet {
     font-family: 'Manrope', sans-serif;
-    font-size: 12px;
+    font-size: 15px;
     font-weight: 600;
-    fill: var(--jai-gold-soft);
+    fill: var(--jai-green-deep);
+}
+
+.kundali-planet-tag {
+    font-family: 'Manrope', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
 }
 
 .kundali-house-num {
     font-family: 'Cormorant Garamond', serif;
-    font-size: 14px;
-    fill: rgba(224, 216, 195, 0.55);
+    font-size: 16px;
+    fill: rgba(15, 61, 46, 0.55);
+    font-style: italic;
 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Send, Loader2, Sparkles, ScrollText } from "lucide-react";
+import { Send, Loader2, Sparkles, ScrollText, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -173,10 +173,11 @@ export default function Chat() {
 }
 
 function MessageBubble({ msg }) {
+  const [showPassages, setShowPassages] = useState(false);
   if (msg.role === "user") {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[80%] rounded-2xl px-5 py-3 border border-[color:var(--jai-border)] bg-[color:var(--jai-surface)]/40 text-[color:var(--jai-text)]" data-testid="user-message">
+        <div className="max-w-[80%] rounded-2xl px-5 py-3 bg-[color:var(--jai-green)] text-[color:var(--jai-surface)] shadow-sm" data-testid="user-message">
           {msg.content}
         </div>
       </div>
@@ -192,24 +193,44 @@ function MessageBubble({ msg }) {
           <FormattedText text={msg.content} citations={msg.citations || []} />
         </div>
         {msg.citations && msg.citations.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {msg.citations.map((c) => (
-              <TooltipProvider key={c.idx} delayDuration={100}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border border-[color:var(--jai-border)] bg-[color:var(--jai-surface)]/60 text-[color:var(--jai-parchment)] cursor-help" data-testid={`citation-${c.idx}`}>
-                      <ScrollText size={11} className="text-[color:var(--jai-gold)]" />
-                      [{c.idx}] {c.book}
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-md bg-[color:var(--jai-surface)] border-[color:var(--jai-border)] text-[color:var(--jai-parchment)]">
-                    <div className="text-[10px] uppercase tracking-widest text-[color:var(--jai-gold)] mb-1">{c.chapter}</div>
-                    <div className="italic font-serif-display text-sm leading-relaxed">{c.text}</div>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            ))}
-          </div>
+          <>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {msg.citations.map((c) => (
+                <TooltipProvider key={c.idx} delayDuration={100}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border border-[color:var(--jai-border)] bg-[color:var(--jai-surface)] text-[color:var(--jai-green-deep)] cursor-help" data-testid={`citation-${c.idx}`}>
+                        <ScrollText size={11} className="text-[color:var(--jai-gold)]" />
+                        [{c.idx}] {c.book}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-md bg-[color:var(--jai-surface)] border-[color:var(--jai-border)] text-[color:var(--jai-parchment)]">
+                      <div className="text-[10px] uppercase tracking-widest text-[color:var(--jai-gold)] mb-1">{c.chapter}</div>
+                      <div className="italic font-serif-display text-sm leading-relaxed">{c.text}</div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ))}
+              <button
+                onClick={() => setShowPassages((v) => !v)}
+                className="inline-flex items-center gap-1 text-xs text-[color:var(--jai-gold)] hover:text-[color:var(--jai-green-deep)] transition-colors ml-1"
+                data-testid={`toggle-passages-${msg.citations[0]?.idx || 0}`}
+              >
+                {showPassages ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                {showPassages ? "Hide retrieved passages" : "Show retrieved passages"}
+              </button>
+            </div>
+            {showPassages && (
+              <div className="mt-4 space-y-3 parchment-tint rounded-lg p-5 border border-[color:var(--jai-border)]" data-testid="retrieved-passages">
+                {msg.citations.map((c) => (
+                  <div key={c.idx} className="border-l-2 border-[color:var(--jai-gold)]/60 pl-4">
+                    <div className="text-[10px] uppercase tracking-widest text-[color:var(--jai-gold)]">[{c.idx}] {c.book} · {c.chapter}</div>
+                    <div className="mt-1 italic font-serif-display text-sm leading-relaxed text-[color:var(--jai-parchment)]">"{c.text}"</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

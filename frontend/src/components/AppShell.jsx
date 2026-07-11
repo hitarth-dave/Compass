@@ -27,7 +27,7 @@ export default function AppShell({ children }) {
               <Sparkles size={18} className="text-[color:var(--jai-gold)]" />
             </div>
             <div>
-              <div className="font-serif-display text-2xl leading-none text-[color:var(--jai-gold-soft)]">Jyotish AI</div>
+              <div className="font-serif-display text-2xl leading-none text-[color:var(--jai-green-deep)]">Jyotish AI</div>
               <div className="overline mt-1">Vedic Counsel</div>
             </div>
           </div>

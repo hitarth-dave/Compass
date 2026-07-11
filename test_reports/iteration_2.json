@@ -1,0 +1,24 @@
+{
+  "summary": "Iteration 2 verified all 8 features from the review request end-to-end. Backend: 12/12 pytest tests passed including enriched chart (house_lords[12], current_antardasha, navamsa D9 with 9 planets, yogas), /api/transits with house_from_lagna + house_from_moon on every planet, SSE chat streaming with citations→delta→done, chart-aware career response (mentions 10th house, Mercury, Rahu, Antardasha), conversation memory retention on 'And what remedy?' follow-up (no clarifier, topical remedies), and /api/chat/{session_id}/history persisting citations. Frontend: Dashboard renders navamsa-card (D9 Lagna Pisces + 9 planet elements), house-lords-card (H1..H12 with lord sits-in-house), yogas-card (empty state message shown for Arjuna), current-dasha shows Rahu MD + Moon AD (Antardasha), transits show H10, H9, H7, H6 etc tags. Chat page: 8 citation chips (data-testid=citation-1..8), toggle-passages-1 button opens/closes retrieved-passages parchment panel with full excerpts. Kundali SVG shows 9 planets like 'Sat ℞ 2°OWN·VG', 'Ven 19°↑', 'Moon 2°VG'. Follow-up 'And what remedy?' returned Mercury-strengthening, Rahu-appeasement, Moon-antardasha remedies grounded in prior context — memory works.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Chat.jsx MessageBubble uses `toggle-passages-${msg.citations[0]?.idx || 0}` which yields the same testid ('toggle-passages-1') for every assistant message on the page — makes selecting a specific message's toggle ambiguous. Consider including message index in the testid.",
+    "server.py:307 catches Exception during SSE streaming but still persists an empty assistant message if the LLM never emits deltas — could pollute history on provider failure. Consider only persisting when `full` is non-empty or storing an explicit error marker.",
+    "backend/.env uses `MONGO_URL=\"mongodb://localhost:27017\"` with quotes; motor accepts it but the quoted form can silently break in shells that don't strip quotes. Not blocking here.",
+    "chat_stream loads prior messages *before* inserting the current user message, which is correct, but the `session_id` field is trusted from the client with no ownership check — any client can read/write any session_id (no auth in scope, just noting)."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py"],
+  "success_rate": {"backend": "100% (12/12 tests)", "frontend": "100% (all 8 UI checks)"},
+  "test_credentials": "no auth in this app; profile id 96eb44c1-0d76-4050-b10f-8cf5dbc215ae used throughout",
+  "seed_data_creation": "None — pre-seeded Arjuna profile already exists. Chat test sessions use TEST_/ui_test_ prefixed session_ids so they can be identified.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "The Claude Sonnet 4.5 integration is live and returns ~4000-char, well-structured chart-aware responses (Acknowledge/Chart Factors/Shastra Analysis/Synthesis/Prediction/Remedy sections). Full SSE round-trip takes ~30-45s per message. Retrieval returns 8 citations (increased from 5). Two kundali-chart data-testids are on the dashboard (D1 + D9) — use .first / .nth() when selecting.",
+  "rca of the issue": "No issues to RCA — iteration 2 fully passed."
+}
