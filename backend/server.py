@@ -19,7 +19,8 @@ from astrology import (
 )
 from knowledge import KB
 
-from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone, FileContentWithMimeType
+from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone, ImageContent
+import base64
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -315,23 +316,20 @@ async def chat_stream(req: ChatRequest):
 
     system_message = SYSTEM_PROMPT + "\n\n" + context_block + memory_block
 
+    # Build attachments as ImageContent (base64) — works with Claude vision via litellm.
+    file_contents = []
+    for url in (req.attachment_urls or []):
+        rel = url.split('/api/attachments/')[-1]
+        fp = ATTACH_DIR / rel
+        if fp.exists():
+            b64 = base64.b64encode(fp.read_bytes()).decode()
+            file_contents.append(ImageContent(image_base64=b64))
+
     chat = LlmChat(
         api_key=EMERGENT_LLM_KEY,
         session_id=req.session_id,
         system_message=system_message,
     ).with_model("anthropic", "claude-sonnet-4-5-20250929")
-
-    # Build attachments list (Claude vision via emergentintegrations)
-    file_contents = []
-    for url in (req.attachment_urls or []):
-        # URL is a path like /api/attachments/<uuid>.jpg served from ATTACH_DIR
-        rel = url.split('/api/attachments/')[-1]
-        fp = ATTACH_DIR / rel
-        if fp.exists():
-            mime = "image/jpeg" if fp.suffix.lower() in (".jpg", ".jpeg") else (
-                "image/png" if fp.suffix.lower() == ".png" else "image/webp"
-            )
-            file_contents.append(FileContentWithMimeType(file_path=str(fp), mime_type=mime))
 
     citations_payload = [
         {"idx": i + 1, "book": r["book"], "chapter": r["chapter"], "text": r["text"], "score": round(r.get("score", 0), 3)}

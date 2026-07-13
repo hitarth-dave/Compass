@@ -388,3 +388,63 @@ class TestAttachments:
     def test_serve_missing_attachment_404(self):
         r = requests.get(f"{API}/attachments/does_not_exist_xyz.png", timeout=15)
         assert r.status_code == 404
+
+
+# ---------- Vision E2E: attachment_urls to /api/chat must yield real Claude vision reply ----------
+class TestChatVision:
+    """Iteration 5 CRITICAL FIX: attachment_urls must no longer trigger
+    'File attachments are only supported with Gemini provider' error.
+    Assistant reply must describe the actual image (colors/shapes/text)."""
+
+    def test_chat_with_attachment_returns_real_vision(self):
+        # 1. Upload the fixture PNG
+        img_path = "/app/test_fixtures/attachment.png"
+        assert os.path.exists(img_path), "fixture PNG missing"
+        with open(img_path, "rb") as f:
+            up = requests.post(
+                f"{API}/chat/attachment",
+                files={"file": ("attachment.png", f, "image/png")},
+                timeout=30,
+            )
+        assert up.status_code == 200, up.text
+        url = up.json()["url"]
+
+        # 2. POST /api/chat with attachment_urls
+        session_id = f"TEST_vision_{uuid.uuid4()}"
+        payload = {
+            "profile_id": TEST_PROFILE_ID,
+            "session_id": session_id,
+            "message": "Please describe the image I just attached — what shapes, colors, and text do you see?",
+            "attachment_urls": [url],
+        }
+        with requests.post(f"{API}/chat", json=payload, stream=True, timeout=180) as r:
+            assert r.status_code == 200, r.text
+            events = _read_sse(r, max_seconds=180)
+
+        # 3. Must have NO 'only supported with Gemini' error
+        errors = [d for e, d in events if e == "error"]
+        for err in errors:
+            err_str = json.dumps(err).lower()
+            assert "only supported with gemini" not in err_str, (
+                f"vision regression: Gemini-only error surfaced again: {err}"
+            )
+        # If provider budget/quota error, allow skip (env-dependent)
+        deltas = "".join(
+            (d.get("text", "") if isinstance(d, dict) else "")
+            for e, d in events if e == "delta"
+        )
+        if errors and not deltas.strip():
+            pytest.skip(f"LLM upstream error, unverified vision: {errors[0]}")
+
+        # 4. Assistant reply must be substantive and describe the actual image
+        assert len(deltas) > 50, f"reply too short ({len(deltas)} chars): {deltas!r}"
+        visible = deltas.split("<LOGIC>", 1)[0].lower() if "<LOGIC>" in deltas else deltas.lower()
+        assert len(visible.strip()) > 50, f"visible answer too short: {visible!r}"
+
+        # The fixture has: orange circle half, blue square/half, diagonal line, "Test" text.
+        color_hits = sum(1 for c in ("orange", "blue", "black", "beige", "cream", "red", "navy", "rust") if c in visible)
+        shape_hits = sum(1 for s in ("circle", "square", "line", "diagonal", "shape", "rectangle", "diagram") if s in visible)
+        assert color_hits + shape_hits >= 2, (
+            f"reply does not describe image (colors/shapes): {visible[:400]}"
+        )
+
