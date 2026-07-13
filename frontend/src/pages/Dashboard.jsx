@@ -2,34 +2,37 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Loader2, MoveRight } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import KundaliChart from "@/components/KundaliChart";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [chart, setChart] = useState(null);
   const [transits, setTransits] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const id = localStorage.getItem("jyotish_profile_id");
-    if (!id) return;
     (async () => {
       try {
         const [c, t] = await Promise.all([
-          axios.get(`${API}/profile/${id}/chart`),
-          axios.get(`${API}/transits`, { params: { profile_id: id } }),
+          axios.get(`${API}/profile/chart`),
+          axios.get(`${API}/transits`),
         ]);
         setChart(c.data);
         setTransits(t.data);
       } catch (e) {
+        if (e.response?.status === 404) {
+          navigate("/onboarding", { replace: true });
+          return;
+        }
         toast.error("Could not load your chart");
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [navigate]);
 
   if (loading) {
     return (
@@ -162,7 +165,7 @@ export default function Dashboard() {
         <div className="lg:col-span-3 card-surface p-8" data-testid="yogas-card">
           <div className="overline mb-5">Detected Yogas</div>
           {yogas.length === 0 && (
-            <p className="text-sm text-[color:var(--jai-text-muted)] italic">No tracked yogas active in this chart. Ask Jyotish AI to discover subtler combinations.</p>
+            <p className="text-sm text-[color:var(--jai-text-muted)] italic">No tracked yogas active in this chart. Ask Compass Astro to discover subtler combinations.</p>
           )}
           <div className="space-y-4">
             {yogas.map((y) => (

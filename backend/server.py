@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File
+from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Depends, Request, Response, Cookie, Header
 from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -8,19 +8,24 @@ import os
 import logging
 import json
 import uuid
+import base64
+import re
+import httpx
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, BeforeValidator
 from typing import List, Optional, Annotated, Any
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from astrology import (
     compute_chart, current_transits, current_dasha, current_antardasha,
-    compute_antardashas, build_navamsa, PLANET_SYMBOLS,
+    compute_antardashas, build_navamsa,
 )
-from knowledge import KB
+from knowledge import (
+    SEED_CORPUS, search_for_user, list_books_for_user, add_pdf_for_user,
+    delete_book_for_user, detect_book_scope,
+)
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone, ImageContent
-import base64
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -34,33 +39,57 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
+EMERGENT_AUTH_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
 
-app = FastAPI(title="Jyotish AI")
+app = FastAPI(title="Compass Astro")
 api_router = APIRouter(prefix="/api")
 
-# --- Base document helpers ---
-def _validate_object_id(v: Any) -> str:
-    if isinstance(v, ObjectId):
-        return str(v)
-    return str(v)
 
-PyObjectId = Annotated[str, BeforeValidator(_validate_object_id)]
-
-
-# --- Models ---
-class BirthProfile(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+# ---------- Auth models ----------
+class User(BaseModel):
+    user_id: str
+    email: str
     name: str
-    dob: str  # YYYY-MM-DD
-    tob: str  # HH:MM
-    tz_offset: float  # e.g. 5.5
-    lat: float
-    lon: float
-    place: str
+    picture: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class SessionExchange(BaseModel):
+    session_id: str
+
+
+# ---------- Dependency: current user ----------
+async def get_current_user(
+    session_token: Optional[str] = Cookie(default=None),
+    authorization: Optional[str] = Header(default=None),
+) -> User:
+    token = session_token
+    if not token and authorization and authorization.startswith("Bearer "):
+        token = authorization.split(" ", 1)[1].strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    sess = await db.user_sessions.find_one({"session_token": token}, {"_id": 0})
+    if not sess:
+        raise HTTPException(status_code=401, detail="Session not found")
+
+    expires_at = sess.get("expires_at")
+    if isinstance(expires_at, str):
+        expires_at = datetime.fromisoformat(expires_at)
+    if expires_at and expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at and expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=401, detail="Session expired")
+
+    user_doc = await db.users.find_one({"user_id": sess["user_id"]}, {"_id": 0})
+    if not user_doc:
+        raise HTTPException(status_code=401, detail="User not found")
+    if isinstance(user_doc.get("created_at"), str):
+        user_doc["created_at"] = datetime.fromisoformat(user_doc["created_at"])
+    return User(**user_doc)
+
+
+# ---------- Domain models ----------
 class BirthProfileCreate(BaseModel):
     name: str
     dob: str
@@ -71,22 +100,26 @@ class BirthProfileCreate(BaseModel):
     place: str
 
 
-class ChatMessage(BaseModel):
-    role: str  # 'user' | 'assistant'
-    content: str
-    citations: Optional[List[dict]] = None
+class BirthProfile(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    name: str
+    dob: str
+    tob: str
+    tz_offset: float
+    lat: float
+    lon: float
+    place: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class ChatRequest(BaseModel):
-    profile_id: str
     session_id: str
     message: str
     attachment_urls: Optional[List[str]] = None
 
 
 class ThreadCreate(BaseModel):
-    profile_id: str
     name: str = "New chat"
 
 
@@ -94,44 +127,99 @@ class ThreadRename(BaseModel):
     name: str
 
 
-class Thread(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    profile_id: str
-    name: str
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-
-# --- Routes ---
+# ---------- Routes ----------
 @api_router.get("/")
 async def root():
-    return {"message": "Jyotish AI is listening. Ask the stars."}
+    return {"message": "Compass Astro is listening. Ask the stars."}
 
 
-@api_router.post("/profile", response_model=BirthProfile)
-async def create_profile(payload: BirthProfileCreate):
-    profile = BirthProfile(**payload.model_dump())
-    doc = profile.model_dump()
-    doc['created_at'] = doc['created_at'].isoformat()
-    await db.profiles.insert_one(doc)
-    return profile
+# ---------- Auth endpoints ----------
+@api_router.post("/auth/session")
+async def create_session(payload: SessionExchange, response: Response):
+    """Exchange Emergent session_id for a session_token; set httpOnly cookie."""
+    async with httpx.AsyncClient(timeout=15) as h:
+        r = await h.get(EMERGENT_AUTH_URL, headers={"X-Session-ID": payload.session_id})
+    if r.status_code != 200:
+        raise HTTPException(status_code=401, detail=f"Auth exchange failed: {r.status_code}")
+    data = r.json()
+    email = data.get("email")
+    name = data.get("name") or (email.split("@")[0] if email else "Seeker")
+    picture = data.get("picture")
+    session_token = data.get("session_token")
+    if not email or not session_token:
+        raise HTTPException(status_code=401, detail="Malformed auth response")
+
+    existing = await db.users.find_one({"email": email}, {"_id": 0})
+    if existing:
+        user_id = existing["user_id"]
+        await db.users.update_one({"user_id": user_id}, {"$set": {"name": name, "picture": picture}})
+    else:
+        user_id = f"user_{uuid.uuid4().hex[:12]}"
+        await db.users.insert_one({
+            "user_id": user_id, "email": email, "name": name, "picture": picture,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+
+    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+    await db.user_sessions.insert_one({
+        "user_id": user_id,
+        "session_token": session_token,
+        "expires_at": expires_at.isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    response.set_cookie(
+        key="session_token", value=session_token, httponly=True, secure=True,
+        samesite="none", path="/", max_age=7 * 24 * 3600,
+    )
+    return {"user_id": user_id, "email": email, "name": name, "picture": picture}
 
 
-@api_router.get("/profile/{profile_id}", response_model=BirthProfile)
-async def get_profile(profile_id: str):
-    doc = await db.profiles.find_one({"id": profile_id}, {"_id": 0})
+@api_router.get("/auth/me", response_model=User)
+async def me(user: User = Depends(get_current_user)):
+    return user
+
+
+@api_router.post("/auth/logout")
+async def logout(response: Response, session_token: Optional[str] = Cookie(default=None)):
+    if session_token:
+        await db.user_sessions.delete_one({"session_token": session_token})
+    response.delete_cookie("session_token", path="/", samesite="none", secure=True)
+    return {"ok": True}
+
+
+# ---------- Profile ----------
+@api_router.get("/profile")
+async def get_profile(user: User = Depends(get_current_user)):
+    doc = await db.profiles.find_one({"user_id": user.user_id}, {"_id": 0})
     if not doc:
-        raise HTTPException(404, "Profile not found")
+        return None
     if isinstance(doc.get('created_at'), str):
         doc['created_at'] = datetime.fromisoformat(doc['created_at'])
     return BirthProfile(**doc)
 
 
-@api_router.get("/profile/{profile_id}/chart")
-async def get_chart(profile_id: str):
-    doc = await db.profiles.find_one({"id": profile_id}, {"_id": 0})
+@api_router.post("/profile", response_model=BirthProfile)
+async def upsert_profile(payload: BirthProfileCreate, user: User = Depends(get_current_user)):
+    existing = await db.profiles.find_one({"user_id": user.user_id}, {"_id": 0})
+    if existing:
+        update = {**payload.model_dump()}
+        await db.profiles.update_one({"user_id": user.user_id}, {"$set": update})
+        merged = {**existing, **update}
+        if isinstance(merged.get('created_at'), str):
+            merged['created_at'] = datetime.fromisoformat(merged['created_at'])
+        return BirthProfile(**merged)
+    profile = BirthProfile(user_id=user.user_id, **payload.model_dump())
+    doc = profile.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    await db.profiles.insert_one({**doc})
+    return profile
+
+
+@api_router.get("/profile/chart")
+async def get_chart(user: User = Depends(get_current_user)):
+    doc = await db.profiles.find_one({"user_id": user.user_id}, {"_id": 0})
     if not doc:
-        raise HTTPException(404, "Profile not found")
+        raise HTTPException(404, "Set up your birth details first")
     chart = compute_chart(doc['dob'], doc['tob'], doc['tz_offset'], doc['lat'], doc['lon'])
     chart['current_dasha'] = current_dasha(chart['dashas'])
     if chart['current_dasha']:
@@ -140,107 +228,54 @@ async def get_chart(profile_id: str):
     else:
         chart['antardashas'] = []
         chart['current_antardasha'] = None
-    # Navamsa D9
     chart['navamsa'] = build_navamsa(chart['planets'], chart['ascendant']['longitude'])
-    chart['profile'] = {
-        'name': doc['name'], 'dob': doc['dob'], 'tob': doc['tob'], 'place': doc['place']
-    }
+    chart['profile'] = {'name': doc['name'], 'dob': doc['dob'], 'tob': doc['tob'], 'place': doc['place']}
     return chart
 
 
 @api_router.get("/transits")
-async def get_transits(profile_id: str | None = None):
+async def get_transits(user: User = Depends(get_current_user)):
+    doc = await db.profiles.find_one({"user_id": user.user_id}, {"_id": 0})
     natal = None
-    if profile_id:
-        doc = await db.profiles.find_one({"id": profile_id}, {"_id": 0})
-        if doc:
-            natal = compute_chart(doc['dob'], doc['tob'], doc['tz_offset'], doc['lat'], doc['lon'])
+    if doc:
+        natal = compute_chart(doc['dob'], doc['tob'], doc['tz_offset'], doc['lat'], doc['lon'])
     return current_transits(natal)
 
 
+# ---------- Books (seed vs custom, per-user upload/delete) ----------
 @api_router.get("/books")
-async def list_books():
-    return {"books": KB.list_books(), "total_chunks": len(KB.chunks)}
+async def list_books(user: User = Depends(get_current_user)):
+    return await list_books_for_user(db, user.user_id)
 
 
 @api_router.post("/books/upload")
-async def upload_book(file: UploadFile = File(...)):
-    if not file.filename.lower().endswith('.pdf'):
+async def upload_book(file: UploadFile = File(...), user: User = Depends(get_current_user)):
+    if not (file.filename or "").lower().endswith('.pdf'):
         raise HTTPException(400, "Only PDF files are supported")
     content = await file.read()
     try:
-        added = KB.add_pdf(file.filename, content)
+        result = await add_pdf_for_user(db, user.user_id, file.filename, content)
     except Exception as e:
         raise HTTPException(400, f"Failed to parse PDF: {e}")
-    return {"filename": file.filename, "chunks_added": added, "total_chunks": len(KB.chunks)}
+    return result
+
+
+@api_router.delete("/books/{book_id}")
+async def delete_book(book_id: str, user: User = Depends(get_current_user)):
+    if book_id == "seed":
+        raise HTTPException(400, "Seed corpus is read-only")
+    n = await delete_book_for_user(db, user.user_id, book_id)
+    return {"deleted_chunks": n}
 
 
 @api_router.get("/books/search")
-async def search_books(q: str, k: int = 5):
-    return {"results": KB.search(q, k=k)}
+async def search_books(q: str, k: int = 5, user: User = Depends(get_current_user)):
+    results = await search_for_user(db, user.user_id, q, k=k)
+    return {"results": results}
 
 
-# --- Chat with Claude Sonnet 4.5 + RAG ---
-def _build_context(chart: dict, transits: dict, retrieved: List[dict]) -> str:
-    p = chart['profile']
-    asc = chart['ascendant']
-    md = chart.get('current_dasha')
-    ad = chart.get('current_antardasha')
-
-    planets_lines = "\n".join(
-        f"  - {pl['name']:<8} in {pl['sign_en']:<12} {pl['degree_in_sign']:.2f}°  house {pl['house']:<2}  "
-        f"nakshatra {pl['nakshatra']:<15} D9→{pl['navamsa_sign']}"
-        + (" [R]" if pl.get('retrograde') else "")
-        + (f"  <{', '.join(pl['dignity'])}>" if pl.get('dignity') else "")
-        for pl in chart['planets']
-    )
-    house_lords_lines = "\n".join(
-        f"  - H{h['house']:<2} ({h['sign_en']}) → lord {h['lord']}"
-        + (f" sits in H{h['lord_sits_in_house']} ({h['lord_sits_in_sign_en']} {h['lord_degree']}°)"
-           if h.get('lord_sits_in_house') else "")
-        for h in chart.get('house_lords', [])
-    )
-    yogas_lines = ("\n".join(f"  - {y['name']}: {y['detail']}" for y in chart.get('yogas', [])) or "  (none of the tracked yogas detected)")
-
-    transit_lines = "\n".join(
-        f"  - {t['name']:<8} in {t['sign_en']:<12} {t['degree_in_sign']:.2f}°"
-        + (f"  → H{t['house_from_lagna']} from Lagna" if 'house_from_lagna' in t else "")
-        + (f", H{t['house_from_moon']} from Moon" if 'house_from_moon' in t else "")
-        + (" [R]" if t.get('retrograde') else "")
-        for t in transits['planets']
-    )
-
-    ctx = f"""NATIVE'S BIRTH DETAILS
-Name: {p['name']}
-Date/Time: {p['dob']} {p['tob']} at {p['place']}
-
-LAGNA (Ascendant): {asc['sign_en']} {asc['degree_in_sign']}°   (Lagna lord: {asc.get('lord', '?')})
-
-NATAL PLANETS (sidereal / Lahiri):
-{planets_lines}
-
-HOUSE LORDS (Rasi):
-{house_lords_lines}
-
-CLASSICAL YOGAS DETECTED:
-{yogas_lines}
-"""
-
-    if md:
-        ctx += f"\nCURRENT MAHADASHA: {md['lord']} ({md['start']} → {md['end']}, {md['years']} yrs total)\n"
-        if ad:
-            ctx += f"CURRENT ANTARDASHA: {ad['lord']} ({ad['start']} → {ad['end']}, {ad['years']} yrs)\n"
-
-    ctx += f"\nCURRENT PLANETARY TRANSITS (as of {transits['as_of'][:10]}):\n{transit_lines}\n"
-
-    if retrieved:
-        ctx += "\nRELEVANT SHASTRA EXCERPTS (single source of truth — cite these):\n"
-        for i, r in enumerate(retrieved, 1):
-            ctx += f"\n[{i}] {r['book']} — {r['chapter']}\n{r['text']}\n"
-    return ctx
-
-
-SYSTEM_PROMPT = """You are Jyotish AI — a warm, calm Vedic astrology guide. You speak like a wise friend, not a scholar.
+# ---------- Chat (with per-message book scoping, auto-name, memory) ----------
+SYSTEM_PROMPT = """You are Compass Astro — a warm, calm Vedic astrology guide. You speak like a wise friend, not a scholar.
 
 ## HARD RULES FOR THE ANSWER YOU SHOW THE USER
 1. Everyday, plain English. Assume the user has ZERO astrology knowledge.
@@ -261,18 +296,68 @@ Then write the technical astrological reasoning: the planets, houses, nakshatras
 - Synthesis: (why this configuration causes what the user is experiencing)
 </LOGIC>
 
-Do NOT deviate from this two-section format. The LOGIC block is required every time — even for greetings or vague questions — so the "Why?" panel always has content."""
+Do NOT deviate from this two-section format."""
+
+
+def _build_context(chart: dict, transits: dict, retrieved: List[dict]) -> str:
+    p = chart['profile']
+    asc = chart['ascendant']
+    md = chart.get('current_dasha')
+    ad = chart.get('current_antardasha')
+    planets_lines = "\n".join(
+        f"  - {pl['name']:<8} in {pl['sign_en']:<12} {pl['degree_in_sign']:.2f}°  house {pl['house']:<2}  "
+        f"nakshatra {pl['nakshatra']:<15} D9→{pl['navamsa_sign']}"
+        + (" [R]" if pl.get('retrograde') else "")
+        + (f"  <{', '.join(pl['dignity'])}>" if pl.get('dignity') else "")
+        for pl in chart['planets']
+    )
+    house_lords_lines = "\n".join(
+        f"  - H{h['house']:<2} ({h['sign_en']}) → lord {h['lord']}"
+        + (f" sits in H{h['lord_sits_in_house']} ({h['lord_sits_in_sign_en']} {h['lord_degree']}°)" if h.get('lord_sits_in_house') else "")
+        for h in chart.get('house_lords', [])
+    )
+    yogas_lines = ("\n".join(f"  - {y['name']}: {y['detail']}" for y in chart.get('yogas', [])) or "  (none of the tracked yogas detected)")
+    transit_lines = "\n".join(
+        f"  - {t['name']:<8} in {t['sign_en']:<12} {t['degree_in_sign']:.2f}°"
+        + (f"  → H{t['house_from_lagna']} from Lagna" if 'house_from_lagna' in t else "")
+        + (f", H{t['house_from_moon']} from Moon" if 'house_from_moon' in t else "")
+        + (" [R]" if t.get('retrograde') else "")
+        for t in transits['planets']
+    )
+    ctx = f"""NATIVE'S BIRTH DETAILS
+Name: {p['name']}
+Date/Time: {p['dob']} {p['tob']} at {p['place']}
+
+LAGNA (Ascendant): {asc['sign_en']} {asc['degree_in_sign']}°   (Lagna lord: {asc.get('lord', '?')})
+
+NATAL PLANETS (sidereal / Lahiri):
+{planets_lines}
+
+HOUSE LORDS (Rasi):
+{house_lords_lines}
+
+CLASSICAL YOGAS DETECTED:
+{yogas_lines}
+"""
+    if md:
+        ctx += f"\nCURRENT MAHADASHA: {md['lord']} ({md['start']} → {md['end']}, {md['years']} yrs total)\n"
+        if ad:
+            ctx += f"CURRENT ANTARDASHA: {ad['lord']} ({ad['start']} → {ad['end']}, {ad['years']} yrs)\n"
+    ctx += f"\nCURRENT PLANETARY TRANSITS (as of {transits['as_of'][:10]}):\n{transit_lines}\n"
+    if retrieved:
+        ctx += "\nRELEVANT SHASTRA EXCERPTS (single source of truth — cite these):\n"
+        for i, r in enumerate(retrieved, 1):
+            ctx += f"\n[{i}] {r['book']} — {r['chapter']}\n{r['text']}\n"
+    return ctx
 
 
 def _summarize_prior_messages(prior: List[dict], max_turns: int = 6) -> str:
-    """Compress prior chat turns into a compact recap for continuity."""
     if not prior:
         return ""
     tail = prior[-(max_turns * 2):]
     lines = []
     for m in tail:
-        role = "User" if m["role"] == "user" else "Jyotish AI"
-        # Use answer-only (strip LOGIC) for prior context
+        role = "User" if m["role"] == "user" else "Compass Astro"
         content = (m.get("content") or "").strip()
         if "<LOGIC>" in content:
             content = content.split("<LOGIC>", 1)[0].strip()
@@ -282,11 +367,36 @@ def _summarize_prior_messages(prior: List[dict], max_turns: int = 6) -> str:
     return "\n\nPRIOR CONVERSATION (for continuity):\n" + "\n".join(lines)
 
 
+async def _auto_name_thread(session_id: str, first_question: str):
+    """Fire-and-forget: ask Claude to generate a 2-4 word title. Update thread name."""
+    try:
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY, session_id=f"title-{session_id}",
+            system_message="Give a very short 2-5 word title for a conversation that starts with the following question. Reply with ONLY the title text, no quotes, no punctuation at the end.",
+        ).with_model("anthropic", "claude-haiku-4-5-20251001")
+        title = ""
+        async for ev in chat.stream_message(UserMessage(text=first_question.strip()[:400])):
+            if isinstance(ev, TextDelta):
+                title += ev.content
+            elif isinstance(ev, StreamDone):
+                break
+        title = (title or "").strip().strip('"').strip("'").split("\n")[0][:60]
+        if title:
+            await db.threads.update_one({"id": session_id}, {"$set": {"name": title, "updated_at": datetime.now(timezone.utc).isoformat()}})
+    except Exception as e:
+        logging.exception("auto-name failed: %s", e)
+
+
 @api_router.post("/chat")
-async def chat_stream(req: ChatRequest):
-    prof = await db.profiles.find_one({"id": req.profile_id}, {"_id": 0})
+async def chat_stream(req: ChatRequest, user: User = Depends(get_current_user)):
+    prof = await db.profiles.find_one({"user_id": user.user_id}, {"_id": 0})
     if not prof:
-        raise HTTPException(404, "Profile not found")
+        raise HTTPException(404, "Set up your birth details first")
+
+    # Ownership check for thread
+    thread = await db.threads.find_one({"id": req.session_id, "user_id": user.user_id}, {"_id": 0})
+    if not thread:
+        raise HTTPException(404, "Thread not found")
 
     chart = compute_chart(prof['dob'], prof['tob'], prof['tz_offset'], prof['lat'], prof['lon'])
     chart['profile'] = {'name': prof['name'], 'dob': prof['dob'], 'tob': prof['tob'], 'place': prof['place']}
@@ -294,11 +404,16 @@ async def chat_stream(req: ChatRequest):
     if chart['current_dasha']:
         chart['current_antardasha'] = current_antardasha(chart['current_dasha'])
     transits = current_transits(chart)
-    retrieved = KB.search(req.message, k=8)
+
+    # Per-message book scoping (NEVER sticks past this message)
+    books_avail = await list_books_for_user(db, user.user_id)
+    book_names = [b["book"] for b in books_avail["seed"]] + [b["book"] for b in books_avail["custom"]]
+    scoped = detect_book_scope(req.message, book_names)
+    retrieved = await search_for_user(db, user.user_id, req.message, k=8, book_names=scoped)
 
     context_block = _build_context(chart, transits, retrieved)
 
-    # Load prior conversation for memory (before saving current user message)
+    # Load prior conversation for memory
     prior = await db.messages.find(
         {"session_id": req.session_id, "role": {"$in": ["user", "assistant"]}},
         {"_id": 0}
@@ -306,17 +421,20 @@ async def chat_stream(req: ChatRequest):
     memory_block = _summarize_prior_messages(prior)
 
     # Persist user message
+    is_first_user_msg = not any(m["role"] == "user" for m in prior)
     await db.messages.insert_one({
         "session_id": req.session_id,
-        "profile_id": req.profile_id,
+        "user_id": user.user_id,
         "role": "user",
         "content": req.message,
+        "attachment_urls": req.attachment_urls or [],
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
 
     system_message = SYSTEM_PROMPT + "\n\n" + context_block + memory_block
+    if scoped:
+        system_message += f"\n\nBOOK SCOPE FOR THIS ANSWER ONLY: The user requested you draw exclusively from: {', '.join(scoped)}. Only cite excerpts from these books.\n"
 
-    # Build attachments as ImageContent (base64) — works with Claude vision via litellm.
     file_contents = []
     for url in (req.attachment_urls or []):
         rel = url.split('/api/attachments/')[-1]
@@ -326,19 +444,19 @@ async def chat_stream(req: ChatRequest):
             file_contents.append(ImageContent(image_base64=b64))
 
     chat = LlmChat(
-        api_key=EMERGENT_LLM_KEY,
-        session_id=req.session_id,
-        system_message=system_message,
+        api_key=EMERGENT_LLM_KEY, session_id=req.session_id, system_message=system_message,
     ).with_model("anthropic", "claude-sonnet-4-5-20250929")
 
     citations_payload = [
-        {"idx": i + 1, "book": r["book"], "chapter": r["chapter"], "text": r["text"], "score": round(r.get("score", 0), 3)}
+        {"idx": i + 1, "book": r["book"], "chapter": r["chapter"], "text": r["text"],
+         "is_seed": r.get("is_seed", True), "score": round(r.get("score", 0), 3)}
         for i, r in enumerate(retrieved)
     ]
 
     async def event_generator():
-        # Emit citations first
         yield f"event: citations\ndata: {json.dumps(citations_payload)}\n\n"
+        if scoped:
+            yield f"event: scope\ndata: {json.dumps({'books': list(scoped)})}\n\n"
         full = ""
         try:
             user_msg = UserMessage(text=req.message, file_contents=file_contents) if file_contents else UserMessage(text=req.message)
@@ -351,7 +469,6 @@ async def chat_stream(req: ChatRequest):
         except Exception as e:
             yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
 
-        # Persist assistant reply — store both raw content (with LOGIC block) and pre-split fields
         answer_only = full
         logic_only = ""
         if "<LOGIC>" in full:
@@ -360,7 +477,7 @@ async def chat_stream(req: ChatRequest):
             logic_only = parts[1].split("</LOGIC>", 1)[0].strip() if "</LOGIC>" in parts[1] else parts[1].strip()
         await db.messages.insert_one({
             "session_id": req.session_id,
-            "profile_id": req.profile_id,
+            "user_id": user.user_id,
             "role": "assistant",
             "content": full,
             "answer": answer_only,
@@ -368,8 +485,13 @@ async def chat_stream(req: ChatRequest):
             "citations": citations_payload,
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
-        # Bump thread updated_at
         await db.threads.update_one({"id": req.session_id}, {"$set": {"updated_at": datetime.now(timezone.utc).isoformat()}})
+
+        # Auto-name if this was the first user turn and the thread has a default name
+        if is_first_user_msg and re.match(r"^(new chat|chat \d+|general)$", (thread.get("name") or "").strip(), re.IGNORECASE):
+            import asyncio
+            asyncio.create_task(_auto_name_thread(req.session_id, req.message))
+
         yield f"event: done\ndata: {json.dumps({'ok': True})}\n\n"
 
     return StreamingResponse(
@@ -380,33 +502,38 @@ async def chat_stream(req: ChatRequest):
 
 
 @api_router.get("/chat/{session_id}/history")
-async def chat_history(session_id: str):
+async def chat_history(session_id: str, user: User = Depends(get_current_user)):
+    thread = await db.threads.find_one({"id": session_id, "user_id": user.user_id}, {"_id": 0})
+    if not thread:
+        raise HTTPException(404, "Thread not found")
     msgs = await db.messages.find({"session_id": session_id}, {"_id": 0}).sort("created_at", 1).to_list(200)
     return {"messages": msgs}
 
 
-# --- Threads (multiple named conversations per profile) ---
+# ---------- Threads ----------
 @api_router.get("/threads")
-async def list_threads(profile_id: str):
-    docs = await db.threads.find({"profile_id": profile_id}, {"_id": 0}).sort("updated_at", -1).to_list(100)
+async def list_threads(user: User = Depends(get_current_user)):
+    docs = await db.threads.find({"user_id": user.user_id}, {"_id": 0}).sort("updated_at", -1).to_list(100)
     return {"threads": docs}
 
 
 @api_router.post("/threads")
-async def create_thread(payload: ThreadCreate):
-    t = Thread(profile_id=payload.profile_id, name=payload.name)
-    doc = t.model_dump()
-    doc['created_at'] = doc['created_at'].isoformat()
-    doc['updated_at'] = doc['updated_at'].isoformat()
-    await db.threads.insert_one({**doc})  # pass a copy so Mongo doesn't mutate return dict
-    doc.pop('_id', None)
-    return doc
+async def create_thread(payload: ThreadCreate, user: User = Depends(get_current_user)):
+    thread = {
+        "id": str(uuid.uuid4()),
+        "user_id": user.user_id,
+        "name": payload.name,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.threads.insert_one({**thread})
+    return thread
 
 
 @api_router.patch("/threads/{thread_id}")
-async def rename_thread(thread_id: str, payload: ThreadRename):
+async def rename_thread(thread_id: str, payload: ThreadRename, user: User = Depends(get_current_user)):
     res = await db.threads.update_one(
-        {"id": thread_id},
+        {"id": thread_id, "user_id": user.user_id},
         {"$set": {"name": payload.name, "updated_at": datetime.now(timezone.utc).isoformat()}},
     )
     if not res.matched_count:
@@ -415,19 +542,21 @@ async def rename_thread(thread_id: str, payload: ThreadRename):
 
 
 @api_router.delete("/threads/{thread_id}")
-async def delete_thread(thread_id: str):
-    await db.threads.delete_one({"id": thread_id})
+async def delete_thread(thread_id: str, user: User = Depends(get_current_user)):
+    res = await db.threads.delete_one({"id": thread_id, "user_id": user.user_id})
+    if not res.deleted_count:
+        raise HTTPException(404, "Thread not found")
     await db.messages.delete_many({"session_id": thread_id})
     return {"ok": True}
 
 
-# --- Attachment upload for chat vision ---
+# ---------- Attachments ----------
 @api_router.post("/chat/attachment")
-async def upload_attachment(file: UploadFile = File(...)):
+async def upload_attachment(file: UploadFile = File(...), user: User = Depends(get_current_user)):
     ext = Path(file.filename or "").suffix.lower()
     if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
         raise HTTPException(400, "Only JPG/PNG/WEBP images are supported")
-    fname = f"{uuid.uuid4().hex}{ext}"
+    fname = f"{user.user_id}_{uuid.uuid4().hex}{ext}"
     dest = ATTACH_DIR / fname
     content = await file.read()
     dest.write_bytes(content)
@@ -444,11 +573,11 @@ async def serve_attachment(fname: str):
     return FileResponse(str(fp))
 
 
-# --- Simple geocoding via geopy nominatim (fallback to manual entry) ---
+# ---------- Geocoding (public) ----------
 @api_router.get("/geocode")
 async def geocode(q: str):
     from geopy.geocoders import Nominatim
-    geolocator = Nominatim(user_agent="jyotish-ai")
+    geolocator = Nominatim(user_agent="compass-astro")
     try:
         loc = geolocator.geocode(q, timeout=10)
         if not loc:

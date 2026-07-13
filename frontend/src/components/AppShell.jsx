@@ -5,7 +5,7 @@ import {
   LayoutGrid,
   MessageSquare,
   BookOpen,
-  Sparkles,
+  Compass,
   LogOut,
   Menu,
   ChevronRight,
@@ -34,12 +34,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
+import { useAuth } from "@/context/AuthContext";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export default function AppShell({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, logout } = useAuth();
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem("jyotish_sidebar_collapsed") === "1"
   );
@@ -49,8 +51,7 @@ export default function AppShell({ children }) {
   const [renameValue, setRenameValue] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const name = localStorage.getItem("jyotish_profile_name") || "Seeker";
-  const profileId = localStorage.getItem("jyotish_profile_id");
+  const displayName = user?.name || "Seeker";
   const activeThread = new URLSearchParams(location.search).get("t");
 
   const toggle = () => {
@@ -60,9 +61,8 @@ export default function AppShell({ children }) {
   };
 
   const loadThreads = async () => {
-    if (!profileId) return;
     try {
-      const res = await axios.get(`${API}/threads`, { params: { profile_id: profileId } });
+      const res = await axios.get(`${API}/threads`);
       setThreads(res.data.threads || []);
     } catch (e) {
       // silent
@@ -71,12 +71,11 @@ export default function AppShell({ children }) {
 
   useEffect(() => {
     loadThreads();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profileId]);
+  }, []);
 
   const createThread = async () => {
     try {
-      const res = await axios.post(`${API}/threads`, { profile_id: profileId, name: `Chat ${threads.length + 1}` });
+      const res = await axios.post(`${API}/threads`, { name: `Chat ${threads.length + 1}` });
       await loadThreads();
       navigate(`/chat?t=${res.data.id}`);
       toast.success("New chat started");
@@ -107,10 +106,9 @@ export default function AppShell({ children }) {
     toast.success("Chat deleted");
   };
 
-  const signOut = () => {
-    localStorage.removeItem("jyotish_profile_id");
-    localStorage.removeItem("jyotish_profile_name");
-    navigate("/onboarding");
+  const signOut = async () => {
+    await logout();
+    navigate("/");
   };
 
   const nav = [
@@ -136,9 +134,12 @@ export default function AppShell({ children }) {
             <Menu size={18} />
           </button>
           {!collapsed && (
-            <div className="flex-1 min-w-0">
-              <div className="font-serif-display text-xl leading-none text-[color:var(--jai-green-deep)]">Jyotish AI</div>
-              <div className="overline mt-1">Vedic Counsel</div>
+            <div className="flex-1 min-w-0 flex items-center gap-2">
+              <Compass size={16} className="text-[color:var(--jai-gold)]" />
+              <div>
+                <div className="font-serif-display text-xl leading-none text-[color:var(--jai-green-deep)]">Compass Astro</div>
+                <div className="overline mt-1">Ancient wisdom</div>
+              </div>
             </div>
           )}
         </div>
@@ -228,7 +229,7 @@ export default function AppShell({ children }) {
             <button
               onClick={signOut}
               className="w-9 h-9 rounded-md flex items-center justify-center text-[color:var(--jai-text-muted)] hover:text-[color:var(--jai-green-deep)] hover:bg-[color:var(--jai-surface)]"
-              title="Reset chart"
+              title="Sign out"
               data-testid="signout-btn"
             >
               <LogOut size={14} />
@@ -236,9 +237,9 @@ export default function AppShell({ children }) {
           ) : (
             <>
               <div className="text-xs text-[color:var(--jai-text-muted)] mb-1">Signed in as</div>
-              <div className="font-serif-display text-lg text-[color:var(--jai-parchment)] mb-3 truncate" data-testid="profile-name">{name}</div>
+              <div className="font-serif-display text-lg text-[color:var(--jai-parchment)] mb-3 truncate" data-testid="profile-name">{displayName}</div>
               <Button variant="ghost" size="sm" onClick={signOut} className="text-[color:var(--jai-text-muted)] hover:text-[color:var(--jai-gold)] px-0" data-testid="signout-btn">
-                <LogOut size={14} className="mr-2" /> Reset chart
+                <LogOut size={14} className="mr-2" /> Sign out
               </Button>
             </>
           )}

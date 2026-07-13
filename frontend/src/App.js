@@ -1,36 +1,45 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
+import axios from "axios";
 import "@/App.css";
 
+import { AuthProvider } from "@/context/AuthContext";
+import ProtectedRoute from "@/components/ProtectedRoute";
+import AppShell from "@/components/AppShell";
+import Landing from "@/pages/Landing";
+import AuthCallback from "@/pages/AuthCallback";
 import Onboarding from "@/pages/Onboarding";
 import Dashboard from "@/pages/Dashboard";
 import Chat from "@/pages/Chat";
 import Library from "@/pages/Library";
-import AppShell from "@/components/AppShell";
 
-function ProtectedShell({ children }) {
-  const profileId = localStorage.getItem("jyotish_profile_id");
-  if (!profileId) return <Navigate to="/onboarding" replace />;
-  return <AppShell>{children}</AppShell>;
-}
+axios.defaults.withCredentials = true;
 
-function Root() {
-  const profileId = localStorage.getItem("jyotish_profile_id");
-  return <Navigate to={profileId ? "/dashboard" : "/onboarding"} replace />;
+function AppRouter() {
+  const location = useLocation();
+  // CRITICAL: detect session_id in fragment synchronously (before route dispatch)
+  if (location.hash?.includes("session_id=")) {
+    return <AuthCallback />;
+  }
+  return (
+    <Routes>
+      <Route path="/" element={<Landing />} />
+      <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
+      <Route path="/dashboard" element={<ProtectedRoute><AppShell><Dashboard /></AppShell></ProtectedRoute>} />
+      <Route path="/chat" element={<ProtectedRoute><AppShell><Chat /></AppShell></ProtectedRoute>} />
+      <Route path="/library" element={<ProtectedRoute><AppShell><Library /></AppShell></ProtectedRoute>} />
+    </Routes>
+  );
 }
 
 function App() {
   return (
     <div className="App">
-      <Toaster theme="dark" position="top-right" />
+      <Toaster theme="light" position="top-right" />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Root />} />
-          <Route path="/onboarding" element={<Onboarding />} />
-          <Route path="/dashboard" element={<ProtectedShell><Dashboard /></ProtectedShell>} />
-          <Route path="/chat" element={<ProtectedShell><Chat /></ProtectedShell>} />
-          <Route path="/library" element={<ProtectedShell><Library /></ProtectedShell>} />
-        </Routes>
+        <AuthProvider>
+          <AppRouter />
+        </AuthProvider>
       </BrowserRouter>
     </div>
   );

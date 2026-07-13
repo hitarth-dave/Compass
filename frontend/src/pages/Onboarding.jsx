@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { CalendarIcon, MapPin, Loader2 } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,7 +28,8 @@ const TIMEZONES = [
 
 export default function Onboarding() {
   const navigate = useNavigate();
-  const [name, setName] = useState("");
+  const { user } = useAuth();
+  const [name, setName] = useState(user?.name || "");
   const [dob, setDob] = useState(null);
   const [tob, setTob] = useState("");
   const [tz, setTz] = useState(5.5);
@@ -36,6 +38,16 @@ export default function Onboarding() {
   const [lon, setLon] = useState(null);
   const [geocoding, setGeocoding] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // If user already has a profile, redirect to dashboard
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await axios.get(`${API}/profile`);
+        if (res.data) navigate("/dashboard", { replace: true });
+      } catch {}
+    })();
+  }, [navigate]);
 
   const geocode = async () => {
     if (!place.trim()) return toast.error("Enter a place first");
@@ -65,16 +77,8 @@ export default function Onboarding() {
     setSubmitting(true);
     try {
       const res = await axios.post(`${API}/profile`, {
-        name,
-        dob: format(dob, "yyyy-MM-dd"),
-        tob,
-        tz_offset: tz,
-        lat,
-        lon,
-        place,
+        name, dob: format(dob, "yyyy-MM-dd"), tob, tz_offset: tz, lat, lon, place,
       });
-      localStorage.setItem("jyotish_profile_id", res.data.id);
-      localStorage.setItem("jyotish_profile_name", res.data.name);
       toast.success("Chart cast. Welcome, " + res.data.name);
       navigate("/dashboard");
     } catch (e) {
@@ -100,7 +104,7 @@ export default function Onboarding() {
 
       <div className="relative w-full max-w-2xl">
         <div className="text-center mb-14 fade-up">
-          <div className="overline mb-6">Sanatan · Jyotish · Vedic Counsel</div>
+          <div className="overline mb-6">Sanatan · Jyotish · Personal Counsel</div>
           <h1 className="font-serif-display text-5xl sm:text-6xl lg:text-7xl leading-[0.95] text-[color:var(--jai-parchment)]">
             The <em className="text-[color:var(--jai-gold-soft)]">stars</em> await<br />
             your <em className="text-[color:var(--jai-gold-soft)]">arrival</em>.
@@ -222,7 +226,7 @@ export default function Onboarding() {
         </div>
 
         <p className="text-center text-xs text-[color:var(--jai-text-muted)] mt-10 tracking-wide fade-up delay-3">
-          Sidereal · Lahiri Ayanamsa · Vimshottari Dasha · Powered by Claude Sonnet 4.5
+          Compass Astro · Sidereal · Lahiri Ayanamsa · Powered by Claude Sonnet 4.5
         </p>
       </div>
     </div>

@@ -68,7 +68,7 @@ export default function Chat() {
   const fileRef = useRef(null);
   const recognitionRef = useRef(null);
 
-  const profileId = localStorage.getItem("jyotish_profile_id");
+  const profileId = null; // profile now server-side per authenticated user
 
   // Resolve / create the active thread from URL ?t= or fallback
   const urlThread = new URLSearchParams(location.search).get("t");
@@ -80,10 +80,10 @@ export default function Chat() {
       } else {
         // Load threads; if none, create a default; otherwise pick the most recent
         try {
-          const res = await axios.get(`${API}/threads`, { params: { profile_id: profileId } });
+          const res = await axios.get(`${API}/threads`);
           const list = res.data.threads || [];
           if (list.length === 0) {
-            const created = await axios.post(`${API}/threads`, { profile_id: profileId, name: "General" });
+            const created = await axios.post(`${API}/threads`, { name: "General" });
             navigate(`/chat?t=${created.data.id}`, { replace: true });
           } else {
             navigate(`/chat?t=${list[0].id}`, { replace: true });
@@ -93,13 +93,13 @@ export default function Chat() {
         }
       }
     })();
-  }, [urlThread, profileId, navigate]);
+  }, [urlThread, navigate]);
 
   // Load thread history when sessionId changes
   useEffect(() => {
     if (!sessionId) return;
     setMessages([]);
-    fetch(`${API}/chat/${sessionId}/history`)
+    fetch(`${API}/chat/${sessionId}/history`, { credentials: "include" })
       .then((r) => r.json())
       .then((d) => setMessages(d.messages || []))
       .catch(() => {});
@@ -184,9 +184,9 @@ export default function Chat() {
     try {
       const res = await fetch(`${API}/chat`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          profile_id: profileId,
           session_id: sessionId,
           message: question || "Please analyze the attached image.",
           attachment_urls: attach.map((a) => a.url),
@@ -249,7 +249,7 @@ export default function Chat() {
     } finally {
       setStreaming(false);
     }
-  }, [input, attachments, streaming, sessionId, profileId]);
+  }, [input, attachments, streaming, sessionId]);
 
   const openLogic = (m) => {
     const parsed = splitAnswerLogic(m.content || "");

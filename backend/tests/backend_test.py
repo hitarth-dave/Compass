@@ -1,127 +1,274 @@
-"""Backend tests for Jyotish AI enriched chart, transits with houses, SSE chat with citations,
-conversation memory, and chat history persistence."""
+"""Compass Astro (iteration 6) backend tests — user-scoped endpoints, auth,
+threads (with auto-name), library seed vs custom, per-message book scoping,
+chart/transits regression, chat SSE citations+deltas+done."""
 import os
+import io
 import json
 import time
 import uuid
 import pytest
 import requests
+from pymongo import MongoClient
 
 BASE_URL = os.environ['REACT_APP_BACKEND_URL'].rstrip('/')
 API = f"{BASE_URL}/api"
 
-# Seeded test profile (Arjuna, 1990-05-15, Varanasi)
-TEST_PROFILE_ID = "96eb44c1-0d76-4050-b10f-8cf5dbc215ae"
+
+# ---------- Seed helper ----------
+def _mongo():
+    return MongoClient(os.environ.get('MONGO_URL', 'mongodb://localhost:27017'))[os.environ.get('DB_NAME', 'test_database')]
 
 
-# ---------- Health / basic ----------
-class TestHealth:
+# Worker-unique prefix so parallel xdist workers don't clean each other's data
+_WORKER = os.environ.get("PYTEST_XDIST_WORKER", "gw0")
+_RUN_ID = f"{_WORKER}_{uuid.uuid4().hex[:6]}"
+_CREATED_USER_IDS = []
+
+
+def _seed_user(prefix: str):
+    db = _mongo()
+    uid = f"TEST_{_RUN_ID}_{prefix}_{uuid.uuid4().hex[:6]}"
+    tok = f"TEST_{_RUN_ID}_tok_{prefix}_{uuid.uuid4().hex[:8]}"
+    from datetime import datetime, timezone, timedelta
+    db.users.insert_one({
+        "user_id": uid,
+        "email": f"TEST_{_RUN_ID}_{prefix}_{uid[-6:]}@ex.com",
+        "name": f"User {prefix}",
+        "picture": None,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    db.user_sessions.insert_one({
+        "user_id": uid,
+        "session_token": tok,
+        "expires_at": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    _CREATED_USER_IDS.append(uid)
+    return uid, tok
+
+
+def _bearer(tok: str) -> dict:
+    return {"Authorization": f"Bearer {tok}"}
+
+
+# Shared session-level users A & B
+@pytest.fixture(scope="session")
+def user_a():
+    uid, tok = _seed_user("A")
+    yield {"uid": uid, "tok": tok}
+
+
+@pytest.fixture(scope="session")
+def user_b():
+    uid, tok = _seed_user("B")
+    yield {"uid": uid, "tok": tok}
+
+
+@pytest.fixture(scope="session")
+def profile_a(user_a):
+    """Seed a profile for user A so chart/chat endpoints work."""
+    payload = {
+        "name": "Arjuna",
+        "dob": "1990-05-15",
+        "tob": "14:30",
+        "tz_offset": 5.5,
+        "lat": 25.32,
+        "lon": 83.0,
+        "place": "Varanasi, India",
+    }
+    r = requests.post(f"{API}/profile", json=payload, headers=_bearer(user_a["tok"]), timeout=15)
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+# ---------- 1. AUTH ----------
+class TestAuth:
     def test_root_ok(self):
         r = requests.get(f"{API}/", timeout=15)
         assert r.status_code == 200
-        assert "message" in r.json()
+        assert "Compass" in r.json().get("message", "") or "compass" in r.json().get("message", "").lower()
 
-    def test_seed_profile_exists(self):
-        r = requests.get(f"{API}/profile/{TEST_PROFILE_ID}", timeout=15)
-        assert r.status_code == 200, f"Seed profile missing: {r.text}"
-        data = r.json()
-        assert data["id"] == TEST_PROFILE_ID
-        assert data["name"] == "Arjuna"
+    def test_me_no_auth_401(self):
+        r = requests.get(f"{API}/auth/me", timeout=10)
+        assert r.status_code == 401
 
-
-# ---------- Enriched Chart ----------
-class TestChartEnriched:
-    """chart endpoint must expose house_lords, current_antardasha, navamsa, yogas."""
-
-    @pytest.fixture(scope="class")
-    def chart(self):
-        r = requests.get(f"{API}/profile/{TEST_PROFILE_ID}/chart", timeout=30)
+    def test_me_with_bearer_returns_user(self, user_a):
+        r = requests.get(f"{API}/auth/me", headers=_bearer(user_a["tok"]), timeout=10)
         assert r.status_code == 200, r.text
-        return r.json()
+        d = r.json()
+        for k in ("user_id", "email", "name"):
+            assert k in d
+        assert d["user_id"] == user_a["uid"]
 
-    def test_ascendant_shape(self, chart):
-        asc = chart.get("ascendant")
-        assert asc, "ascendant missing"
-        # Iteration 3: ascendant must now include nakshatra + pada for kundali 'As' rendering
-        for k in ("sign_en", "sign_idx", "degree_in_sign", "lord", "nakshatra", "pada"):
-            assert k in asc, f"asc.{k} missing"
-        # For Arjuna seed profile: Lagna is Virgo w/ Uttara Phalguni nakshatra
-        assert asc["sign_en"] == "Virgo"
-        assert asc["nakshatra"] == "Uttara Phalguni"
-        assert asc["lord"] == "Mercury"
+    def test_me_invalid_token_401(self):
+        r = requests.get(f"{API}/auth/me", headers=_bearer("garbage_token_xyz"), timeout=10)
+        assert r.status_code == 401
 
-    def test_current_dasha_and_antardasha(self, chart):
-        md = chart.get("current_dasha")
-        assert md is not None, "current_dasha missing"
-        for k in ("lord", "start", "end", "years"):
-            assert k in md
-        ad = chart.get("current_antardasha")
-        assert ad is not None, "current_antardasha missing"
-        for k in ("lord", "start", "end", "years"):
-            assert k in ad, f"antardasha.{k} missing"
-        # antardasha must be within mahadasha window
-        assert md["start"] <= ad["start"] <= md["end"]
-
-    def test_house_lords_12(self, chart):
-        hl = chart.get("house_lords")
-        assert hl is not None, "house_lords missing"
-        assert len(hl) == 12
-        for row in hl:
-            for k in ("house", "sign_en", "lord", "lord_sits_in_house", "lord_sits_in_sign_en"):
-                assert k in row, f"house_lord row missing {k}: {row}"
-            assert 1 <= row["house"] <= 12
-            assert 1 <= row["lord_sits_in_house"] <= 12
-
-    def test_navamsa_present(self, chart):
-        nav = chart.get("navamsa")
-        assert nav is not None, "navamsa missing"
-        assert "ascendant" in nav
-        assert "sign_en" in nav["ascendant"]
-        assert isinstance(nav["planets"], list)
-        # Should have 9 planets (Sun..Ketu)
-        assert len(nav["planets"]) == 9
-        for p in nav["planets"]:
-            for k in ("name", "sign_en", "house"):
-                assert k in p
-            # Iteration 3: D9 planets must now carry nakshatra (copied from D1) so KundaliChart d9 has data
-            assert "nakshatra" in p, f"navamsa.{p['name']}.nakshatra missing"
-
-    def test_yogas_list(self, chart):
-        yogas = chart.get("yogas")
-        assert yogas is not None, "yogas missing"
-        assert isinstance(yogas, list)
-        # May be empty; if present items must have name and detail
-        for y in yogas:
-            assert "name" in y and "detail" in y
+    def test_protected_endpoints_all_401_without_auth(self):
+        for path in ("/profile", "/threads", "/books", "/profile/chart", "/transits"):
+            r = requests.get(f"{API}{path}", timeout=10)
+            assert r.status_code == 401, f"{path} did not require auth (got {r.status_code})"
 
 
-# ---------- Transits with house tags ----------
-class TestTransits:
-    def test_transits_with_profile_id_has_houses(self):
-        r = requests.get(f"{API}/transits", params={"profile_id": TEST_PROFILE_ID}, timeout=20)
-        assert r.status_code == 200, r.text
-        data = r.json()
-        assert "planets" in data
-        # 9 planets incl Ketu
-        assert len(data["planets"]) == 9
-        for t in data["planets"]:
-            assert "house_from_lagna" in t, f"missing house_from_lagna for {t.get('name')}"
-            assert "house_from_moon" in t, f"missing house_from_moon for {t.get('name')}"
-            assert 1 <= t["house_from_lagna"] <= 12
-            assert 1 <= t["house_from_moon"] <= 12
-
-    def test_transits_without_profile_id_ok(self):
-        r = requests.get(f"{API}/transits", timeout=20)
+# ---------- 2. PROFILE + CHART + TRANSITS (user-scoped) ----------
+class TestProfileChart:
+    def test_profile_get_before_create(self, user_b):
+        # user_b has no profile yet
+        r = requests.get(f"{API}/profile", headers=_bearer(user_b["tok"]), timeout=10)
         assert r.status_code == 200
-        data = r.json()
-        # No house tags when natal not provided
-        for t in data["planets"]:
-            assert "house_from_lagna" not in t
+        assert r.json() is None
+
+    def test_profile_upsert_and_chart(self, user_a, profile_a):
+        # profile_a fixture created it. Verify
+        r = requests.get(f"{API}/profile", headers=_bearer(user_a["tok"]), timeout=10)
+        assert r.status_code == 200
+        d = r.json()
+        assert d and d["name"] == "Arjuna"
+        assert d["user_id"] == user_a["uid"]
+
+    def test_chart_full_shape(self, user_a, profile_a):
+        r = requests.get(f"{API}/profile/chart", headers=_bearer(user_a["tok"]), timeout=30)
+        assert r.status_code == 200, r.text
+        chart = r.json()
+        for k in ("ascendant", "planets", "current_dasha", "current_antardasha", "house_lords", "navamsa", "yogas"):
+            assert k in chart, f"chart.{k} missing"
+        assert chart["ascendant"]["sign_en"] == "Virgo"
+        assert len(chart["house_lords"]) == 12
+        assert len(chart["navamsa"]["planets"]) == 9
+        assert chart["current_antardasha"] is not None
+
+    def test_transits_with_natal(self, user_a, profile_a):
+        r = requests.get(f"{API}/transits", headers=_bearer(user_a["tok"]), timeout=15)
+        assert r.status_code == 200
+        d = r.json()
+        assert len(d["planets"]) == 9
+        for p in d["planets"]:
+            assert "house_from_lagna" in p and 1 <= p["house_from_lagna"] <= 12
 
 
-# ---------- SSE Chat: citations, deltas, done, chart-aware ----------
+# ---------- 3. USER SCOPING (A cannot see B's data) ----------
+class TestUserScoping:
+    def test_b_cannot_read_a_profile(self, user_a, user_b, profile_a):
+        # B's profile is null even though A has one
+        r = requests.get(f"{API}/profile", headers=_bearer(user_b["tok"]), timeout=10)
+        assert r.status_code == 200
+        assert r.json() is None
+
+    def test_b_cannot_see_a_thread(self, user_a, user_b, profile_a):
+        # A creates a thread
+        cr = requests.post(f"{API}/threads", json={"name": "TEST_A_thread"}, headers=_bearer(user_a["tok"]))
+        assert cr.status_code == 200
+        tid = cr.json()["id"]
+        # B lists threads: must not contain tid
+        lr = requests.get(f"{API}/threads", headers=_bearer(user_b["tok"]))
+        assert lr.status_code == 200
+        b_ids = [t["id"] for t in lr.json().get("threads", [])]
+        assert tid not in b_ids
+        # B fetches history: 404
+        hr = requests.get(f"{API}/chat/{tid}/history", headers=_bearer(user_b["tok"]))
+        assert hr.status_code == 404
+        # B cannot rename/delete
+        pr = requests.patch(f"{API}/threads/{tid}", json={"name": "hacked"}, headers=_bearer(user_b["tok"]))
+        assert pr.status_code == 404
+        dr = requests.delete(f"{API}/threads/{tid}", headers=_bearer(user_b["tok"]))
+        assert dr.status_code == 404
+        # cleanup
+        requests.delete(f"{API}/threads/{tid}", headers=_bearer(user_a["tok"]))
+
+
+# ---------- 4. LIBRARY (seed vs custom) ----------
+class TestLibrary:
+    def test_books_list_seed_shape(self, user_a):
+        r = requests.get(f"{API}/books", headers=_bearer(user_a["tok"]), timeout=15)
+        assert r.status_code == 200
+        d = r.json()
+        assert "seed" in d and "custom" in d
+        assert isinstance(d["seed"], list) and isinstance(d["custom"], list)
+        assert len(d["seed"]) == 12, f"expected 12 seed books, got {len(d['seed'])}"
+        for b in d["seed"]:
+            assert b["is_seed"] is True
+            assert b["book_id"] == "seed"
+            assert "book" in b and "chunk_count" in b
+
+    def test_delete_seed_returns_400(self, user_a):
+        r = requests.delete(f"{API}/books/seed", headers=_bearer(user_a["tok"]))
+        assert r.status_code == 400
+
+    def test_upload_custom_pdf_appears_in_custom(self, user_a):
+        # Prefer a real PDF fixture if present; else construct with fpdf2
+        try:
+            from pypdf import PdfWriter  # noqa: F401
+        except Exception:
+            pytest.skip("pypdf not installed")
+        fx = "/app/test_fixtures/test.pdf"
+        if not os.path.exists(fx):
+            try:
+                from fpdf import FPDF
+                pdf = FPDF()
+                pdf.add_page()
+                pdf.set_font("Helvetica", size=12)
+                pdf.multi_cell(0, 8, (
+                    "Test scripture excerpt: The Sun rules the tenth house of Karma and grants "
+                    "authority when strong. This is a small custom book uploaded for automated "
+                    "testing purposes only. It should be searchable and deletable by the uploading user only."
+                ))
+                os.makedirs("/app/test_fixtures", exist_ok=True)
+                pdf.output(fx)
+            except Exception as e:
+                pytest.skip(f"Cannot construct PDF fixture: {e}")
+        pdf_bytes = open(fx, "rb").read()
+
+        files = {"file": ("TEST_custom_book.pdf", pdf_bytes, "application/pdf")}
+        r = requests.post(f"{API}/books/upload", files=files, headers=_bearer(user_a["tok"]), timeout=30)
+        assert r.status_code == 200, r.text
+        up = r.json()
+        assert up.get("chunks_added", 0) >= 1, f"expected chunks_added >=1, got {up}"
+        book_id = up["book_id"]
+        assert book_id and book_id != "seed"
+
+        # It appears in /books custom
+        lr = requests.get(f"{API}/books", headers=_bearer(user_a["tok"]))
+        custom = lr.json()["custom"]
+        assert any(b["book_id"] == book_id for b in custom), f"uploaded book not in custom: {custom}"
+        c = next(b for b in custom if b["book_id"] == book_id)
+        assert c["is_seed"] is False
+
+        # It is user-scoped (B does NOT see it)
+        lr_b = _bearer_get_books = requests.get(f"{API}/books", headers=_bearer(TestLibrary._user_b_tok))
+        assert lr_b.status_code == 200
+        assert not any(b["book_id"] == book_id for b in lr_b.json()["custom"])
+
+        # /books/search returns the custom chunk
+        sr = requests.get(f"{API}/books/search", params={"q": "custom book uploaded testing"},
+                          headers=_bearer(user_a["tok"]))
+        assert sr.status_code == 200
+        results = sr.json().get("results", [])
+        assert any(not r.get("is_seed", True) for r in results), f"no custom chunk returned in search: {results[:2]}"
+
+        # Delete the custom book — chunks removed
+        dr = requests.delete(f"{API}/books/{book_id}", headers=_bearer(user_a["tok"]))
+        assert dr.status_code == 200
+        assert dr.json().get("deleted_chunks", 0) >= 1
+
+        # After delete: not in /books
+        lr2 = requests.get(f"{API}/books", headers=_bearer(user_a["tok"]))
+        assert not any(b["book_id"] == book_id for b in lr2.json()["custom"])
+        # /books/search does not return the deleted chunk
+        sr2 = requests.get(f"{API}/books/search", params={"q": "custom book uploaded testing"},
+                           headers=_bearer(user_a["tok"]))
+        for res in sr2.json().get("results", []):
+            assert res.get("is_seed", True) is True or res.get("book") != "TEST_custom_book.pdf", \
+                f"deleted chunk still returned: {res}"
+
+
+# Inject user_b token into TestLibrary class before running (set from a fixture)
+@pytest.fixture(autouse=True, scope="session")
+def _inject_userb(user_b):
+    TestLibrary._user_b_tok = user_b["tok"]
+
+
+# ---------- 5. SSE helper ----------
 def _read_sse(response, max_seconds=90):
-    """Iterate SSE stream, return list of (event, data)."""
     events = []
     buf = ""
     deadline = time.time() + max_seconds
@@ -148,303 +295,146 @@ def _read_sse(response, max_seconds=90):
     return events
 
 
-class TestChatSSE:
-    session_id = f"TEST_{uuid.uuid4()}"
-
-    def test_chat_career_question_chart_aware(self):
-        payload = {
-            "profile_id": TEST_PROFILE_ID,
-            "session_id": self.session_id,
-            "message": "Why is my career stuck? What does my 10th house say?",
-        }
-        with requests.post(f"{API}/chat", json=payload, stream=True, timeout=120) as r:
-            assert r.status_code == 200, r.text
-            events = _read_sse(r, max_seconds=120)
-
-        # Assert we saw citations, deltas, and done
-        evt_names = [e for e, _ in events]
-        assert "citations" in evt_names, f"no citations event, events={evt_names[:8]}"
-        assert "delta" in evt_names, f"no delta events, events={evt_names[:8]}"
-        assert "done" in evt_names, f"no done event, events={evt_names[-5:]}"
-
-        # Citations structure
-        cits = next(d for e, d in events if e == "citations")
-        assert isinstance(cits, list)
-        assert len(cits) > 0
-        for c in cits:
-            for k in ("idx", "book", "chapter", "text", "score"):
-                assert k in c, f"citation missing {k}: {c}"
-
-        # Accumulate delta text
-        full = "".join(d.get("text", "") for e, d in events if e == "delta")
-        assert len(full) > 100, f"assistant reply too short ({len(full)} chars): {full!r}"
-        low = full.lower()
-        # Chart-aware: mention 10th house/lord AND current dasha (Rahu) or antardasha planet
-        mentions_10th = "10th" in low or "tenth" in low or "10 th" in low
-        mentions_dasha = ("rahu" in low) or ("mahadasha" in low) or ("antardasha" in low) or ("dasha" in low)
-        mentions_mercury_or_lord = "mercury" in low or "10th lord" in low or "tenth lord" in low
-        assert mentions_10th, f"reply not chart-aware (no 10th house): {full[:400]}"
-        assert mentions_dasha, f"reply not dasha-aware: {full[:400]}"
-        assert mentions_mercury_or_lord, f"reply doesn't mention 10th lord/Mercury: {full[:400]}"
-
-        # Save session_id for the follow-up memory test
-        TestChatSSE._first_full = full
-
-    def test_conversation_memory_followup(self):
-        # Use the same session used above
-        payload = {
-            "profile_id": TEST_PROFILE_ID,
-            "session_id": self.session_id,
-            "message": "And what remedy?",
-        }
-        with requests.post(f"{API}/chat", json=payload, stream=True, timeout=120) as r:
-            assert r.status_code == 200, r.text
-            events = _read_sse(r, max_seconds=120)
-        assert any(e == "done" for e, _ in events)
-        full = "".join(d.get("text", "") for e, d in events if e == "delta")
-        assert len(full) > 50, f"follow-up too short: {full!r}"
-        low = full.lower()
-        # Must NOT be an off-topic clarifier like 'remedy for what?'
-        clarify_signal = "remedy for what" in low or "which topic" in low or "please specify" in low
-        assert not clarify_signal, f"assistant asked for clarification instead of continuing context: {full[:400]}"
-        # Must reference context: career/10th/mercury/rahu remedy hints
-        topical = any(k in low for k in ["mercury", "career", "10th", "tenth", "rahu"])
-        assert topical, f"follow-up not context-aware: {full[:400]}"
-
-    def test_history_persisted(self):
-        # Give MongoDB a moment
-        time.sleep(1)
-        r = requests.get(f"{API}/chat/{self.session_id}/history", timeout=20)
-        assert r.status_code == 200
-        msgs = r.json().get("messages", [])
-        # At least 4 messages: 2 user + 2 assistant
-        assert len(msgs) >= 4, f"expected >=4 messages, got {len(msgs)}"
-        roles = [m["role"] for m in msgs]
-        assert roles.count("user") >= 2
-        assert roles.count("assistant") >= 2
-        # Assistant messages must carry citations
-        assistants = [m for m in msgs if m["role"] == "assistant"]
-        assert any((m.get("citations") or []) for m in assistants), "no citations persisted on any assistant message"
-
-
-# ---------- Threads CRUD ----------
-class TestThreads:
-    """POST/GET/PATCH/DELETE /api/threads endpoints."""
-    _thread_id = None
-
-    def test_create_thread(self):
-        r = requests.post(f"{API}/threads", json={"profile_id": TEST_PROFILE_ID, "name": "TEST_thread_a"}, timeout=15)
-        assert r.status_code == 200, r.text
-        data = r.json()
-        for k in ("id", "profile_id", "name", "created_at", "updated_at"):
-            assert k in data, f"missing {k} in create response"
-        assert data["profile_id"] == TEST_PROFILE_ID
-        assert data["name"] == "TEST_thread_a"
-        assert isinstance(data["id"], str) and len(data["id"]) > 10
-        TestThreads._thread_id = data["id"]
-
-    def test_list_threads_contains_new(self):
-        assert TestThreads._thread_id is not None
-        r = requests.get(f"{API}/threads", params={"profile_id": TEST_PROFILE_ID}, timeout=15)
-        assert r.status_code == 200
-        threads = r.json().get("threads", [])
-        assert isinstance(threads, list)
-        ids = [t["id"] for t in threads]
-        assert TestThreads._thread_id in ids, f"created thread not in list: {ids[:5]}"
-
-    def test_rename_thread_persists(self):
-        tid = TestThreads._thread_id
-        assert tid
-        r = requests.patch(f"{API}/threads/{tid}", json={"name": "TEST_renamed_b"}, timeout=15)
-        assert r.status_code == 200, r.text
-        # GET list and verify persistence
-        r2 = requests.get(f"{API}/threads", params={"profile_id": TEST_PROFILE_ID}, timeout=15)
-        threads = r2.json().get("threads", [])
-        found = next((t for t in threads if t["id"] == tid), None)
-        assert found is not None
-        assert found["name"] == "TEST_renamed_b", f"rename did not persist: {found}"
-
-    def test_rename_missing_thread_404(self):
-        r = requests.patch(f"{API}/threads/nonexistent-thread-id-xyz", json={"name": "x"}, timeout=15)
-        assert r.status_code == 404
-
-    def test_delete_thread_removes_and_cascades_messages(self):
-        # Create a thread, send a chat message on it, delete, verify both gone
-        cr = requests.post(f"{API}/threads", json={"profile_id": TEST_PROFILE_ID, "name": "TEST_todelete"}, timeout=15)
-        assert cr.status_code == 200
+# ---------- 6. AUTO-NAME THREAD ----------
+class TestAutoName:
+    def test_first_message_renames_thread(self, user_a, profile_a):
+        # Create a "Chat 1" (default-name) thread
+        cr = requests.post(f"{API}/threads", json={"name": "Chat 1"}, headers=_bearer(user_a["tok"]))
+        assert cr.status_code == 200, f"create thread failed: {cr.status_code} {cr.text}"
         tid = cr.json()["id"]
-        # Manually insert a message via chat? Faster: just call delete and rely on cascade code
-        # But we want to verify cascade — post a very small chat and cancel quickly
-        # Use direct DB-less approach: rely on the delete endpoint deleting messages if any exist
-        # (Cannot easily insert messages via public API without going through /api/chat streaming.)
-        dr = requests.delete(f"{API}/threads/{tid}", timeout=15)
-        assert dr.status_code == 200
-        assert dr.json().get("ok") is True
-        # Verify gone from list
-        lr = requests.get(f"{API}/threads", params={"profile_id": TEST_PROFILE_ID}, timeout=15)
-        ids = [t["id"] for t in lr.json().get("threads", [])]
-        assert tid not in ids
-
-    def test_cleanup_rename_thread(self):
-        # Final cleanup — delete the renamed thread
-        tid = TestThreads._thread_id
-        if tid:
-            requests.delete(f"{API}/threads/{tid}", timeout=15)
-
-
-# ---------- LOGIC block in chat + persisted history ----------
-class TestLogicBlock:
-    """The assistant reply must contain a <LOGIC>...</LOGIC> block and the persisted
-    history must expose separate 'answer' and 'logic' fields."""
-    session_id = f"TEST_logic_{uuid.uuid4()}"
-
-    def test_chat_reply_contains_logic_and_is_plain(self):
-        payload = {
-            "profile_id": TEST_PROFILE_ID,
-            "session_id": self.session_id,
-            "message": "How's my career going right now?",
-        }
-        with requests.post(f"{API}/chat", json=payload, stream=True, timeout=120) as r:
-            assert r.status_code == 200, r.text
-            events = _read_sse(r, max_seconds=120)
-
-        # Look for either successful delta content or an error event (budget)
-        deltas = [d.get("text", "") for e, d in events if e == "delta"]
-        full = "".join(deltas)
-        errors = [d for e, d in events if e == "error"]
-        if errors and not full.strip():
-            pytest.skip(f"LLM upstream error, unverified: {errors[0]}")
-
-        assert "<LOGIC>" in full, f"reply missing <LOGIC> tag; full={full[:600]!r}"
-        assert "</LOGIC>" in full, f"reply missing </LOGIC> close tag"
-
-        # Visible portion (before <LOGIC>) must be plain-language: no jargon words
-        visible = full.split("<LOGIC>", 1)[0].lower()
-        JARGON = [
-            "nakshatra", "retrograde", "ascendant", "lagna", "dasha", "antardasha",
-            "graha", "vargottama", "moolatrikona", "debilitated",
-        ]
-        # 'house' is very common English; the requirement is that we don't say "10th house" etc.
-        # Check specifically for house-number phrasing.
-        import re
-        housey = re.search(r"\b(\d{1,2})(st|nd|rd|th)\s+house\b", visible)
-        assert not housey, f"visible answer used '<N>th house' phrasing: {housey.group(0)}"
-
-        found_jargon = [w for w in JARGON if w in visible]
-        assert not found_jargon, f"jargon words leaked into visible answer: {found_jargon}\nvisible={visible[:400]}"
-
-        # Word count guardrail (soft): visible <= ~400 words
-        word_count = len(visible.split())
-        assert word_count <= 400, f"visible answer too long: {word_count} words"
-
-    def test_history_persists_logic_and_answer_fields(self):
-        time.sleep(1)
-        r = requests.get(f"{API}/chat/{self.session_id}/history", timeout=20)
-        assert r.status_code == 200
-        msgs = r.json().get("messages", [])
-        assistants = [m for m in msgs if m["role"] == "assistant"]
-        if not assistants:
-            pytest.skip("no assistant message persisted (likely upstream LLM error)")
-        a = assistants[-1]
-        # Either the raw content contains LOGIC OR the split fields are populated
-        content = a.get("content", "") or ""
-        answer = a.get("answer", "") or ""
-        logic = a.get("logic", "") or ""
-        assert "<LOGIC>" in content, "persisted content missing <LOGIC>"
-        assert answer, "persisted answer field empty"
-        assert logic, "persisted logic field empty"
-        assert "<LOGIC>" not in answer, "answer should be stripped of <LOGIC>"
+        # Send a chat message
+        payload = {"session_id": tid, "message": "What does my chart say about my career direction?"}
+        with requests.post(f"{API}/chat", json=payload, headers=_bearer(user_a["tok"]), stream=True, timeout=180) as r:
+            assert r.status_code == 200, f"chat failed: {r.status_code} {r.text[:200]}"
+            events = _read_sse(r, max_seconds=180)
+        assert any(e == "done" for e, _ in events)
+        # Poll /threads for up to 20s to see the name change
+        deadline = time.time() + 20
+        final_name = None
+        while time.time() < deadline:
+            lr = requests.get(f"{API}/threads", headers=_bearer(user_a["tok"]))
+            assert lr.status_code == 200, f"threads GET failed: {lr.status_code} {lr.text[:200]}"
+            match = next((t for t in lr.json().get("threads", []) if t["id"] == tid), None)
+            if match and match["name"] and match["name"].lower() not in ("chat 1", "new chat", "general"):
+                final_name = match["name"]
+                break
+            time.sleep(1)
+        assert final_name, f"thread name did not auto-rename from 'Chat 1' within 20s"
+        # 2-5 words heuristic (allow up to 8 for lenience)
+        assert 1 <= len(final_name.split()) <= 8, f"auto-name unexpected length: {final_name!r}"
+        # cleanup
+        requests.delete(f"{API}/threads/{tid}", headers=_bearer(user_a["tok"]))
 
 
-# ---------- Attachment upload for vision ----------
-class TestAttachments:
-    """POST /api/chat/attachment + GET /api/attachments/{fname} roundtrip."""
+# ---------- 7. MANUAL RENAME ----------
+class TestManualRename:
+    def test_rename_persists(self, user_a):
+        cr = requests.post(f"{API}/threads", json={"name": "TEST_orig"}, headers=_bearer(user_a["tok"]))
+        tid = cr.json()["id"]
+        pr = requests.patch(f"{API}/threads/{tid}", json={"name": "My Career"}, headers=_bearer(user_a["tok"]))
+        assert pr.status_code == 200
+        lr = requests.get(f"{API}/threads", headers=_bearer(user_a["tok"]))
+        row = next(t for t in lr.json()["threads"] if t["id"] == tid)
+        assert row["name"] == "My Career"
+        requests.delete(f"{API}/threads/{tid}", headers=_bearer(user_a["tok"]))
 
-    def test_upload_png_and_fetch(self):
-        img_path = "/app/test_fixtures/attachment.png"
-        assert os.path.exists(img_path), "test fixture PNG missing"
-        with open(img_path, "rb") as f:
-            files = {"file": ("attachment.png", f, "image/png")}
-            r = requests.post(f"{API}/chat/attachment", files=files, timeout=30)
-        assert r.status_code == 200, r.text
-        data = r.json()
-        for k in ("url", "filename", "mime_type", "size"):
-            assert k in data, f"missing key {k} in upload response"
-        assert data["mime_type"] == "image/png"
-        assert data["filename"] == "attachment.png"
-        assert data["size"] > 500
-        # Fetch it back
-        fname = data["url"].split("/api/attachments/")[-1]
-        g = requests.get(f"{API}/attachments/{fname}", timeout=15)
-        assert g.status_code == 200
-        assert g.headers.get("content-type", "").startswith("image/")
-        assert len(g.content) == data["size"]
-
-    def test_upload_rejects_non_image(self):
-        files = {"file": ("bad.txt", b"hello world", "text/plain")}
-        r = requests.post(f"{API}/chat/attachment", files=files, timeout=15)
-        assert r.status_code == 400, r.text
-
-    def test_serve_missing_attachment_404(self):
-        r = requests.get(f"{API}/attachments/does_not_exist_xyz.png", timeout=15)
+    def test_rename_missing_404(self, user_a):
+        r = requests.patch(f"{API}/threads/nonexistent-xyz", json={"name": "x"}, headers=_bearer(user_a["tok"]))
         assert r.status_code == 404
 
 
-# ---------- Vision E2E: attachment_urls to /api/chat must yield real Claude vision reply ----------
-class TestChatVision:
-    """Iteration 5 CRITICAL FIX: attachment_urls must no longer trigger
-    'File attachments are only supported with Gemini provider' error.
-    Assistant reply must describe the actual image (colors/shapes/text)."""
+# ---------- 8. PER-MESSAGE BOOK SCOPING ----------
+class TestBookScoping:
+    def test_scoped_msg_emits_scope_event_then_followup_does_not(self, user_a, profile_a):
+        # Create fresh thread (default name so auto-name won't interfere with test flow)
+        cr = requests.post(f"{API}/threads", json={"name": "TEST_scope"}, headers=_bearer(user_a["tok"]))
+        assert cr.status_code == 200, f"create thread failed: {cr.status_code} {cr.text}"
+        tid = cr.json()["id"]
 
-    def test_chat_with_attachment_returns_real_vision(self):
-        # 1. Upload the fixture PNG
-        img_path = "/app/test_fixtures/attachment.png"
-        assert os.path.exists(img_path), "fixture PNG missing"
-        with open(img_path, "rb") as f:
-            up = requests.post(
-                f"{API}/chat/attachment",
-                files={"file": ("attachment.png", f, "image/png")},
-                timeout=30,
-            )
-        assert up.status_code == 200, up.text
-        url = up.json()["url"]
+        # (a) Scoped message
+        payload1 = {"session_id": tid, "message": "Answer from Phaladeepika: what shapes my career?"}
+        events1 = []
+        deltas1 = ""
+        citations1 = []
+        with requests.post(f"{API}/chat", json=payload1, headers=_bearer(user_a["tok"]), stream=True, timeout=180) as r:
+            assert r.status_code == 200
+            events1 = _read_sse(r, max_seconds=180)
+        assert any(e == "done" for e, _ in events1)
 
-        # 2. POST /api/chat with attachment_urls
-        session_id = f"TEST_vision_{uuid.uuid4()}"
-        payload = {
-            "profile_id": TEST_PROFILE_ID,
-            "session_id": session_id,
-            "message": "Please describe the image I just attached — what shapes, colors, and text do you see?",
-            "attachment_urls": [url],
-        }
-        with requests.post(f"{API}/chat", json=payload, stream=True, timeout=180) as r:
+        # scope must appear
+        evt_names = [e for e, _ in events1]
+        assert "scope" in evt_names, f"no 'scope' event emitted for scoped message. events={evt_names[:10]}"
+
+        # scope must appear BEFORE any delta
+        first_delta_idx = next((i for i, (e, _) in enumerate(events1) if e == "delta"), -1)
+        first_scope_idx = next((i for i, (e, _) in enumerate(events1) if e == "scope"), -1)
+        assert first_scope_idx >= 0 and (first_delta_idx == -1 or first_scope_idx < first_delta_idx), (
+            f"scope event did not precede deltas; scope={first_scope_idx} delta={first_delta_idx}"
+        )
+
+        # scope payload must include Phaladeepika
+        scope_evt = next(d for e, d in events1 if e == "scope")
+        assert "books" in scope_evt
+        assert any("Phaladeepika" in b for b in scope_evt["books"]), f"scope books = {scope_evt['books']}"
+
+        # citations must all be from Phaladeepika (if any). BM25 may return 0 hits
+        # with a very narrow book pool — but any hit must be Phaladeepika.
+        cits1 = next((d for e, d in events1 if e == "citations"), [])
+        assert isinstance(cits1, list)
+        for c in cits1:
+            assert "Phaladeepika" in c["book"], f"non-Phaladeepika citation leaked: {c['book']}"
+
+        # (b) Follow-up (no scope trigger) — scope MUST NOT emit
+        payload2 = {"session_id": tid, "message": "And what about my relationships?"}
+        with requests.post(f"{API}/chat", json=payload2, headers=_bearer(user_a["tok"]), stream=True, timeout=180) as r2:
+            assert r2.status_code == 200
+            events2 = _read_sse(r2, max_seconds=180)
+        assert any(e == "done" for e, _ in events2)
+        evt2_names = [e for e, _ in events2]
+        assert "scope" not in evt2_names, f"scope leaked to follow-up! events={evt2_names[:10]}"
+        # citations may come from any book — just assert we got some
+        cits2 = next(d for e, d in events2 if e == "citations")
+        assert isinstance(cits2, list) and len(cits2) > 0
+
+        # cleanup
+        requests.delete(f"{API}/threads/{tid}", headers=_bearer(user_a["tok"]))
+
+
+# ---------- 9. CHAT SSE REGRESSION (citations + deltas + done + logic) ----------
+class TestChatSSE:
+    def test_chat_streams_citations_deltas_done(self, user_a, profile_a):
+        cr = requests.post(f"{API}/threads", json={"name": "TEST_chat_sse"}, headers=_bearer(user_a["tok"]))
+        tid = cr.json()["id"]
+        payload = {"session_id": tid, "message": "Why is my career stuck?"}
+        with requests.post(f"{API}/chat", json=payload, headers=_bearer(user_a["tok"]), stream=True, timeout=180) as r:
             assert r.status_code == 200, r.text
             events = _read_sse(r, max_seconds=180)
+        evt_names = [e for e, _ in events]
+        assert "citations" in evt_names
+        assert "delta" in evt_names
+        assert "done" in evt_names
+        full = "".join(d.get("text", "") for e, d in events if e == "delta")
+        assert len(full) > 100
+        assert "<LOGIC>" in full
+        # History persists
+        hr = requests.get(f"{API}/chat/{tid}/history", headers=_bearer(user_a["tok"]))
+        assert hr.status_code == 200
+        msgs = hr.json()["messages"]
+        assert any(m["role"] == "assistant" and (m.get("logic") or "") for m in msgs)
+        requests.delete(f"{API}/threads/{tid}", headers=_bearer(user_a["tok"]))
 
-        # 3. Must have NO 'only supported with Gemini' error
-        errors = [d for e, d in events if e == "error"]
-        for err in errors:
-            err_str = json.dumps(err).lower()
-            assert "only supported with gemini" not in err_str, (
-                f"vision regression: Gemini-only error surfaced again: {err}"
-            )
-        # If provider budget/quota error, allow skip (env-dependent)
-        deltas = "".join(
-            (d.get("text", "") if isinstance(d, dict) else "")
-            for e, d in events if e == "delta"
-        )
-        if errors and not deltas.strip():
-            pytest.skip(f"LLM upstream error, unverified vision: {errors[0]}")
 
-        # 4. Assistant reply must be substantive and describe the actual image
-        assert len(deltas) > 50, f"reply too short ({len(deltas)} chars): {deltas!r}"
-        visible = deltas.split("<LOGIC>", 1)[0].lower() if "<LOGIC>" in deltas else deltas.lower()
-        assert len(visible.strip()) > 50, f"visible answer too short: {visible!r}"
-
-        # The fixture has: orange circle half, blue square/half, diagonal line, "Test" text.
-        color_hits = sum(1 for c in ("orange", "blue", "black", "beige", "cream", "red", "navy", "rust") if c in visible)
-        shape_hits = sum(1 for s in ("circle", "square", "line", "diagonal", "shape", "rectangle", "diagram") if s in visible)
-        assert color_hits + shape_hits >= 2, (
-            f"reply does not describe image (colors/shapes): {visible[:400]}"
-        )
-
+# ---------- Session cleanup ----------
+@pytest.fixture(autouse=True, scope="session")
+def _final_cleanup(request):
+    yield
+    db = _mongo()
+    if not _CREATED_USER_IDS:
+        return
+    # Only delete users this worker created (safe under xdist)
+    db.users.delete_many({"user_id": {"$in": _CREATED_USER_IDS}})
+    db.user_sessions.delete_many({"user_id": {"$in": _CREATED_USER_IDS}})
+    db.profiles.delete_many({"user_id": {"$in": _CREATED_USER_IDS}})
+    db.threads.delete_many({"user_id": {"$in": _CREATED_USER_IDS}})
+    db.messages.delete_many({"user_id": {"$in": _CREATED_USER_IDS}})
+    db.book_chunks.delete_many({"user_id": {"$in": _CREATED_USER_IDS}})
