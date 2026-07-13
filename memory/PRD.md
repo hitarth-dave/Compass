@@ -42,21 +42,19 @@ User wants a Vedic astrology conversational web app. Backend uses ~100 Sanatan/H
 - House-number positions fixed to prevent overlap
 - Chat bug fix: MessageBubble now destructures {msg, idx} — was throwing ReferenceError
 
-## Iteration 4-5 (2026-07-13) — Chat & sidebar upgrades
-- Markdown rendering in chat via `react-markdown` + `remark-gfm` (styled via .md-body CSS)
-- System prompt rewritten: plain everyday language, ≤300 words, NO jargon (nakshatra/dasha/etc.) in visible reply; technical reasoning embedded in a `<LOGIC>...</LOGIC>` block that the frontend strips from the bubble
-- "Why?" button per assistant message opens a right-side Sheet (`data-testid=logic-panel`) showing the LOGIC content + shastra excerpts consulted
-- Collapsible sidebar: hamburger toggle switches w-72↔w-16, persisted via `localStorage['jyotish_sidebar_collapsed']`
-- Multiple named chat threads under Conversation: expand toggle, create/rename/delete via dropdown menu + AlertDialog; URL keyed by `?t=<threadId>`; each thread has its own history
-- Voice mic via Web Speech API (webkitSpeechRecognition) into the input textarea
-- Image attachments (JPG/PNG/WEBP) upload to `/api/chat/attachment` and stream to Claude Sonnet 4.5 vision via `ImageContent(image_base64=…)` — real vision output (colors/shapes/text) confirmed by iteration-5 test
+## Iteration 6 (2026-07-13) — Rebrand + Auth + Book scoping
+- **Rebrand** Jyotish AI → **Compass Astro** ("Ancient wisdom, clear direction") across UI, page titles, system prompts.
+- **Emergent Google Auth**: `/auth/session` exchanges Google `session_id` → 7-day `session_token` cookie + backend `user_sessions` collection; `/auth/me` + `/auth/logout`. Backend uses `Depends(get_current_user)` on every protected endpoint (falls back to `Authorization: Bearer` header for tests). Structure ready for future email/password provider.
+- **Landing page** for logged-out visitors (`/`) with hero, feature cards, and "Continue with Google" button.
+- **User-scoped data**: profiles, threads, messages, book_chunks, attachments all tagged with `user_id`. Custom `user_id` UUID (never `_id`).
+- **Auto-name threads**: background Claude Haiku 4.5 call after first user turn generates a 2-5 word title if the thread has a default name; manual rename still works.
+- **Library seed vs custom**: `/api/books` returns `{seed: [...], custom: [...]}`; delete only allowed on custom books (`DELETE /api/books/{book_id}` — seed is 400); UI shows locked seed corpus + user's uploads with a delete button.
+- **Per-message book scoping**: `detect_book_scope()` parses trigger phrases ("from X", "as per X", "@X", etc.) against the user's book list. If a match is found, that turn's retrieval is filtered to that book and Claude is instructed to cite only from it. The filter NEVER persists past the current message — next question searches the full library again.
 
 ## Backlog / Next Actions
-- P1: Multi-chart profiles + Emergent Google Auth (user login) — next up
-- P1: Panchanga daily card (tithi, yoga, karana, hora, rahu kala)
-- P1: More divisional charts (D10 Dashamsa career, D7 Saptamsa children, D24 Chaturvimshamsa learning)
-- P2: Kundali matching (Ashtakoot) for two natives
-- P2: Muhurta / auspicious timing recommendations
-- P2: Vector embeddings (upgrade from BM25) as corpus grows past ~500 chunks
-- P2: Ashtakavarga (SAV/BAV) transit strength scoring
-- Polish: aria-describedby on Sheet/AlertDialog; defer user_msg persistence until first delta; thread delete → 404 on missing id; make thread-menu visible for keyboard/touch users
+- P1: Email/password provider alongside Google (auth structure already ready)
+- P1: Panchanga daily card (tithi, yoga, karana, rahu kala)
+- P1: More divisional charts (D10 Dashamsa, D7, D24)
+- P2: Ashtakoot matching, Muhurta timings, Ashtakavarga
+- P2: Vector embeddings (upgrade from BM25) as corpus grows
+- Polish: aria-describedby, thread-menu accessibility, resend/retry on stream failure

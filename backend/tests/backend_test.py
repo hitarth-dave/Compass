@@ -377,10 +377,11 @@ class TestBookScoping:
         assert "books" in scope_evt
         assert any("Phaladeepika" in b for b in scope_evt["books"]), f"scope books = {scope_evt['books']}"
 
-        # citations must all be from Phaladeepika (if any). BM25 may return 0 hits
-        # with a very narrow book pool — but any hit must be Phaladeepika.
+        # FIX (a): citations must be non-empty for tiny-pool BM25 (Phaladeepika has 2 chunks).
+        # All citations must be from Phaladeepika.
         cits1 = next((d for e, d in events1 if e == "citations"), [])
         assert isinstance(cits1, list)
+        assert len(cits1) >= 1, f"FIX (a) BM25 tiny-pool: expected ≥1 citation on scoped msg, got 0"
         for c in cits1:
             assert "Phaladeepika" in c["book"], f"non-Phaladeepika citation leaked: {c['book']}"
 
@@ -422,6 +423,123 @@ class TestChatSSE:
         msgs = hr.json()["messages"]
         assert any(m["role"] == "assistant" and (m.get("logic") or "") for m in msgs)
         requests.delete(f"{API}/threads/{tid}", headers=_bearer(user_a["tok"]))
+
+
+# ---------- 10. FIX (a) BM25 tiny-pool floor (unit-level test via public API) ----------
+class TestBM25TinyPool:
+    def test_scoped_search_returns_results_from_tiny_book(self, user_a, profile_a):
+        """FIX (a): search_for_user with book_names={'Phaladeepika (Mantreswara)'}
+        must return ≥1 chunk for 'career' or 'marriage' even though Phaladeepika
+        has only 2 seed chunks (BM25 IDF collapses).
+        We exercise via /api/chat SSE 'citations' event with an explicit scope trigger.
+        """
+        for msg in (
+            "As per Phaladeepika, what shapes my career?",
+            "According to Phaladeepika, when is marriage timing best?",
+        ):
+            cr = requests.post(f"{API}/threads", json={"name": "TEST_bm25_tiny"}, headers=_bearer(user_a["tok"]))
+            tid = cr.json()["id"]
+            try:
+                with requests.post(f"{API}/chat", json={"session_id": tid, "message": msg},
+                                    headers=_bearer(user_a["tok"]), stream=True, timeout=180) as r:
+                    assert r.status_code == 200
+                    events = _read_sse(r, max_seconds=180)
+                evt_names = [e for e, _ in events]
+                assert "scope" in evt_names, f"expected 'scope' for msg={msg!r}, got events={evt_names[:8]}"
+                cits = next((d for e, d in events if e == "citations"), [])
+                assert isinstance(cits, list) and len(cits) >= 1, (
+                    f"FIX (a) failed: expected ≥1 Phaladeepika citation for msg={msg!r}, got {len(cits)}"
+                )
+                for c in cits:
+                    assert "Phaladeepika" in c["book"], f"non-Phaladeepika citation leaked: {c['book']}"
+            finally:
+                requests.delete(f"{API}/threads/{tid}", headers=_bearer(user_a["tok"]))
+
+
+# ---------- 11. FIX (c) Persist on client disconnect ----------
+class TestPersistOnDisconnect:
+    def test_assistant_msg_persists_when_client_aborts_mid_stream(self, user_a, profile_a):
+        """FIX (c): kill the SSE mid-stream (after 2-3 deltas, BEFORE 'done').
+        Poll /api/chat/{tid}/history within 10s — assistant message MUST be persisted
+        (content non-empty). Auto-name (if 'Chat N') should still fire eventually.
+        """
+        cr = requests.post(f"{API}/threads", json={"name": "Chat 1"}, headers=_bearer(user_a["tok"]))
+        tid = cr.json()["id"]
+        try:
+            payload = {"session_id": tid, "message": "What does my career look like this year?"}
+            deltas_seen = 0
+            with requests.post(f"{API}/chat", json=payload, headers=_bearer(user_a["tok"]),
+                                stream=True, timeout=60) as r:
+                assert r.status_code == 200
+                buf = ""
+                for chunk in r.iter_content(chunk_size=None, decode_unicode=True):
+                    if not chunk:
+                        continue
+                    buf += chunk
+                    while "\n\n" in buf:
+                        block, buf = buf.split("\n\n", 1)
+                        if "event: delta" in block:
+                            deltas_seen += 1
+                        if deltas_seen >= 2:
+                            break
+                    if deltas_seen >= 2:
+                        r.close()
+                        break
+            assert deltas_seen >= 2, f"could not observe ≥2 deltas before abort (saw {deltas_seen})"
+
+            # Poll history for up to 15s
+            deadline = time.time() + 15
+            persisted = None
+            while time.time() < deadline:
+                hr = requests.get(f"{API}/chat/{tid}/history", headers=_bearer(user_a["tok"]))
+                assert hr.status_code == 200
+                msgs = hr.json().get("messages", [])
+                assistant = [m for m in msgs if m["role"] == "assistant"]
+                if assistant and (assistant[-1].get("content") or "").strip():
+                    persisted = assistant[-1]
+                    break
+                time.sleep(1)
+            assert persisted is not None, (
+                "FIX (c) failed: assistant message was NOT persisted after client disconnected mid-stream"
+            )
+            assert len(persisted.get("content", "")) > 0
+        finally:
+            requests.delete(f"{API}/threads/{tid}", headers=_bearer(user_a["tok"]))
+
+
+# ---------- 12. FIX (e) Tightened detect_book_scope regex ----------
+class TestScopeRegexTightened:
+    def _events(self, tok, tid, msg):
+        with requests.post(f"{API}/chat", json={"session_id": tid, "message": msg},
+                            headers=_bearer(tok), stream=True, timeout=180) as r:
+            assert r.status_code == 200
+            return _read_sse(r, max_seconds=180)
+
+    def test_in_and_per_no_longer_trigger_scope(self, user_a, profile_a):
+        cr = requests.post(f"{API}/threads", json={"name": "TEST_regex"}, headers=_bearer(user_a["tok"]))
+        tid = cr.json()["id"]
+        try:
+            for msg in ("What is happening in my career?", "Guide me per my mahadasha"):
+                events = self._events(user_a["tok"], tid, msg)
+                evt_names = [e for e, _ in events]
+                assert "scope" not in evt_names, (
+                    f"FIX (e) failed: msg={msg!r} triggered scope. events={evt_names[:8]}"
+                )
+                assert "done" in evt_names
+        finally:
+            requests.delete(f"{API}/threads/{tid}", headers=_bearer(user_a["tok"]))
+
+    def test_as_per_still_triggers_scope(self, user_a, profile_a):
+        cr = requests.post(f"{API}/threads", json={"name": "TEST_regex2"}, headers=_bearer(user_a["tok"]))
+        tid = cr.json()["id"]
+        try:
+            events = self._events(user_a["tok"], tid, "As per Phaladeepika, what shapes my career?")
+            evt_names = [e for e, _ in events]
+            assert "scope" in evt_names, "FIX (e) regression: 'as per <book>' must still trigger scope"
+            scope_evt = next(d for e, d in events if e == "scope")
+            assert any("Phaladeepika" in b for b in scope_evt["books"])
+        finally:
+            requests.delete(f"{API}/threads/{tid}", headers=_bearer(user_a["tok"]))
 
 
 # ---------- Session cleanup ----------

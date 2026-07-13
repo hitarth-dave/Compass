@@ -222,6 +222,11 @@ export default function Chat() {
               c[c.length - 1] = { ...c[c.length - 1], content: c[c.length - 1].content + data.text };
               return c;
             });
+          } else if (evtName === "done") {
+            // Server signaled completion — bail immediately even if reader
+            // hasn't seen {done:true} (some proxies keep the SSE conn open).
+            setStreaming(false);
+            return;
           } else if (evtName === "error") {
             toast.error(`Claude API: ${data.error}`);
             setMessages((m) => {

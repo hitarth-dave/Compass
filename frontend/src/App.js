@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
+import { useEffect } from "react";
 import axios from "axios";
 import "@/App.css";
 
@@ -17,6 +18,15 @@ axios.defaults.withCredentials = true;
 
 function AppRouter() {
   const location = useLocation();
+  // Keep the browser tab title as Compass Astro even if platform scripts override it.
+  useEffect(() => {
+    const setTitle = () => { document.title = "Compass Astro"; };
+    setTitle();
+    const obs = new MutationObserver(setTitle);
+    const t = document.querySelector("title");
+    if (t) obs.observe(t, { childList: true });
+    return () => obs.disconnect();
+  }, []);
   // CRITICAL: detect session_id in fragment synchronously (before route dispatch)
   if (location.hash?.includes("session_id=")) {
     return <AuthCallback />;

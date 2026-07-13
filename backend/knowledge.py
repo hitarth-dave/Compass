@@ -107,6 +107,10 @@ async def search_for_user(db, user_id: str, query: str, k: int = 8, book_names: 
     bm25 = BM25Okapi(toks)
     scores = bm25.get_scores(_tokenize(query))
     ranked = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
+    # When book_names is provided (per-message scoping) and the pool is small,
+    # BM25 IDF can collapse to 0 — return top-K regardless of positive score.
+    if book_names:
+        return [{**pool[i], "score": float(scores[i])} for i in ranked[:k]]
     return [{**pool[i], "score": float(scores[i])} for i in ranked[:k] if scores[i] > 0]
 
 
@@ -165,7 +169,7 @@ def detect_book_scope(message: str, available_book_names: List[str]) -> Optional
     m_lower = message.lower()
 
     trigger_pattern = re.compile(
-        r"\b(?:from|as per|according to|per|in|using|based on|only from|from the)\b\s+([A-Za-z][^,.?!\n]{2,80})",
+        r"\b(?:from|as per|according to|only from|from the|from the book|based on the book)\b\s+([A-Za-z][^,.?!\n]{2,80})",
         re.IGNORECASE,
     )
     at_pattern = re.compile(r"@([A-Za-z][A-Za-z0-9 _'-]{2,60})")

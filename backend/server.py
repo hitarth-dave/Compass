@@ -10,6 +10,7 @@ import json
 import uuid
 import base64
 import re
+import asyncio
 import httpx
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, BeforeValidator
@@ -475,29 +476,32 @@ async def chat_stream(req: ChatRequest, user: User = Depends(get_current_user)):
             parts = full.split("<LOGIC>", 1)
             answer_only = parts[0].strip()
             logic_only = parts[1].split("</LOGIC>", 1)[0].strip() if "</LOGIC>" in parts[1] else parts[1].strip()
-        await db.messages.insert_one({
-            "session_id": req.session_id,
-            "user_id": user.user_id,
-            "role": "assistant",
-            "content": full,
-            "answer": answer_only,
-            "logic": logic_only,
-            "citations": citations_payload,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        })
-        await db.threads.update_one({"id": req.session_id}, {"$set": {"updated_at": datetime.now(timezone.utc).isoformat()}})
 
-        # Auto-name if this was the first user turn and the thread has a default name
-        if is_first_user_msg and re.match(r"^(new chat|chat \d+|general)$", (thread.get("name") or "").strip(), re.IGNORECASE):
-            import asyncio
-            asyncio.create_task(_auto_name_thread(req.session_id, req.message))
+        # Persist AND schedule auto-name under shield so client-disconnect
+        # (user navigates away mid-stream) doesn't drop the assistant reply.
+        async def _persist():
+            await db.messages.insert_one({
+                "session_id": req.session_id,
+                "user_id": user.user_id,
+                "role": "assistant",
+                "content": full,
+                "answer": answer_only,
+                "logic": logic_only,
+                "citations": citations_payload,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+            await db.threads.update_one({"id": req.session_id}, {"$set": {"updated_at": datetime.now(timezone.utc).isoformat()}})
+            if is_first_user_msg and re.match(r"^(new chat|chat \d+|general)$", (thread.get("name") or "").strip(), re.IGNORECASE):
+                asyncio.create_task(_auto_name_thread(req.session_id, req.message))
+
+        await asyncio.shield(_persist())
 
         yield f"event: done\ndata: {json.dumps({'ok': True})}\n\n"
 
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "close"},
     )
 
 
