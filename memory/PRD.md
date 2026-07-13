@@ -36,6 +36,21 @@ User wants a Vedic astrology conversational web app. Backend uses ~100 Sanatan/H
 - Dashboard adds panels: D9 Navamsa chart, House Lords with lord's placement, Detected Yogas, Antardasha alongside Mahadasha
 - Chat adds "Show retrieved passages" toggle per assistant message revealing full excerpts on a parchment panel
 
+## Iteration 3 (2026-07-11) — Parashara's Light chart notation
+- KundaliChart rewritten to match Parashara's Light standard: 12-region NI diamond, planet initials (Su/Mo/Ma/Me/Ju/Ve/Sa/Ra/Ke) + retrograde "R" + DD:MM degree + 3-letter nakshatra abbreviation, color-coded per graha
+- Ascendant rendered as "As DD:MM Nak" inside H1
+- House-number positions fixed to prevent overlap
+- Chat bug fix: MessageBubble now destructures {msg, idx} — was throwing ReferenceError
+
+## Iteration 4-5 (2026-07-13) — Chat & sidebar upgrades
+- Markdown rendering in chat via `react-markdown` + `remark-gfm` (styled via .md-body CSS)
+- System prompt rewritten: plain everyday language, ≤300 words, NO jargon (nakshatra/dasha/etc.) in visible reply; technical reasoning embedded in a `<LOGIC>...</LOGIC>` block that the frontend strips from the bubble
+- "Why?" button per assistant message opens a right-side Sheet (`data-testid=logic-panel`) showing the LOGIC content + shastra excerpts consulted
+- Collapsible sidebar: hamburger toggle switches w-72↔w-16, persisted via `localStorage['jyotish_sidebar_collapsed']`
+- Multiple named chat threads under Conversation: expand toggle, create/rename/delete via dropdown menu + AlertDialog; URL keyed by `?t=<threadId>`; each thread has its own history
+- Voice mic via Web Speech API (webkitSpeechRecognition) into the input textarea
+- Image attachments (JPG/PNG/WEBP) upload to `/api/chat/attachment` and stream to Claude Sonnet 4.5 vision via `ImageContent(image_base64=…)` — real vision output (colors/shapes/text) confirmed by iteration-5 test
+
 ## Backlog / Next Actions
 - P1: Multi-chart profiles + Emergent Google Auth (user login) — next up
 - P1: Panchanga daily card (tithi, yoga, karana, hora, rahu kala)
@@ -44,3 +59,4 @@ User wants a Vedic astrology conversational web app. Backend uses ~100 Sanatan/H
 - P2: Muhurta / auspicious timing recommendations
 - P2: Vector embeddings (upgrade from BM25) as corpus grows past ~500 chunks
 - P2: Ashtakavarga (SAV/BAV) transit strength scoring
+- Polish: aria-describedby on Sheet/AlertDialog; defer user_msg persistence until first delta; thread delete → 404 on missing id; make thread-menu visible for keyboard/touch users
