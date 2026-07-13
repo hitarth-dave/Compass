@@ -198,3 +198,41 @@ body::after {
     fill: rgba(15, 61, 46, 0.65);
     font-style: italic;
 }
+
+/* Markdown styling (replaces need for @tailwindcss/typography plugin) */
+.md-body p { margin: 0 0 0.85em 0; line-height: 1.65; }
+.md-body p:last-child { margin-bottom: 0; }
+.md-body strong { color: var(--jai-green-deep); font-weight: 600; }
+.md-body em { color: var(--jai-gold); font-style: italic; }
+.md-body h1, .md-body h2, .md-body h3 {
+    font-family: 'Cormorant Garamond', serif;
+    color: var(--jai-green-deep);
+    margin: 1.1em 0 0.4em 0;
+    line-height: 1.15;
+}
+.md-body h1 { font-size: 1.35rem; }
+.md-body h2 { font-size: 1.2rem; }
+.md-body h3 { font-size: 1.05rem; }
+.md-body ul, .md-body ol { margin: 0.4em 0 0.9em 1.2em; padding: 0; }
+.md-body ul li { list-style-type: disc; margin-bottom: 0.3em; }
+.md-body ol li { list-style-type: decimal; margin-bottom: 0.3em; }
+.md-body code {
+    background: rgba(184, 134, 11, 0.12);
+    color: var(--jai-green-deep);
+    padding: 0.1em 0.35em;
+    border-radius: 3px;
+    font-size: 0.9em;
+}
+.md-body blockquote {
+    border-left: 2px solid var(--jai-gold);
+    padding-left: 0.85em;
+    margin: 0.5em 0;
+    color: var(--jai-olive);
+    font-style: italic;
+}
+.md-body hr {
+    border: none;
+    border-top: 1px solid var(--jai-border);
+    margin: 1em 0;
+}
+.md-body a { color: var(--jai-gold); text-decoration: underline; }

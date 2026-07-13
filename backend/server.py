@@ -19,10 +19,14 @@ from astrology import (
 )
 from knowledge import KB
 
-from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
+from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone, FileContentWithMimeType
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
+
+UPLOAD_DIR = Path(os.environ.get('UPLOAD_DIR', '/app/backend/uploads'))
+ATTACH_DIR = UPLOAD_DIR / 'attachments'
+ATTACH_DIR.mkdir(parents=True, exist_ok=True)
 
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
@@ -77,6 +81,24 @@ class ChatRequest(BaseModel):
     profile_id: str
     session_id: str
     message: str
+    attachment_urls: Optional[List[str]] = None
+
+
+class ThreadCreate(BaseModel):
+    profile_id: str
+    name: str = "New chat"
+
+
+class ThreadRename(BaseModel):
+    name: str
+
+
+class Thread(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    profile_id: str
+    name: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 # --- Routes ---
@@ -217,27 +239,28 @@ CLASSICAL YOGAS DETECTED:
     return ctx
 
 
-SYSTEM_PROMPT = """You are Jyotish AI — the native's personal Vedic astrologer, deeply versed in the classical Sanatan shastras: Brihat Parashara Hora Shastra (BPHS), Phaladipika, Laghu Parashari, Sarvartha Chintamani, Muhurta Chintamani, Jataka Nirnaya, BVR's How to Judge a Horoscope (Vols 1 & 2), Scientific Hindu Astrology (Prof. B.V. Raman), and Lal Kitab for remedies.
+SYSTEM_PROMPT = """You are Jyotish AI — a warm, calm Vedic astrology guide. You speak like a wise friend, not a scholar.
 
-## HARD RULES
-1. The SHASTRA EXCERPTS block below is your single source of truth. Cite them inline as [1], [2], etc. Never fabricate a shloka.
-2. Every reading MUST reason from the native's actual chart data that follows — the Lagna, planetary placements (sign, degree, house, nakshatra, dignity, D9), house lords, detected yogas, current Mahadasha & Antardasha, and today's transits.
-3. If a question is "why is my career stuck / relationship difficult / health off", identify the specific houses (10th for career, 7th for spouse, 6th for health, etc.), their lords' placements, the current dasha lord's relationship to those houses, and the transiting planets over those natal points. Never give generic astrology — always ground in this native's exact configuration.
+## HARD RULES FOR THE ANSWER YOU SHOW THE USER
+1. Everyday, plain English. Assume the user has ZERO astrology knowledge.
+2. NO jargon in the visible answer. Never use these words in the main reply: nakshatra, retrograde, house (as in 10th house), dasha, antardasha, lagna, ascendant, graha, kendra, trikona, moolatrikona, vargottama, sign lord, planet lord, transit, aspect, degree, exalted, debilitated, ayanamsa. Translate them to natural language ("this phase of your life", "your career area", "the friend/planet guiding you now", "an important shift").
+3. Maximum 300 words. Prefer 150–200. Short paragraphs, no headers, minimal bullets.
+4. Direct answer to the question first. Then 2–4 sentences of grounded insight. Then one gentle, practical suggestion or remedy (in plain words, e.g. "chant on Tuesday mornings" instead of "Mangal beej mantra").
+5. Never mention "as per BPHS [1]", "shastra", "citations", or reference numbers to the user. That reasoning lives ONLY in the LOGIC block below.
 
-## RESPONSE STRUCTURE (follow every time)
-**Acknowledge** — one line restating what is being asked astrologically.
-**Chart factors** — bullet the exact houses, planets, dasha, and transits at play in *this* chart.
-**Shastra analysis** — cite classical rules from the excerpts: `As per BPHS [1]…`, `Laghu Parashari [3] states…`.
-**Synthesis** — connect the rules to this native's specific configuration and explain the *cause* of what's happening.
-**Prediction / timing** — what unfolds and when, mapped to upcoming antardashas or transits.
-**Remedy (upaya)** — 1–2 concrete remedies from the texts (mantra, gemstone, charity, Lal Kitab upaya). Cite the source.
+## LOGIC BLOCK (technical — hidden from the user, always required)
+After your plain-language answer, output exactly this on a new line:
 
-## STYLE
-- Speak as a calm, wise Jyotishi. Use Sanskrit naturally (Lagna, Rashi, Nakshatra, Dasha, Graha) with brief English glosses.
-- Be specific about timing, planets, and houses — never fortune-cookie vague.
-- If the excerpts don't cover the exact question, say so honestly and reason from Vedic principles + the chart in front of you.
-- No disclaimers about not being a real astrologer — you are the guide.
-"""
+<LOGIC>
+Then write the technical astrological reasoning: the planets, houses, nakshatras, dashas, antardashas, transits, dignities involved. Cite the shastra excerpts inline as [1], [2], etc. Structure it as short bullets:
+- Chart factors: (planets/houses/dignities relevant)
+- Dasha & timing: (Mahadasha/Antardasha, upcoming shift)
+- Transits: (which transiting planets touch which natal points)
+- Shastra grounding: (cite [N] excerpts)
+- Synthesis: (why this configuration causes what the user is experiencing)
+</LOGIC>
+
+Do NOT deviate from this two-section format. The LOGIC block is required every time — even for greetings or vague questions — so the "Why?" panel always has content."""
 
 
 def _summarize_prior_messages(prior: List[dict], max_turns: int = 6) -> str:
@@ -247,12 +270,15 @@ def _summarize_prior_messages(prior: List[dict], max_turns: int = 6) -> str:
     tail = prior[-(max_turns * 2):]
     lines = []
     for m in tail:
-        role = "Native" if m["role"] == "user" else "Jyotishi"
-        content = (m["content"] or "").strip()
-        if len(content) > 400:
-            content = content[:400] + "…"
+        role = "User" if m["role"] == "user" else "Jyotish AI"
+        # Use answer-only (strip LOGIC) for prior context
+        content = (m.get("content") or "").strip()
+        if "<LOGIC>" in content:
+            content = content.split("<LOGIC>", 1)[0].strip()
+        if len(content) > 300:
+            content = content[:300] + "…"
         lines.append(f"{role}: {content}")
-    return "\n\nPRIOR CONVERSATION (for continuity — do not repeat verbatim):\n" + "\n".join(lines)
+    return "\n\nPRIOR CONVERSATION (for continuity):\n" + "\n".join(lines)
 
 
 @api_router.post("/chat")
@@ -295,6 +321,18 @@ async def chat_stream(req: ChatRequest):
         system_message=system_message,
     ).with_model("anthropic", "claude-sonnet-4-5-20250929")
 
+    # Build attachments list (Claude vision via emergentintegrations)
+    file_contents = []
+    for url in (req.attachment_urls or []):
+        # URL is a path like /api/attachments/<uuid>.jpg served from ATTACH_DIR
+        rel = url.split('/api/attachments/')[-1]
+        fp = ATTACH_DIR / rel
+        if fp.exists():
+            mime = "image/jpeg" if fp.suffix.lower() in (".jpg", ".jpeg") else (
+                "image/png" if fp.suffix.lower() == ".png" else "image/webp"
+            )
+            file_contents.append(FileContentWithMimeType(file_path=str(fp), mime_type=mime))
+
     citations_payload = [
         {"idx": i + 1, "book": r["book"], "chapter": r["chapter"], "text": r["text"], "score": round(r.get("score", 0), 3)}
         for i, r in enumerate(retrieved)
@@ -305,7 +343,8 @@ async def chat_stream(req: ChatRequest):
         yield f"event: citations\ndata: {json.dumps(citations_payload)}\n\n"
         full = ""
         try:
-            async for ev in chat.stream_message(UserMessage(text=req.message)):
+            user_msg = UserMessage(text=req.message, file_contents=file_contents) if file_contents else UserMessage(text=req.message)
+            async for ev in chat.stream_message(user_msg):
                 if isinstance(ev, TextDelta):
                     full += ev.content
                     yield f"event: delta\ndata: {json.dumps({'text': ev.content})}\n\n"
@@ -314,15 +353,25 @@ async def chat_stream(req: ChatRequest):
         except Exception as e:
             yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
 
-        # Persist assistant reply
+        # Persist assistant reply — store both raw content (with LOGIC block) and pre-split fields
+        answer_only = full
+        logic_only = ""
+        if "<LOGIC>" in full:
+            parts = full.split("<LOGIC>", 1)
+            answer_only = parts[0].strip()
+            logic_only = parts[1].split("</LOGIC>", 1)[0].strip() if "</LOGIC>" in parts[1] else parts[1].strip()
         await db.messages.insert_one({
             "session_id": req.session_id,
             "profile_id": req.profile_id,
             "role": "assistant",
             "content": full,
+            "answer": answer_only,
+            "logic": logic_only,
             "citations": citations_payload,
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
+        # Bump thread updated_at
+        await db.threads.update_one({"id": req.session_id}, {"$set": {"updated_at": datetime.now(timezone.utc).isoformat()}})
         yield f"event: done\ndata: {json.dumps({'ok': True})}\n\n"
 
     return StreamingResponse(
@@ -336,6 +385,65 @@ async def chat_stream(req: ChatRequest):
 async def chat_history(session_id: str):
     msgs = await db.messages.find({"session_id": session_id}, {"_id": 0}).sort("created_at", 1).to_list(200)
     return {"messages": msgs}
+
+
+# --- Threads (multiple named conversations per profile) ---
+@api_router.get("/threads")
+async def list_threads(profile_id: str):
+    docs = await db.threads.find({"profile_id": profile_id}, {"_id": 0}).sort("updated_at", -1).to_list(100)
+    return {"threads": docs}
+
+
+@api_router.post("/threads")
+async def create_thread(payload: ThreadCreate):
+    t = Thread(profile_id=payload.profile_id, name=payload.name)
+    doc = t.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['updated_at'] = doc['updated_at'].isoformat()
+    await db.threads.insert_one({**doc})  # pass a copy so Mongo doesn't mutate return dict
+    doc.pop('_id', None)
+    return doc
+
+
+@api_router.patch("/threads/{thread_id}")
+async def rename_thread(thread_id: str, payload: ThreadRename):
+    res = await db.threads.update_one(
+        {"id": thread_id},
+        {"$set": {"name": payload.name, "updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    if not res.matched_count:
+        raise HTTPException(404, "Thread not found")
+    return {"ok": True}
+
+
+@api_router.delete("/threads/{thread_id}")
+async def delete_thread(thread_id: str):
+    await db.threads.delete_one({"id": thread_id})
+    await db.messages.delete_many({"session_id": thread_id})
+    return {"ok": True}
+
+
+# --- Attachment upload for chat vision ---
+@api_router.post("/chat/attachment")
+async def upload_attachment(file: UploadFile = File(...)):
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
+        raise HTTPException(400, "Only JPG/PNG/WEBP images are supported")
+    fname = f"{uuid.uuid4().hex}{ext}"
+    dest = ATTACH_DIR / fname
+    content = await file.read()
+    dest.write_bytes(content)
+    mime = "image/jpeg" if ext in (".jpg", ".jpeg") else ("image/png" if ext == ".png" else "image/webp")
+    return {"url": f"/api/attachments/{fname}", "filename": file.filename, "mime_type": mime, "size": len(content)}
+
+
+@api_router.get("/attachments/{fname}")
+async def serve_attachment(fname: str):
+    from fastapi.responses import FileResponse
+    fp = ATTACH_DIR / fname
+    if not fp.exists():
+        raise HTTPException(404, "Not found")
+    return FileResponse(str(fp))
 
 
 # --- Simple geocoding via geopy nominatim (fallback to manual entry) ---
