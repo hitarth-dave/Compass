@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { Loader2 } from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth, setStoredToken } from "@/context/AuthContext";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -27,6 +27,9 @@ export default function AuthCallback() {
     (async () => {
       try {
         const res = await axios.post(`${API}/auth/session`, { session_id: sessionId });
+        if (res.data?.session_token) {
+          setStoredToken(res.data.session_token);
+        }
         setUser(res.data);
         navigate("/dashboard", { replace: true, state: { user: res.data } });
       } catch (e) {
