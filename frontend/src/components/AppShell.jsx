@@ -14,6 +14,7 @@ import {
   MoreHorizontal,
   Pencil,
   Trash2,
+  Settings,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -222,6 +223,7 @@ export default function AppShell({ children }) {
           </div>
 
           <SideItem to="/library" label="Library" Icon={BookOpen} collapsed={collapsed} testId="nav-library" />
+          <SideItem to="/settings" label="Settings" Icon={Settings} collapsed={collapsed} testId="nav-settings" />
         </nav>
 
         <div className={`border-t border-[color:var(--jai-border)] ${collapsed ? "p-3 flex justify-center" : "p-5"}`}>
