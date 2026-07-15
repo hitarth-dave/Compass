@@ -3,6 +3,31 @@ import axios from "axios";
 
 axios.defaults.withCredentials = true;
 
+// Fallback for browsers that block cross-site cookies (Safari ITP, strict
+// tracking-prevention modes, some mobile browsers): store the session token
+// and send it as a Bearer header on every request. The cookie still works
+// wherever it's supported; this just adds a second path that always works.
+const TOKEN_KEY = "compass_session_token";
+
+export function setStoredToken(token) {
+  if (token) {
+    localStorage.setItem(TOKEN_KEY, token);
+    axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+  }
+}
+
+export function clearStoredToken() {
+  localStorage.removeItem(TOKEN_KEY);
+  delete axios.defaults.headers.common["Authorization"];
+}
+
+// Apply any previously stored token immediately on load, before the first
+// request goes out.
+const existingToken = localStorage.getItem(TOKEN_KEY);
+if (existingToken) {
+  axios.defaults.headers.common["Authorization"] = `Bearer ${existingToken}`;
+}
+
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const AuthContext = createContext(null);
@@ -34,6 +59,7 @@ export function AuthProvider({ children }) {
 
   const logout = async () => {
     try { await axios.post(`${API}/auth/logout`); } catch {}
+    clearStoredToken();
     setUser(null);
   };
 
