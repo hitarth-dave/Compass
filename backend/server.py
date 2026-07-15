@@ -55,7 +55,22 @@ class User(BaseModel):
     email: str
     name: str
     picture: Optional[str] = None
+    phone: Optional[str] = None
+    current_lat: Optional[float] = None
+    current_lon: Optional[float] = None
+    current_place: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class AccountUpdate(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+
+
+class LocationUpdate(BaseModel):
+    lat: float
+    lon: float
+    place: str
 
 
 class SessionExchange(BaseModel):
@@ -187,6 +202,43 @@ async def me(user: User = Depends(get_current_user)):
 async def logout(response: Response, session_token: Optional[str] = Cookie(default=None)):
     if session_token:
         await db.user_sessions.delete_one({"session_token": session_token})
+    response.delete_cookie("session_token", path="/", samesite="none", secure=True)
+    return {"ok": True}
+
+
+# ---------- Account (profile info, current location, delete) ----------
+@api_router.patch("/account", response_model=User)
+async def update_account(payload: AccountUpdate, user: User = Depends(get_current_user)):
+    update = {k: v for k, v in payload.model_dump().items() if v is not None}
+    if update:
+        await db.users.update_one({"user_id": user.user_id}, {"$set": update})
+    doc = await db.users.find_one({"user_id": user.user_id}, {"_id": 0})
+    if isinstance(doc.get("created_at"), str):
+        doc["created_at"] = datetime.fromisoformat(doc["created_at"])
+    return User(**doc)
+
+
+@api_router.put("/account/location", response_model=User)
+async def update_current_location(payload: LocationUpdate, user: User = Depends(get_current_user)):
+    await db.users.update_one(
+        {"user_id": user.user_id},
+        {"$set": {"current_lat": payload.lat, "current_lon": payload.lon, "current_place": payload.place}},
+    )
+    doc = await db.users.find_one({"user_id": user.user_id}, {"_id": 0})
+    if isinstance(doc.get("created_at"), str):
+        doc["created_at"] = datetime.fromisoformat(doc["created_at"])
+    return User(**doc)
+
+
+@api_router.delete("/account")
+async def delete_account(response: Response, user: User = Depends(get_current_user)):
+    """Permanently deletes the user and everything tied to their account."""
+    await db.users.delete_one({"user_id": user.user_id})
+    await db.user_sessions.delete_many({"user_id": user.user_id})
+    await db.profiles.delete_one({"user_id": user.user_id})
+    await db.threads.delete_many({"user_id": user.user_id})
+    await db.messages.delete_many({"user_id": user.user_id})
+    await db.book_chunks.delete_many({"user_id": user.user_id})
     response.delete_cookie("session_token", path="/", samesite="none", secure=True)
     return {"ok": True}
 
