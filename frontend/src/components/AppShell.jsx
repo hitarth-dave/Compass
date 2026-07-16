@@ -15,7 +15,10 @@ import {
   Pencil,
   Trash2,
   Settings,
+  Sun,
+  Moon,
 } from "lucide-react";
+import { useTheme } from "@/context/ThemeContext";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,6 +46,7 @@ export default function AppShell({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem("jyotish_sidebar_collapsed") === "1"
   );
@@ -247,6 +251,15 @@ export default function AppShell({ children }) {
           )}
         </div>
       </aside>
+
+      <button
+        onClick={toggleTheme}
+        className="fixed top-4 right-4 z-20 w-10 h-10 rounded-full flex items-center justify-center bg-[color:var(--jai-surface)] border border-[color:var(--jai-border)] text-[color:var(--jai-gold)] hover:text-[color:var(--jai-gold-soft)] hover:border-[color:var(--jai-border-gold)] transition-colors shadow-sm"
+        title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+        data-testid="theme-toggle-btn"
+      >
+        {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+      </button>
 
       <main className="flex-1 relative z-[1] overflow-y-auto">{children}</main>
 
