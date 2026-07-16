@@ -361,11 +361,16 @@ HARD LENGTH LIMIT: 600 words maximum for this entire block. Keep every bullet to
 
 Do NOT deviate from this two-section format."""
 
-
-def _build_context(chart: dict, transits: dict, retrieved: List[dict]) -> str:
-    p = chart['profile']
-    asc = chart['ascendant']
-    md = chart.get('current_dasha')
+if os.environ.get('KNOWLEDGE_SOURCE', 'original') == 'v1':
+        from knowledge_v1 import (
+            SEED_CORPUS, search_for_user, list_books_for_user, add_pdf_for_user,
+            delete_book_for_user, detect_book_scope,
+    )
+else:
+        from knowledge import (
+            SEED_CORPUS, search_for_user, list_books_for_user, add_pdf_for_user,
+            delete_book_for_user, detect_book_scope,
+    )
     ad = chart.get('current_antardasha')
     planets_lines = "\n".join(
         f"  - {pl['name']:<8} in {pl['sign_en']:<12} {pl['degree_in_sign']:.2f}°  house {pl['house']:<2}  "
