@@ -109,18 +109,24 @@ export default function Dashboard() {
           )}
 
           <div className="card-surface p-6" data-testid="transits-card">
-            <div className="overline mb-4">Live Transits · Today</div>
-            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-              {transits.planets.map((t) => (
-                <div key={t.name} className="flex items-baseline justify-between text-sm border-b border-[color:var(--jai-border)]/50 py-2">
-                  <span className="font-medium text-[color:var(--jai-text)]">{t.name}</span>
-                  <span className="text-[color:var(--jai-text-muted)] text-xs">
-                    {t.sign_en} · {t.degree_in_sign}°{t.retrograde ? " R" : ""}
-                    {t.house_from_lagna ? <span className="ml-1 text-[color:var(--jai-gold)]">· H{t.house_from_lagna}</span> : null}
-                  </span>
-                </div>
-              ))}
+            <div className="flex items-center justify-between mb-2">
+              <div className="overline">Live Transits · Today</div>
+              <div className="text-[10px] text-[color:var(--jai-text-muted)]">
+                {new Date(transits.as_of).toLocaleString(undefined, {
+                  timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                })}
+              </div>
             </div>
+            <KundaliChart
+              planets={transits.planets
+                .filter((t) => t.house_from_lagna)
+                .map((t) => ({ ...t, house: t.house_from_lagna }))}
+              ascendantSign={asc.sign_idx}
+              showNakshatra={false}
+              testid="kundali-chart-transit"
+            />
           </div>
         </div>
       </div>
