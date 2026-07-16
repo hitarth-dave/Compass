@@ -191,6 +191,49 @@ body::after {
     background: linear-gradient(180deg, rgba(247, 241, 225, 0.95), rgba(239, 230, 205, 0.85));
 }
 
+/* Night Sky card treatment — deep indigo panel, hairline gold edge, faint
+   constellation dusting. This is the fix: .card-surface/.parchment-tint had
+   no dark variant before, so cards stayed cream even with .dark active. */
+.dark .card-surface {
+    background: linear-gradient(165deg, rgba(28, 38, 61, 0.97) 0%, rgba(19, 27, 44, 0.98) 55%, rgba(13, 18, 30, 0.99) 100%);
+    border: 1px solid rgba(212, 167, 44, 0.28);
+    box-shadow:
+        0 1px 0 rgba(232, 197, 88, 0.10) inset,
+        0 20px 50px rgba(0, 0, 0, 0.45);
+    transition: box-shadow 300ms ease, border-color 300ms ease;
+}
+
+.dark .card-surface::before {
+    background-image:
+        radial-gradient(circle at 100% 0%, rgba(212, 167, 44, 0.18), transparent 45%),
+        radial-gradient(1px 1px at 18% 28%, rgba(232, 197, 88, 0.55), transparent 100%),
+        radial-gradient(1px 1px at 64% 62%, rgba(232, 197, 88, 0.4), transparent 100%),
+        radial-gradient(1px 1px at 84% 18%, rgba(232, 197, 88, 0.45), transparent 100%),
+        radial-gradient(1px 1px at 38% 82%, rgba(232, 197, 88, 0.3), transparent 100%),
+        radial-gradient(1px 1px at 92% 70%, rgba(232, 197, 88, 0.35), transparent 100%);
+}
+
+.dark .card-surface:hover {
+    border-color: rgba(212, 167, 44, 0.45);
+    box-shadow:
+        0 1px 0 rgba(232, 197, 88, 0.14) inset,
+        0 24px 60px rgba(0, 0, 0, 0.5),
+        0 0 24px rgba(212, 167, 44, 0.10);
+}
+
+.dark .parchment-tint {
+    background: linear-gradient(180deg, rgba(23, 32, 47, 0.95), rgba(16, 22, 36, 0.9));
+}
+
+.dark .kundali-cell {
+    stroke: rgba(212, 167, 44, 0.4);
+    fill: rgba(23, 32, 47, 0.6);
+}
+
+.dark .kundali-house-num {
+    fill: rgba(232, 197, 88, 0.55);
+}
+
 @keyframes fadeUp {
     from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: translateY(0); }
