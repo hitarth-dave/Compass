@@ -35,11 +35,16 @@ UPLOAD_DIR = Path(os.environ.get('UPLOAD_DIR', '/app/backend/uploads'))
 ATTACH_DIR = UPLOAD_DIR / 'attachments'
 ATTACH_DIR.mkdir(parents=True, exist_ok=True)
 
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
-
-ANTHROPIC_API_KEY = os.environ['ANTHROPIC_API_KEY']
+mongo_url = os.environ['if os.environ.get('KNOWLEDGE_SOURCE', 'original') == 'v1':
+    from knowledge_v1 import (
+            SEED_CORPUS, search_for_user, list_books_for_user, add_pdf_for_user,
+            delete_book_for_user, detect_book_scope,
+)
+else:
+    from knowledge import (
+            SEED_CORPUS, search_for_user, list_books_for_user, add_pdf_for_user,
+            delete_book_for_user, detect_book_scope,
+    )nviron['ANTHROPIC_API_KEY']
 CLAUDE_MODEL = os.environ.get('CLAUDE_MODEL', 'claude-sonnet-4-5-20250929')
 CLAUDE_TITLE_MODEL = os.environ.get('CLAUDE_TITLE_MODEL', 'claude-haiku-4-5-20251001')
 anthropic_client = AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
