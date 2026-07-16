@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import axios from "axios";
+import { getStoredToken } from "@/context/AuthContext";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -99,7 +100,11 @@ export default function Chat() {
   useEffect(() => {
     if (!sessionId) return;
     setMessages([]);
-    fetch(`${API}/chat/${sessionId}/history`, { credentials: "include" })
+    const token = getStoredToken();
+    fetch(`${API}/chat/${sessionId}/history`, {
+      credentials: "include",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
       .then((r) => r.json())
       .then((d) => setMessages(d.messages || []))
       .catch(() => {});
@@ -182,16 +187,21 @@ export default function Chat() {
     setMessages((m) => [...m, { role: "assistant", content: "", citations: [] }]);
 
     try {
+      const token = getStoredToken();
       const res = await fetch(`${API}/chat`, {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           session_id: sessionId,
           message: question || "Please analyze the attached image.",
           attachment_urls: attach.map((a) => a.url),
         }),
       });
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
       if (!res.body) throw new Error("no stream");
 
       const reader = res.body.getReader();
