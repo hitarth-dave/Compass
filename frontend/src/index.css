@@ -25,6 +25,49 @@
     --jai-border-gold: rgba(184, 134, 11, 0.35);
 }
 
+.dark {
+    /* Night Sky palette — gold constellations on deep indigo */
+    --jai-bg: #0D1420;
+    --jai-bg-2: #131B2C;
+    --jai-surface: #17202F;
+    --jai-surface-2: #1C2638;
+    --jai-green: #8FCBAE;
+    --jai-green-deep: #A8D8BE;
+    --jai-green-soft: #6FA88A;
+    --jai-olive: #93A190;
+    --jai-gold: #D4A72C;
+    --jai-gold-soft: #E8C158;
+    --jai-terracotta: #D2795A;
+    --jai-parchment-ink: #EDE6D6;
+    --jai-text: var(--jai-green);
+    --jai-text-muted: var(--jai-olive);
+    --jai-parchment: var(--jai-parchment-ink);
+    --jai-border: rgba(212, 167, 44, 0.15);
+    --jai-border-gold: rgba(212, 167, 44, 0.35);
+}
+
+.dark {
+    --background: 220 35% 9%;
+    --foreground: 150 35% 78%;
+    --card: 220 30% 14%;
+    --card-foreground: 150 35% 78%;
+    --popover: 220 30% 14%;
+    --popover-foreground: 150 35% 78%;
+    --primary: 150 35% 78%;
+    --primary-foreground: 220 35% 9%;
+    --secondary: 220 25% 18%;
+    --secondary-foreground: 150 35% 78%;
+    --muted: 220 25% 18%;
+    --muted-foreground: 100 8% 62%;
+    --accent: 42 65% 52%;
+    --accent-foreground: 220 35% 9%;
+    --destructive: 8 55% 55%;
+    --destructive-foreground: 220 35% 9%;
+    --border: 42 40% 55%;
+    --input: 220 25% 20%;
+    --ring: 42 65% 52%;
+}
+
 @layer base {
     :root {
         --background: 46 55% 92%;          /* parchment */

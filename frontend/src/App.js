@@ -5,6 +5,7 @@ import axios from "axios";
 import "@/App.css";
 
 import { AuthProvider } from "@/context/AuthContext";
+import { ThemeProvider, useTheme } from "@/context/ThemeContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AppShell from "@/components/AppShell";
 import Landing from "@/pages/Landing";
@@ -44,14 +45,21 @@ function AppRouter() {
   );
 }
 
+function ThemedToaster() {
+  const { theme } = useTheme();
+  return <Toaster theme={theme} position="top-right" />;
+}
+
 function App() {
   return (
     <div className="App">
-      <Toaster theme="light" position="top-right" />
       <BrowserRouter>
-        <AuthProvider>
-          <AppRouter />
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <ThemedToaster />
+            <AppRouter />
+          </AuthProvider>
+        </ThemeProvider>
       </BrowserRouter>
     </div>
   );
