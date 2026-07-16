@@ -21,6 +21,12 @@ export function clearStoredToken() {
   delete axios.defaults.headers.common["Authorization"];
 }
 
+// For raw fetch() calls (e.g. streaming responses axios can't handle) that
+// need to attach the same Bearer fallback axios gets automatically.
+export function getStoredToken() {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
 // Apply any previously stored token immediately on load, before the first
 // request goes out.
 const existingToken = localStorage.getItem(TOKEN_KEY);
