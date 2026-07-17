@@ -8,6 +8,16 @@ const LEVEL_LABELS = ["Mahadasha", "Antardasha", "Pratyantardasha", "Sookshma Da
 const LEVEL_ABBR = ["MD", "AD", "PD", "SD", "PR"];
 const MAX_DEPTH = 4; // 0=Maha, 1=Antar, 2=Pratyantar, 3=Sookshma, 4=Prana (leaf, not clickable further)
 
+/** Backend now returns full "YYYY-MM-DD HH:MM:SS" timestamps (needed so Prana-
+ * level sub-day periods stay distinct). Higher levels span months/years so
+ * showing the time-of-day is just noise; Prana spans only hours, so that's
+ * the one level worth showing time for. */
+function formatDashaDate(str, depth) {
+  const [datePart, timePart] = str.split(" ");
+  if (depth < MAX_DEPTH || !timePart) return datePart;
+  return `${datePart} ${timePart.slice(0, 5)}`;
+}
+
 /**
  * Renders the Vimshottari Dasha timeline as a clickable drill-down:
  * Mahadasha -> Antardasha -> Pratyantardasha -> Sookshma Dasha.
@@ -110,7 +120,7 @@ export default function DashaExplorer({ mahadashas, currentMahadasha }) {
                 <div className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">{d.years} yrs</div>
               </div>
               <div className="text-xs text-[color:var(--jai-text-muted)] text-right">
-                {d.start}<br />{d.end}
+                {formatDashaDate(d.start, depth)}<br />{formatDashaDate(d.end, depth)}
               </div>
             </div>
           );
