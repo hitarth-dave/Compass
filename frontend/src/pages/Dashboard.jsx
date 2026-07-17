@@ -8,6 +8,31 @@ import DashaExplorer from "@/components/DashaExplorer";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
+// Short, deterministic one-liners keyed by where transiting Moon sits from
+// Lagna today — purely derived from data already on the page (no extra API
+// call), just enough to fill the header space with something useful rather
+// than blank air.
+const MOON_TRANSIT_NOTE = {
+  1: "Moon is transiting your own Lagna today — expect heightened emotional visibility.",
+  2: "Moon is moving through your 2nd house — a good day for finances and family conversations.",
+  3: "Moon is in your 3rd house — courage and communication are favored today.",
+  4: "Moon is transiting your 4th house — home and inner peace take center stage today.",
+  5: "Moon is in your 5th house — creativity and romance get a gentle boost today.",
+  6: "Moon is moving through your 6th house — a productive day for routine and resolving conflicts.",
+  7: "Moon is transiting your 7th house — partnerships and one-on-one connections are highlighted.",
+  8: "Moon is in your 8th house — a more introspective, low-key day is likely.",
+  9: "Moon is transiting your 9th house — good day for learning, travel, or seeking guidance.",
+  10: "Moon is in your 10th house — career visibility and public matters are in focus today.",
+  11: "Moon is moving through your 11th house — favorable for gains, networking, and social plans.",
+  12: "Moon is transiting your 12th house — a quieter day suited for rest and reflection.",
+};
+
+function todaysTransitNote(transits) {
+  const moon = transits.planets.find((p) => p.name === "Moon");
+  if (!moon || !moon.house_from_lagna) return null;
+  return MOON_TRANSIT_NOTE[moon.house_from_lagna] || null;
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const [chart, setChart] = useState(null);
@@ -48,6 +73,7 @@ export default function Dashboard() {
   const asc = chart.ascendant;
   const dasha = chart.current_dasha;
   const antar = chart.current_antardasha;
+  const pratyantar = chart.current_pratyantardasha;
   const navamsa = chart.navamsa;
   const dasamsa = chart.dasamsa;
   const houseLords = chart.house_lords || [];
@@ -88,12 +114,18 @@ export default function Dashboard() {
                 <span className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">AD · {antar.start} → {antar.end}</span>
               </div>
             )}
+            {pratyantar && (
+              <div className="flex items-baseline gap-2">
+                <span className="font-serif-display text-lg text-[color:var(--jai-gold-soft)]">{pratyantar.lord}</span>
+                <span className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">PD · {pratyantar.start} → {pratyantar.end}</span>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-6 fade-up delay-1">
-        <div className="lg:col-span-6 card-surface p-8" data-testid="rasi-card">
+      <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-6 fade-up delay-1 items-stretch">
+        <div className="lg:col-span-6 card-surface p-8 flex flex-col" data-testid="rasi-card">
           <div className="flex items-center justify-between mb-6">
             <div>
               <div className="overline">Rasi Chakra · D1</div>
@@ -104,11 +136,13 @@ export default function Dashboard() {
               <div className="font-serif-display text-xl text-[color:var(--jai-gold)]">{asc.degree_in_sign}°</div>
             </div>
           </div>
-          <KundaliChart planets={chart.planets} ascendantSign={asc.sign_idx} ascendant={asc} />
+          <div className="flex-1 flex items-center">
+            <KundaliChart planets={chart.planets} ascendantSign={asc.sign_idx} ascendant={asc} />
+          </div>
         </div>
 
-        <div className="lg:col-span-6 card-surface p-8" data-testid="transits-card">
-          <div className="flex items-center justify-between mb-4">
+        <div className="lg:col-span-6 card-surface p-8 flex flex-col" data-testid="transits-card">
+          <div className="flex items-center justify-between mb-1">
             <div className="overline">Live Transits · Today</div>
             <div className="text-[10px] text-[color:var(--jai-text-muted)]">
               {new Date(transits.as_of).toLocaleString(undefined, {
@@ -118,14 +152,19 @@ export default function Dashboard() {
               })}
             </div>
           </div>
-          <KundaliChart
-            planets={transits.planets
-              .filter((t) => t.house_from_lagna)
-              .map((t) => ({ ...t, house: t.house_from_lagna }))}
-            ascendantSign={asc.sign_idx}
-            showNakshatra={false}
-            testid="kundali-chart-transit"
-          />
+          <div className="font-serif-display text-base mt-1 mb-4 text-[color:var(--jai-parchment)] leading-snug min-h-[3.5rem]">
+            {todaysTransitNote(transits) || "Today's sky, mapped against your birth chart."}
+          </div>
+          <div className="flex-1 flex items-center">
+            <KundaliChart
+              planets={transits.planets
+                .filter((t) => t.house_from_lagna)
+                .map((t) => ({ ...t, house: t.house_from_lagna }))}
+              ascendantSign={asc.sign_idx}
+              showNakshatra={false}
+              testid="kundali-chart-transit"
+            />
+          </div>
         </div>
       </div>
 
@@ -165,12 +204,16 @@ export default function Dashboard() {
           <div className="overline mb-5">House Lords (Bhava Adhipati)</div>
           <div className="space-y-1 max-h-[520px] overflow-y-auto pr-1">
             {houseLords.map((h) => (
-              <div key={h.house} className="flex items-baseline justify-between border-b border-[color:var(--jai-border)]/40 py-2 text-sm gap-4">
-                <div className="shrink-0">
+              <div
+                key={h.house}
+                className="grid items-center border-b border-[color:var(--jai-border)]/40 py-2 text-sm gap-3"
+                style={{ gridTemplateColumns: "100px 1fr 130px" }}
+              >
+                <div>
                   <span className="font-serif-display text-lg text-[color:var(--jai-parchment)]">H{h.house}</span>
                   <span className="ml-2 text-[color:var(--jai-text-muted)]">{h.sign_en}</span>
                 </div>
-                <div className="text-right shrink-0">
+                <div>
                   <div className="text-[color:var(--jai-green-deep)] font-semibold">{h.lord}</div>
                   {h.lord_sits_in_house && (
                     <div className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">
@@ -178,7 +221,7 @@ export default function Dashboard() {
                     </div>
                   )}
                 </div>
-                <div className="text-right flex-1 min-w-[90px]">
+                <div className="text-right">
                   <div className="text-[9px] uppercase tracking-widest text-[color:var(--jai-text-muted)]/70">Aspected by</div>
                   <div className="text-xs text-[color:var(--jai-gold-soft)]">
                     {h.aspected_by && h.aspected_by.length > 0 ? h.aspected_by.join(", ") : "—"}
