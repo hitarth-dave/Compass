@@ -105,6 +105,19 @@ def _navamsa_sign(lon: float) -> int:
     return (start_map[element] + navamsa_idx) % 12
 
 
+def _dasamsa_sign(lon: float) -> int:
+    """Return sign_idx (0-11) of the Dasamsa (D10) position.
+    Classical rule: odd signs (Aries, Gemini, Leo, Libra, Sagittarius, Aquarius)
+    count the 10 parts starting from the same sign; even signs start counting
+    from the 9th sign from themselves (i.e. +8 in 0-indexed terms)."""
+    sign = int(lon // 30)
+    deg_in_sign = lon - sign * 30
+    dasamsa_idx = int(deg_in_sign // (30 / 10))  # 0..9
+    is_odd_sign = (sign % 2 == 0)  # sign_idx 0 (Aries) is the 1st sign = odd
+    start = sign if is_odd_sign else (sign + 8) % 12
+    return (start + dasamsa_idx) % 12
+
+
 def _dignity(name: str, sign_idx: int, degree_in_sign: float, nav_sign: int) -> Dict:
     tags = []
     # Exalted / Debilitated (within ±1° of deepest = deep, else general)
@@ -210,6 +223,7 @@ def compute_chart(dob_iso: str, tob: str, tz_offset_hours: float, lat: float, lo
     dashas = _vimshottari_dashas(moon_lon, local, m_nak_idx)
 
     # House lords: for each house (1-12), the sign occupying it and its dispositor
+    house_aspects = _compute_house_aspects(planets_out)
     house_lords_list = []
     for h in range(1, 13):
         sign_idx = (asc_sign + h - 1) % 12
@@ -224,6 +238,7 @@ def compute_chart(dob_iso: str, tob: str, tz_offset_hours: float, lat: float, lo
             "lord_sits_in_house": lord_planet["house"] if lord_planet else None,
             "lord_sits_in_sign_en": lord_planet["sign_en"] if lord_planet else None,
             "lord_degree": lord_planet["degree_in_sign"] if lord_planet else None,
+            "aspected_by": house_aspects[h],
         })
 
     yogas = _detect_yogas(planets_out, asc_sign)
@@ -252,6 +267,30 @@ SIGN_LORDS = [
     "Mars", "Venus", "Mercury", "Moon", "Sun", "Mercury",
     "Venus", "Mars", "Jupiter", "Saturn", "Saturn", "Jupiter",
 ]
+
+
+def _compute_house_aspects(planets: List[Dict]) -> Dict[int, List[str]]:
+    """Classical Parashari graha drishti (full aspect only, binary — no partial
+    aspect strengths). Every planet aspects the 7th house from itself; Mars
+    additionally aspects the 4th/8th, Jupiter the 5th/9th, and Saturn the
+    3rd/10th. Rahu/Ketu get the universal 7th aspect only (the special
+    Jupiter-like aspects for the nodes are a less universally agreed-upon
+    variant, so left out to avoid asserting a disputed rule as settled).
+    Returns {house_number(1-12): [planet names aspecting that house]}."""
+    aspects_on_house: Dict[int, List[str]] = {h: [] for h in range(1, 13)}
+    special_offsets = {
+        "Mars": (3, 7),
+        "Jupiter": (4, 8),
+        "Saturn": (2, 9),
+    }
+    for p in planets:
+        p_house = p["house"]
+        offsets = {6}  # universal 7th aspect (offset 6 = +7th house, 0-indexed)
+        offsets |= set(special_offsets.get(p["name"], ()))
+        for off in offsets:
+            target_house = ((p_house - 1 + off) % 12) + 1
+            aspects_on_house[target_house].append(p["name"])
+    return aspects_on_house
 
 
 def _detect_yogas(planets: List[Dict], asc_sign: int) -> List[Dict]:
@@ -481,4 +520,36 @@ def build_navamsa(planets: List[Dict], ascendant_longitude: float) -> Dict:
             "sign_en": RASHI_EN[d9_asc_sign],
         },
         "planets": d9_planets,
+    }
+
+
+def build_dasamsa(planets: List[Dict], ascendant_longitude: float) -> Dict:
+    """Compute D10 (Dasamsa) chart: reveals career, profession, status and
+    achievements. Same output shape as build_navamsa so it can reuse the
+    same KundaliChart renderer on the frontend."""
+    d10_asc_sign = _dasamsa_sign(ascendant_longitude)
+    d10_planets = []
+    for p in planets:
+        d10_sign = _dasamsa_sign(p["longitude"])
+        house = ((d10_sign - d10_asc_sign) % 12) + 1
+        d10_planets.append({
+            "name": p["name"],
+            "symbol": p["symbol"],
+            "sign_idx": d10_sign,
+            "sign": RASHIS[d10_sign],
+            "sign_en": RASHI_EN[d10_sign],
+            "degree_in_sign": p["degree_in_sign"],  # keep D1 degree for reference
+            "nakshatra": p.get("nakshatra", ""),
+            "house": house,
+            "retrograde": p.get("retrograde", False),
+            "dignity": [],
+            "navamsa_sign": p.get("navamsa_sign", ""),  # unused by D10 render, kept for shape parity
+        })
+    return {
+        "ascendant": {
+            "sign_idx": d10_asc_sign,
+            "sign": RASHIS[d10_asc_sign],
+            "sign_en": RASHI_EN[d10_asc_sign],
+        },
+        "planets": d10_planets,
     }
