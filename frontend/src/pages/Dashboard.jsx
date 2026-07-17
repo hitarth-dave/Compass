@@ -211,7 +211,7 @@ export default function Dashboard() {
               <div
                 key={h.house}
                 className="grid items-center border-b border-[color:var(--jai-border)]/30 py-1.5 text-sm gap-3"
-                style={{ gridTemplateColumns: "95px 1fr 110px 56px" }}
+                style={{ gridTemplateColumns: "90px 1fr 100px 50px 50px" }}
               >
                 <div>
                   <span className="font-serif-display text-base text-[color:var(--jai-parchment)]">H{h.house}</span>
@@ -244,6 +244,14 @@ export default function Dashboard() {
                       {h.ashtakavarga_sav}
                     </div>
                     <div className="text-[8px] uppercase tracking-widest text-[color:var(--jai-text-muted)]/60 mt-0.5">SAV</div>
+                  </div>
+                )}
+                {h.bhava_bala && (
+                  <div className="flex flex-col items-center" title="Bhava Bala — relative house strength within this chart (partial classical implementation)">
+                    <div className="w-9 h-9 rounded flex items-center justify-center text-xs font-serif-display border border-[color:var(--jai-border)]" style={{ color: "var(--jai-text-muted)" }}>
+                      {h.bhava_bala.total_rupas}
+                    </div>
+                    <div className="text-[8px] uppercase tracking-widest text-[color:var(--jai-text-muted)]/60 mt-0.5">BB</div>
                   </div>
                 )}
               </div>
@@ -313,6 +321,15 @@ export default function Dashboard() {
                 <div className="text-right">
                   <div className="text-sm text-[color:var(--jai-gold)]">{p.sign_en} {p.degree_in_sign}°</div>
                   <div className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">house {p.house}</div>
+                  {chart.shadbala && chart.shadbala[p.name] && (
+                    <div
+                      className="text-[10px] mt-0.5"
+                      style={{ color: "var(--jai-gold-soft)" }}
+                      title="Shadbala — relative planetary strength within this chart (partial classical implementation)"
+                    >
+                      Shadbala {chart.shadbala[p.name].total_rupas}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
