@@ -293,9 +293,13 @@ async def get_chart(user: User = Depends(get_current_user)):
     if chart['current_dasha']:
         chart['antardashas'] = compute_antardashas(chart['current_dasha'])
         chart['current_antardasha'] = current_antardasha(chart['current_dasha'])
+        chart['current_pratyantardasha'] = (
+            current_antardasha(chart['current_antardasha']) if chart['current_antardasha'] else None
+        )
     else:
         chart['antardashas'] = []
         chart['current_antardasha'] = None
+        chart['current_pratyantardasha'] = None
     chart['navamsa'] = build_navamsa(chart['planets'], chart['ascendant']['longitude'])
     chart['dasamsa'] = build_dasamsa(chart['planets'], chart['ascendant']['longitude'])
     chart['profile'] = {'name': doc['name'], 'dob': doc['dob'], 'tob': doc['tob'], 'place': doc['place']}
