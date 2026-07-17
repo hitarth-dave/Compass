@@ -749,12 +749,50 @@ def _detect_yogas(planets: List[Dict], asc_sign: int) -> List[Dict]:
     same = [p for p in planets if p["name"] != "Moon" and p["sign_idx"] == moon["sign_idx"]]
     prev_sign = (moon["sign_idx"] - 1) % 12
     next_sign = (moon["sign_idx"] + 1) % 12
-    around = [p for p in planets if p["name"] not in ("Moon", "Rahu", "Ketu") and p["sign_idx"] in (prev_sign, next_sign)]
-    if not same and not around:
+    has_next = any(p["name"] not in ("Moon", "Rahu", "Ketu") and p["sign_idx"] == next_sign for p in planets)
+    has_prev = any(p["name"] not in ("Moon", "Rahu", "Ketu") and p["sign_idx"] == prev_sign for p in planets)
+    if not same and not has_next and not has_prev:
         yogas.append({
             "name": "Kemadruma Yoga",
             "detail": "Moon isolated (no planets in 2nd/12th from Moon) — struggle and solitude unless mitigated.",
         })
+    elif has_next and has_prev:
+        yogas.append({
+            "name": "Durudhara Yoga",
+            "detail": "Planets on both sides of Moon (2nd and 12th) — wealth, resources, and support from others.",
+        })
+    elif has_next:
+        yogas.append({
+            "name": "Sunapha Yoga",
+            "detail": "Planet(s) in the 2nd from Moon only — self-earned wealth and resourcefulness.",
+        })
+    elif has_prev:
+        yogas.append({
+            "name": "Anapha Yoga",
+            "detail": "Planet(s) in the 12th from Moon only — good health, self-reliance, and steady temperament.",
+        })
+
+    # Panch Mahapurusha Yogas — a planet in its own sign or exaltation, AND in
+    # a kendra (1st/4th/7th/10th) from the Ascendant. Five classic, widely
+    # recognized "great person" yogas, one per planet.
+    MAHAPURUSHA = {
+        "Mars": ("Ruchaka Yoga", "courage, physical strength, and command"),
+        "Mercury": ("Bhadra Yoga", "sharp intellect, eloquence, and business acumen"),
+        "Jupiter": ("Hamsa Yoga", "wisdom, virtue, and respect"),
+        "Venus": ("Malavya Yoga", "charm, comfort, and artistic or luxurious living"),
+        "Saturn": ("Sasa Yoga", "discipline, authority, and lasting achievement through persistence"),
+    }
+    for pname, (yoga_name, significance) in MAHAPURUSHA.items():
+        p = by_name[pname]
+        if p["house"] not in (1, 4, 7, 10):
+            continue
+        ex_sign, _ = EXALTATION[pname]
+        is_own_or_exalted = p["sign_idx"] in OWN_SIGNS[pname] or p["sign_idx"] == ex_sign
+        if is_own_or_exalted:
+            yogas.append({
+                "name": yoga_name,
+                "detail": f"{pname} in its own sign or exalted, in a kendra (house {p['house']}) — one of the five Mahapurusha Yogas, bringing {significance}.",
+            })
 
     # Raja Yoga — Kendra lord + Trikona lord in association (same sign)
     kendras = {0, 3, 6, 9}  # relative positions to asc (h-1)
