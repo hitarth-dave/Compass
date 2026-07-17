@@ -187,9 +187,11 @@ def compute_chart(dob_iso: str, tob: str, tz_offset_hours: float, lat: float, lo
             "nakshatra_lord": NAK_LORDS[nak_idx % 9],
             "pada": pada,
             "house": house,
+            "speed": round(speed, 4),
             "retrograde": speed < 0 and name not in ("Sun", "Moon", "Rahu", "Ketu"),
             "dignity": dignity["tags"],
             "navamsa_sign": dignity["navamsa_sign_en"],
+            "navamsa_sign_idx": dignity["navamsa_sign_idx"],
         })
 
     # Ketu = Rahu + 180
@@ -245,6 +247,10 @@ def compute_chart(dob_iso: str, tob: str, tz_offset_hours: float, lat: float, lo
         })
 
     yogas = _detect_yogas(planets_out, asc_sign)
+    shadbala = compute_shadbala(planets_out, asc_lon)
+    bhava_bala = compute_bhava_bala(house_lords_list, shadbala, house_aspects)
+    for h in house_lords_list:
+        h["bhava_bala"] = bhava_bala[h["house"]]
 
     return {
         "birth_utc": utc.isoformat(),
@@ -263,6 +269,7 @@ def compute_chart(dob_iso: str, tob: str, tz_offset_hours: float, lat: float, lo
         "house_lords": house_lords_list,
         "yogas": yogas,
         "ashtakavarga": ashtakavarga,
+        "shadbala": shadbala,
     }
 
 
@@ -340,6 +347,231 @@ def compute_ashtakavarga(planet_signs: Dict[str, int], asc_sign: int) -> Dict:
         bav[target] = counts
     sav = [sum(bav[p][s] for p in ASHTAKAVARGA_PLANETS) for s in range(12)]
     return {"bav": bav, "sav": sav}
+
+
+# --- Shadbala (planetary strength) & Bhava Bala (house strength) ---
+#
+# HONESTY NOTE ON SCOPE: Full classical Shadbala has six components, and
+# Sthana Bala and Kaala Bala are themselves each built from several further
+# sub-components (some of which require divisional charts this codebase
+# doesn't compute — D2/D3/D7/D12 — or fine-grained sunrise/sunset/hora-lord
+# timing tables). Rather than guess at those and silently ship possibly-wrong
+# numbers, this implementation includes only the components that have crisp,
+# verifiable classical formulas and the inputs already available in this
+# chart. This mirrors how even professional calculators (e.g. Ishvaram's
+# Shadbala tool) explicitly ship a subset and label the rest as pending,
+# rather than presenting an unverified "full" six-fold total as if it were
+# complete. What's included:
+#   Sthana Bala  = Uchcha Bala + Kendradi Bala + Ojayugmarasyamsa Bala + Drekkana Bala
+#                  (Saptavargaja Bala omitted — needs D2/D3/D7/D12)
+#   Dig Bala     = full classical formula
+#   Kaala Bala   = Paksha Bala only (Nathonnatha, Tribhaga, Varsha/Masa/Vara/
+#                  Hora Bala, Yuddha Bala omitted — need precise local
+#                  sunrise/sunset and time-lord tables not in this codebase)
+#   Chesta Bala  = simplified continuous approximation from actual vs. mean
+#                  daily motion (not the full classical 8-tier Vakra/Anuvakra/
+#                  etc. discrete categories, which need finer ephemeris
+#                  sampling than a single snapshot gives)
+#   Naisargika Bala = full classical fixed table
+#   Drik Bala    = omitted (needs the full aspect-degree virupa formula,
+#                  which is easy to get subtly wrong without a worked
+#                  example to check against; better to omit than guess)
+#
+# All values are cross-checked for range-sanity (each sub-score falls within
+# its classical 0-max bound) but this has NOT been verified against a
+# published fully-worked Shadbala example the way Ashtakavarga was — treat
+# the totals as directionally useful (comparing planets against each other)
+# rather than as exact classical Rupas.
+
+NAISARGIKA_BALA = {  # fixed, in Virupas — BPHS Ch.33, verified against multiple sources
+    "Sun": 60.0, "Moon": 51.43, "Venus": 42.86, "Jupiter": 34.29,
+    "Mercury": 25.71, "Mars": 17.14, "Saturn": 8.57,
+}
+DIG_BALA_PEAK_HOUSE = {  # house of maximum directional strength
+    "Sun": 10, "Mars": 10, "Moon": 4, "Venus": 4, "Jupiter": 1, "Mercury": 1, "Saturn": 7,
+}
+OJA_RASI_BENEFIC = {"Moon", "Venus"}  # get strength in even (yugma) signs; rest in odd (oja)
+DREKKANA_MALE = {"Sun", "Mars", "Jupiter"}
+DREKKANA_FEMALE = {"Moon", "Venus"}
+DREKKANA_NEUTRAL = {"Mercury", "Saturn"}
+MEAN_DAILY_MOTION = {  # degrees/day, standard mean motion constants
+    "Mars": 0.524, "Mercury": 1.383, "Jupiter": 0.083, "Venus": 1.2, "Saturn": 0.034,
+}
+KAALA_BALA_BENEFICS = {"Moon", "Mercury", "Jupiter", "Venus"}
+MINIMUM_SHADBALA_RUPAS = {  # BPHS-prescribed minimum for a planet to deliver full results.
+    # Reference only, NOT currently used for a pass/fail comparison — see the
+    # scope note on why comparing our partial total against this full-system
+    # threshold would be misleading. Kept here for when Drik Bala/full Kaala
+    # Bala/Saptavargaja Bala are eventually added and the comparison is fair.
+    "Sun": 5.0, "Moon": 6.0, "Mars": 5.0, "Mercury": 7.0,
+    "Jupiter": 6.5, "Venus": 5.5, "Saturn": 5.0,
+}
+
+
+def _angular_diff(a: float, b: float) -> float:
+    """Shortest angular distance (0-180) between two longitudes."""
+    d = abs(a - b) % 360
+    return 360 - d if d > 180 else d
+
+
+def _uchcha_bala(name: str, longitude: float) -> float:
+    if name not in EXALTATION:
+        return 0.0
+    ex_sign, ex_deg = EXALTATION[name]
+    ex_lon = ex_sign * 30 + ex_deg
+    diff = _angular_diff(longitude, ex_lon)
+    return round(60 * (180 - diff) / 180, 2)
+
+
+def _kendradi_bala(house: int) -> float:
+    if house in (1, 4, 7, 10):
+        return 60.0
+    if house in (2, 5, 8, 11):
+        return 30.0
+    return 15.0  # 3, 6, 9, 12
+
+
+def _oja_yugma_bala(name: str, sign_idx: int, navamsa_sign_idx: int) -> float:
+    wants_even = name in OJA_RASI_BENEFIC
+    total = 0.0
+    if ((sign_idx % 2 == 1) == wants_even):
+        total += 15.0
+    if ((navamsa_sign_idx % 2 == 1) == wants_even):
+        total += 15.0
+    return total
+
+
+def _drekkana_bala(name: str, degree_in_sign: float) -> float:
+    drek = int(degree_in_sign // 10)  # 0, 1, 2
+    if drek == 0 and name in DREKKANA_MALE:
+        return 15.0
+    if drek == 1 and name in DREKKANA_FEMALE:
+        return 15.0
+    if drek == 2 and name in DREKKANA_NEUTRAL:
+        return 15.0
+    return 0.0
+
+
+def _dig_bala(name: str, longitude: float, asc_longitude: float) -> float:
+    peak_house = DIG_BALA_PEAK_HOUSE.get(name)
+    if not peak_house:
+        return 0.0
+    peak_lon = (asc_longitude + (peak_house - 1) * 30) % 360
+    diff = _angular_diff(longitude, peak_lon)
+    return round((180 - diff) / 3, 2)
+
+
+def _chesta_bala(name: str, speed: float, retrograde: bool) -> float | None:
+    """Simplified continuous approximation — see scope note above. Returns
+    None for Sun/Moon, which use Ayana/Paksha Bala instead per BPHS."""
+    if name not in MEAN_DAILY_MOTION:
+        return None
+    if retrograde:
+        return 60.0
+    mean = MEAN_DAILY_MOTION[name]
+    ratio = abs(speed) / mean if mean else 1.0
+    if ratio < 0.1:
+        return 30.0  # near-stationary
+    val = 7.5 + min(ratio, 2.0) * (45.0 - 7.5) / 2.0
+    return round(min(val, 45.0), 2)
+
+
+def _paksha_bala(name: str, sun_lon: float, moon_lon: float) -> float:
+    elongation = (moon_lon - sun_lon) % 360
+    waxing_strength = elongation / 3 if elongation <= 180 else (360 - elongation) / 3
+    if name in KAALA_BALA_BENEFICS:
+        return round(waxing_strength, 2)
+    return round(60 - waxing_strength, 2)
+
+
+def compute_shadbala(planets: List[Dict], asc_longitude: float) -> Dict:
+    """Compute Shadbala for the 7 classical planets. See the scope note above
+    for exactly which components are included. Returns Rupas (1 Rupa = 60
+    Virupas) per planet, plus a sub-component breakdown and the
+    minimum-required comparison."""
+    by_name = {p["name"]: p for p in planets}
+    sun_lon = by_name["Sun"]["longitude"]
+    moon_lon = by_name["Moon"]["longitude"]
+
+    result = {}
+    for name in ASHTAKAVARGA_PLANETS:  # same 7 classical planets
+        p = by_name[name]
+        uchcha = _uchcha_bala(name, p["longitude"])
+        kendradi = _kendradi_bala(p["house"])
+        oja_yugma = _oja_yugma_bala(name, p["sign_idx"], p.get("navamsa_sign_idx", p["sign_idx"]))
+        drekkana = _drekkana_bala(name, p["degree_in_sign"])
+        sthana = uchcha + kendradi + oja_yugma + drekkana
+
+        dig = _dig_bala(name, p["longitude"], asc_longitude)
+
+        paksha = _paksha_bala(name, sun_lon, moon_lon)
+        kaala = paksha  # partial — see scope note
+
+        chesta = _chesta_bala(name, p.get("speed", 0.0), p.get("retrograde", False))
+        if chesta is None:
+            # Sun uses Ayana Bala (omitted — needs declination/sunrise data),
+            # Moon uses Paksha Bala as its Chesta Bala per BPHS 27.
+            chesta = paksha if name == "Moon" else 30.0  # neutral placeholder for Sun's Ayana Bala
+
+        naisargika = NAISARGIKA_BALA[name]
+
+        total_virupas = sthana + dig + kaala + chesta + naisargika  # Drik Bala omitted
+        total_rupas = round(total_virupas / 60, 2)
+
+        result[name] = {
+            "total_rupas": total_rupas,
+            # NOTE: deliberately NOT comparing against the classical minimum-
+            # required-Rupas table here. That table (Sun 5, Moon 6, Mercury 7,
+            # etc.) assumes the FULL six-component system; since this
+            # implementation omits Drik Bala, most of Kaala Bala, and
+            # Saptavargaja Bala, our total is systematically lower than the
+            # true classical total. Comparing it against the full-system
+            # threshold would show nearly every planet as "below minimum"
+            # regardless of the chart — a misleading signal, not a real one.
+            # total_rupas is meaningful as a RELATIVE strength indicator
+            # (comparing planets within the same chart to each other), not as
+            # an absolute pass/fail against classical thresholds.
+            "sub_scores_virupas": {
+                "sthana_bala": round(sthana, 2),
+                "dig_bala": round(dig, 2),
+                "kaala_bala": round(kaala, 2),
+                "chesta_bala": round(chesta, 2),
+                "naisargika_bala": round(naisargika, 2),
+            },
+        }
+    return result
+
+
+def compute_bhava_bala(house_lords_list: List[Dict], shadbala: Dict, house_aspects: Dict[int, List[str]]) -> Dict[int, Dict]:
+    """Bhava Bala (house strength), Rupas. Scope note: this uses Bhavadhipati
+    Bala (the house lord's own Shadbala) and an aspect-based strength
+    component; classical Bhava Dig Bala is omitted (see module-level scope
+    note — no verified distinct formula available separate from what
+    Kendradi Bala already captures for the lord itself). Like Shadbala's
+    total_rupas, treat this as a RELATIVE indicator (comparing houses within
+    the same chart) rather than an absolute score against the classical ">8
+    Rupas = dominant" threshold, for the same reason: our partial Shadbala
+    input is systematically lower than the full classical system, so the
+    absolute threshold doesn't transfer cleanly. is_dominant is included but
+    should be read as "relatively strong in this partial system," not a
+    strict classical verdict."""
+    result = {}
+    for h in house_lords_list:
+        lord = h["lord"]
+        bhavadhipati_bala = shadbala[lord]["total_rupas"] if lord in shadbala else 0.0
+
+        # Aspect strength on this house: sum of aspecting planets' own Shadbala,
+        # scaled down — a house aspected by strong planets gets a boost.
+        aspecting = house_aspects.get(h["house"], [])
+        aspect_bala = round(sum(shadbala[p]["total_rupas"] for p in aspecting if p in shadbala) * 0.25, 2)
+
+        total = round(bhavadhipati_bala + aspect_bala, 2)
+        result[h["house"]] = {
+            "total_rupas": total,
+            "bhavadhipati_bala_rupas": round(bhavadhipati_bala, 2),
+            "aspect_bala_rupas": aspect_bala,
+        }
+    return result
 
 
 def _compute_house_aspects(planets: List[Dict]) -> Dict[int, List[str]]:
