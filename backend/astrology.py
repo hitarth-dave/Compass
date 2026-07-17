@@ -247,7 +247,7 @@ def compute_chart(dob_iso: str, tob: str, tz_offset_hours: float, lat: float, lo
         })
 
     yogas = _detect_yogas(planets_out, asc_sign)
-    shadbala = compute_shadbala(planets_out, asc_lon)
+    shadbala = compute_shadbala(planets_out, asc_lon, jd, lat, lon)
     bhava_bala = compute_bhava_bala(house_lords_list, shadbala, house_aspects)
     for h in house_lords_list:
         h["bhava_bala"] = bhava_bala[h["house"]]
@@ -365,9 +365,12 @@ def compute_ashtakavarga(planet_signs: Dict[str, int], asc_sign: int) -> Dict:
 #   Sthana Bala  = Uchcha Bala + Kendradi Bala + Ojayugmarasyamsa Bala + Drekkana Bala
 #                  (Saptavargaja Bala omitted — needs D2/D3/D7/D12)
 #   Dig Bala     = full classical formula
-#   Kaala Bala   = Paksha Bala only (Nathonnatha, Tribhaga, Varsha/Masa/Vara/
-#                  Hora Bala, Yuddha Bala omitted — need precise local
-#                  sunrise/sunset and time-lord tables not in this codebase)
+#   Kaala Bala   = Paksha Bala + Nathonnatha Bala (day/night strength, using
+#                  real sunrise/sunset for the birth location — verified
+#                  against all 4 classical anchor points: midnight, sunrise,
+#                  noon, sunset). Still missing: Tribhaga, Varsha/Masa/Vara/
+#                  Hora Bala, Yuddha Bala (need time-lord tables not in this
+#                  codebase).
 #   Chesta Bala  = simplified continuous approximation from actual vs. mean
 #                  daily motion (not the full classical 8-tier Vakra/Anuvakra/
 #                  etc. discrete categories, which need finer ephemeris
@@ -398,6 +401,8 @@ MEAN_DAILY_MOTION = {  # degrees/day, standard mean motion constants
     "Mars": 0.524, "Mercury": 1.383, "Jupiter": 0.083, "Venus": 1.2, "Saturn": 0.034,
 }
 KAALA_BALA_BENEFICS = {"Moon", "Mercury", "Jupiter", "Venus"}
+DIURNAL_PLANETS = {"Sun", "Jupiter", "Venus"}
+NOCTURNAL_PLANETS = {"Moon", "Mars", "Saturn"}
 MINIMUM_SHADBALA_RUPAS = {  # BPHS-prescribed minimum for a planet to deliver full results.
     # Reference only, NOT currently used for a pass/fail comparison — see the
     # scope note on why comparing our partial total against this full-system
@@ -484,7 +489,45 @@ def _paksha_bala(name: str, sun_lon: float, moon_lon: float) -> float:
     return round(60 - waxing_strength, 2)
 
 
-def compute_shadbala(planets: List[Dict], asc_longitude: float) -> Dict:
+def _sun_rise_set_events(jd_birth: float, lat: float, lon: float) -> tuple:
+    """Return the (jd, kind) event immediately before and immediately after
+    jd_birth, where kind is 'rise' or 'set', using real sunrise/sunset for the
+    birth location (not a fixed clock-time assumption)."""
+    geopos = (lon, lat, 0)
+    events = []
+    t = jd_birth - 1.6  # comfortably more than one full day/night cycle back
+    for _ in range(6):
+        _, tr = swe.rise_trans(t, swe.SUN, swe.CALC_RISE, geopos)
+        _, ts = swe.rise_trans(t, swe.SUN, swe.CALC_SET, geopos)
+        events.append((tr[0], "rise"))
+        events.append((ts[0], "set"))
+        t = min(tr[0], ts[0]) + 0.01
+    events = sorted(set(events))
+    before = [e for e in events if e[0] <= jd_birth]
+    after = [e for e in events if e[0] > jd_birth]
+    return before[-1], after[0]
+
+
+def _nathonnatha_bala(name: str, jd_birth: float, lat: float, lon: float) -> float:
+    """Day/night strength — BPHS: Unnata Bala (diurnal planets Sun/Jupiter/
+    Venus) peaks at 60 Virupas at solar noon, is 30 at sunrise/sunset, and 0
+    at solar midnight. Nata Bala (nocturnal planets Moon/Mars/Saturn) is the
+    complement: Nata + Unnata = 60 always. Mercury is always 60 regardless.
+    Uses real sunrise/sunset for the birth location (not a fixed clock-time
+    approximation), verified against all four classical anchor points
+    (midnight=0/60, sunrise=30/30, noon=60/0, and back through midnight)."""
+    if name not in DIURNAL_PLANETS and name not in NOCTURNAL_PLANETS:
+        return 60.0  # Mercury
+    prev_event, next_event = _sun_rise_set_events(jd_birth, lat, lon)
+    is_day = prev_event[1] == "rise"
+    start_jd, end_jd = prev_event[0], next_event[0]
+    mid_jd = (start_jd + end_jd) / 2
+    frac = (jd_birth - start_jd) / (mid_jd - start_jd) if jd_birth <= mid_jd else (end_jd - jd_birth) / (end_jd - mid_jd)
+    unnata = (30 + 30 * frac) if is_day else (30 - 30 * frac)
+    return round(unnata if name in DIURNAL_PLANETS else 60 - unnata, 2)
+
+
+def compute_shadbala(planets: List[Dict], asc_longitude: float, jd_birth: float, lat: float, lon: float) -> Dict:
     """Compute Shadbala for the 7 classical planets. See the scope note above
     for exactly which components are included. Returns Rupas (1 Rupa = 60
     Virupas) per planet, plus a sub-component breakdown and the
@@ -505,11 +548,12 @@ def compute_shadbala(planets: List[Dict], asc_longitude: float) -> Dict:
         dig = _dig_bala(name, p["longitude"], asc_longitude)
 
         paksha = _paksha_bala(name, sun_lon, moon_lon)
-        kaala = paksha  # partial — see scope note
+        nathonnatha = _nathonnatha_bala(name, jd_birth, lat, lon)
+        kaala = paksha + nathonnatha  # partial — see scope note (still missing Tribhaga/Varsha/Masa/Vara/Hora/Yuddha Bala)
 
         chesta = _chesta_bala(name, p.get("speed", 0.0), p.get("retrograde", False))
         if chesta is None:
-            # Sun uses Ayana Bala (omitted — needs declination/sunrise data),
+            # Sun uses Ayana Bala (omitted — needs declination data),
             # Moon uses Paksha Bala as its Chesta Bala per BPHS 27.
             chesta = paksha if name == "Moon" else 30.0  # neutral placeholder for Sun's Ayana Bala
 
