@@ -211,7 +211,7 @@ export default function Dashboard() {
               <div
                 key={h.house}
                 className="grid items-center border-b border-[color:var(--jai-border)]/30 py-1.5 text-sm gap-3"
-                style={{ gridTemplateColumns: "95px 1fr 120px" }}
+                style={{ gridTemplateColumns: "95px 1fr 110px 56px" }}
               >
                 <div>
                   <span className="font-serif-display text-base text-[color:var(--jai-parchment)]">H{h.house}</span>
@@ -231,6 +231,21 @@ export default function Dashboard() {
                     {h.aspected_by && h.aspected_by.length > 0 ? h.aspected_by.join(", ") : "—"}
                   </div>
                 </div>
+                {h.ashtakavarga_sav != null && (
+                  <div className="flex flex-col items-center" title="Sarvashtakavarga (SAV) — benefic point support for this sign, out of 337 total across the chart">
+                    <div
+                      className="w-9 h-9 rounded flex items-center justify-center text-xs font-serif-display border"
+                      style={{
+                        borderColor: h.ashtakavarga_sav >= 30 ? "var(--jai-gold)" : h.ashtakavarga_sav >= 25 ? "var(--jai-border-gold)" : "var(--jai-border)",
+                        color: h.ashtakavarga_sav >= 30 ? "var(--jai-gold-soft)" : h.ashtakavarga_sav >= 25 ? "var(--jai-text-muted)" : "var(--jai-text-muted)",
+                        opacity: h.ashtakavarga_sav >= 25 ? 1 : 0.6,
+                      }}
+                    >
+                      {h.ashtakavarga_sav}
+                    </div>
+                    <div className="text-[8px] uppercase tracking-widest text-[color:var(--jai-text-muted)]/60 mt-0.5">SAV</div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
