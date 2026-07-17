@@ -247,7 +247,7 @@ def compute_chart(dob_iso: str, tob: str, tz_offset_hours: float, lat: float, lo
         })
 
     yogas = _detect_yogas(planets_out, asc_sign)
-    shadbala = compute_shadbala(planets_out, asc_lon, jd, lat, lon)
+    shadbala = compute_shadbala(planets_out, asc_lon, jd, lat, lon, house_aspects)
     bhava_bala = compute_bhava_bala(house_lords_list, shadbala, house_aspects)
     for h in house_lords_list:
         h["bhava_bala"] = bhava_bala[h["house"]]
@@ -376,9 +376,16 @@ def compute_ashtakavarga(planet_signs: Dict[str, int], asc_sign: int) -> Dict:
 #                  etc. discrete categories, which need finer ephemeris
 #                  sampling than a single snapshot gives)
 #   Naisargika Bala = full classical fixed table
-#   Drik Bala    = omitted (needs the full aspect-degree virupa formula,
-#                  which is easy to get subtly wrong without a worked
-#                  example to check against; better to omit than guess)
+#   Drik Bala    = attempted using the already-verified binary graha drishti
+#                  with classical +25%/-25% benefic/malefic weighting, but
+#                  tested against real reference data (Parashara's Light
+#                  values for this app's own test chart) and found to move
+#                  the Saturn/Venus ranking further from the reference, not
+#                  closer — so it's excluded from the total rather than
+#                  shipped as a "fix" that measurably made a real comparison
+#                  worse. The _drik_bala function is kept in the code for
+#                  future refinement once a proper continuous Sputa Drishti
+#                  formula can be verified against a worked example.
 #
 # All values are cross-checked for range-sanity (each sub-score falls within
 # its classical 0-max bound) but this has NOT been verified against a
@@ -527,7 +534,42 @@ def _nathonnatha_bala(name: str, jd_birth: float, lat: float, lon: float) -> flo
     return round(unnata if name in DIURNAL_PLANETS else 60 - unnata, 2)
 
 
-def compute_shadbala(planets: List[Dict], asc_longitude: float, jd_birth: float, lat: float, lon: float) -> Dict:
+DRIK_BALA_FIXED_BENEFIC = {"Jupiter", "Venus", "Mercury"}  # Mercury simplified to always-benefic
+DRIK_BALA_FIXED_MALEFIC = {"Sun", "Mars", "Saturn"}
+FULL_ASPECT_VIRUPAS = 60.0  # approximation of Sputa Drishti at full strength — see scope note
+
+
+def _drik_bala(name: str, house: int, house_aspects: Dict[int, List[str]], sun_lon: float, moon_lon: float) -> float:
+    """Aspectual strength — APPROXIMATION, not the full classical Sputa
+    Drishti formula. Real BPHS Drik Bala grades aspect strength continuously
+    by exact angular distance (an aspect exactly at its "full" degree counts
+    fully, one further off counts less, per a specific BPHS table); getting
+    that continuous formula wrong without a worked example to verify against
+    would be worse than approximating. This version instead uses the
+    already-verified binary graha drishti (does planet X aspect this house,
+    yes/no) and applies the classical +25%/-25% benefic/malefic weighting to
+    a fixed full-aspect value, per BPHS 27.19 and the Saravali commentary's
+    rectification rule. This captures the right DIRECTION (net benefic vs
+    malefic aspect pressure) but not the precise degree-graded magnitude."""
+    aspecting = house_aspects.get(house, [])
+    total = 0.0
+    for aspector in aspecting:
+        if aspector == name:
+            continue  # a planet doesn't aspect itself
+        if aspector == "Moon":
+            elongation = (moon_lon - sun_lon) % 360
+            is_benefic = elongation <= 180  # waxing Moon = benefic for this purpose
+        elif aspector in DRIK_BALA_FIXED_BENEFIC:
+            is_benefic = True
+        elif aspector in DRIK_BALA_FIXED_MALEFIC:
+            is_benefic = False
+        else:
+            continue  # Rahu/Ketu not part of classical Drik Bala's aspecting set
+        total += FULL_ASPECT_VIRUPAS * (1.25 if is_benefic else 0.75) * (1 if is_benefic else -1)
+    return round(total, 2)
+
+
+def compute_shadbala(planets: List[Dict], asc_longitude: float, jd_birth: float, lat: float, lon: float, house_aspects: Dict[int, List[str]]) -> Dict:
     """Compute Shadbala for the 7 classical planets. See the scope note above
     for exactly which components are included. Returns Rupas (1 Rupa = 60
     Virupas) per planet, plus a sub-component breakdown and the
@@ -558,8 +600,14 @@ def compute_shadbala(planets: List[Dict], asc_longitude: float, jd_birth: float,
             chesta = paksha if name == "Moon" else 30.0  # neutral placeholder for Sun's Ayana Bala
 
         naisargika = NAISARGIKA_BALA[name]
+        # Drik Bala: implemented and tested (see _drik_bala function below), but
+        # empirically it moved Saturn's ranking further AWAY from Parashara's
+        # Light's reference values, not closer — meaning this approximation
+        # doesn't match the real formula well enough to trust. Rather than ship
+        # a "fix" that measurably made a real comparison worse, it's excluded
+        # from the total (kept available via _drik_bala for future refinement).
 
-        total_virupas = sthana + dig + kaala + chesta + naisargika  # Drik Bala omitted
+        total_virupas = sthana + dig + kaala + chesta + naisargika
         total_rupas = round(total_virupas / 60, 2)
 
         result[name] = {
