@@ -224,6 +224,8 @@ def compute_chart(dob_iso: str, tob: str, tz_offset_hours: float, lat: float, lo
 
     # House lords: for each house (1-12), the sign occupying it and its dispositor
     house_aspects = _compute_house_aspects(planets_out)
+    planet_signs = {p["name"]: p["sign_idx"] for p in planets_out if p["name"] in ASHTAKAVARGA_PLANETS}
+    ashtakavarga = compute_ashtakavarga(planet_signs, asc_sign)
     house_lords_list = []
     for h in range(1, 13):
         sign_idx = (asc_sign + h - 1) % 12
@@ -239,6 +241,7 @@ def compute_chart(dob_iso: str, tob: str, tz_offset_hours: float, lat: float, lo
             "lord_sits_in_sign_en": lord_planet["sign_en"] if lord_planet else None,
             "lord_degree": lord_planet["degree_in_sign"] if lord_planet else None,
             "aspected_by": house_aspects[h],
+            "ashtakavarga_sav": ashtakavarga["sav"][sign_idx],
         })
 
     yogas = _detect_yogas(planets_out, asc_sign)
@@ -259,6 +262,7 @@ def compute_chart(dob_iso: str, tob: str, tz_offset_hours: float, lat: float, lo
         "dashas": dashas,
         "house_lords": house_lords_list,
         "yogas": yogas,
+        "ashtakavarga": ashtakavarga,
     }
 
 
@@ -267,6 +271,75 @@ SIGN_LORDS = [
     "Mars", "Venus", "Mercury", "Moon", "Sun", "Mercury",
     "Venus", "Mars", "Jupiter", "Saturn", "Saturn", "Jupiter",
 ]
+
+# --- Ashtakavarga (Sarvashtakavarga / Bhinnashtakavarga) ---
+# Classical BPHS Chapter 66 benefic-place tables. Each of the 7 planets has a
+# fixed set of "benefic houses" (counted from each of the 8 contributors: the
+# 7 planets + Lagna) that is IDENTICAL for every horoscope ever cast — only
+# which sign each benefic house lands on changes per chart. Cross-verified
+# against B.V. Raman's published totals (Sun=48, Moon=49, Mars=39, Mercury=54,
+# Jupiter=56, Venus=52, Saturn=39, grand total=337) and against his fully
+# worked Standard Horoscope example, which this implementation reproduces
+# exactly.
+ASHTAKAVARGA_TABLE = {
+    "Sun": {
+        "Sun": [1,2,4,7,8,9,10,11], "Moon": [3,6,10,11], "Mars": [1,2,4,7,8,9,10,11],
+        "Mercury": [3,5,6,9,10,11,12], "Jupiter": [5,6,9,11], "Venus": [6,7,12],
+        "Saturn": [1,2,4,7,8,9,10,11], "Ascendant": [3,4,6,10,11,12],
+    },
+    "Moon": {
+        "Sun": [3,6,7,8,10,11], "Moon": [1,3,6,7,10,11], "Mars": [2,3,5,6,9,10,11],
+        "Mercury": [1,3,4,5,7,8,10,11], "Jupiter": [1,4,7,8,10,11,12], "Venus": [3,4,5,7,9,10,11],
+        "Saturn": [3,5,6,11], "Ascendant": [3,6,10,11],
+    },
+    "Mars": {
+        "Sun": [3,5,6,10,11], "Moon": [3,6,11], "Mars": [1,2,4,7,8,10,11],
+        "Mercury": [3,5,6,11], "Jupiter": [6,10,11,12], "Venus": [6,8,11,12],
+        "Saturn": [1,4,7,8,9,10,11], "Ascendant": [1,3,6,10,11],
+    },
+    "Mercury": {
+        "Sun": [5,6,9,11,12], "Moon": [2,4,6,8,10,11], "Mars": [1,2,4,7,8,9,10,11],
+        "Mercury": [1,3,5,6,9,10,11,12], "Jupiter": [6,8,11,12], "Venus": [1,2,3,4,5,8,9,11],
+        "Saturn": [1,2,4,7,8,9,10,11], "Ascendant": [1,2,4,6,8,10,11],
+    },
+    "Jupiter": {
+        "Sun": [1,2,3,4,7,8,9,10,11], "Moon": [2,5,7,9,11], "Mars": [1,2,4,7,8,10,11],
+        "Mercury": [1,2,4,5,6,9,10,11], "Jupiter": [1,2,3,4,7,8,10,11], "Venus": [2,5,6,9,10,11],
+        "Saturn": [3,5,6,12], "Ascendant": [1,2,4,5,6,7,9,10,11],
+    },
+    "Venus": {
+        "Sun": [8,11,12], "Moon": [1,2,3,4,5,8,9,11,12], "Mars": [3,5,6,9,11,12],
+        "Mercury": [3,5,6,9,11], "Jupiter": [5,8,9,10,11], "Venus": [1,2,3,4,5,8,9,10,11],
+        "Saturn": [3,4,5,8,9,10,11], "Ascendant": [1,2,3,4,5,8,9,11],
+    },
+    "Saturn": {
+        "Sun": [1,2,4,7,8,10,11], "Moon": [3,6,11], "Mars": [3,5,6,10,11,12],
+        "Mercury": [6,8,9,10,11,12], "Jupiter": [5,6,11,12], "Venus": [6,11,12],
+        "Saturn": [3,5,6,11], "Ascendant": [1,3,4,6,10,11],
+    },
+}
+ASHTAKAVARGA_PLANETS = ["Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn"]
+
+
+def compute_ashtakavarga(planet_signs: Dict[str, int], asc_sign: int) -> Dict:
+    """Compute Bhinnashtakavarga (per-planet bindu tables) and Sarvashtakavarga
+    (their sum) for a chart. planet_signs maps the 7 classical planet names to
+    their sign_idx (0-11); asc_sign is the Ascendant's sign_idx.
+    Returns {"bav": {planet: [12 bindu counts by sign_idx]}, "sav": [12 totals]}."""
+    contributors = {**{p: planet_signs[p] for p in ASHTAKAVARGA_PLANETS if p in planet_signs}, "Ascendant": asc_sign}
+    bav = {}
+    for target in ASHTAKAVARGA_PLANETS:
+        counts = [0] * 12
+        for contributor_name, benefic_houses in ASHTAKAVARGA_TABLE[target].items():
+            if contributor_name not in contributors:
+                continue
+            c_sign = contributors[contributor_name]
+            for house_num in benefic_houses:
+                sign = (c_sign + house_num - 1) % 12
+                counts[sign] += 1
+        bav[target] = counts
+    sav = [sum(bav[p][s] for p in ASHTAKAVARGA_PLANETS) for s in range(12)]
+    return {"bav": bav, "sav": sav}
 
 
 def _compute_house_aspects(planets: List[Dict]) -> Dict[int, List[str]]:
