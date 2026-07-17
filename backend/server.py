@@ -152,6 +152,12 @@ class ThreadRename(BaseModel):
     name: str
 
 
+class DashaSubdivideRequest(BaseModel):
+    lord: str
+    start: str
+    years: float
+
+
 # ---------- Routes ----------
 @api_router.get("/")
 async def root():
@@ -303,6 +309,16 @@ async def get_transits(user: User = Depends(get_current_user)):
     if doc:
         natal = compute_chart(doc['dob'], doc['tob'], doc['tz_offset'], doc['lat'], doc['lon'])
     return current_transits(natal)
+
+
+@api_router.post("/dasha/subdivide")
+async def subdivide_dasha(payload: DashaSubdivideRequest, user: User = Depends(get_current_user)):
+    """Given any dasha period (Mahadasha, Antardasha, or Pratyantardasha), return
+    its 9 sub-periods one level deeper. The subdivision math is identical at every
+    level of the Vimshottari system, so this single endpoint serves the whole
+    Maha → Antar → Pratyantar → Sookshma drill-down."""
+    subs = compute_antardashas({"lord": payload.lord, "start": payload.start, "years": payload.years})
+    return {"subs": subs}
 
 
 # ---------- Books (seed vs custom, per-user upload/delete) ----------
