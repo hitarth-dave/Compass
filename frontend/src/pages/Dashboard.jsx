@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Loader2, MoveRight } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import KundaliChart from "@/components/KundaliChart";
+import DashaExplorer from "@/components/DashaExplorer";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -258,25 +259,7 @@ export default function Dashboard() {
 
         <div className="lg:col-span-5 card-surface p-8" data-testid="dasha-timeline">
           <div className="overline mb-5">Vimshottari Dasha · 120-Year Cycle</div>
-          <div className="space-y-1 max-h-80 overflow-y-auto">
-            {chart.dashas.map((d, i) => {
-              const isCurrent = dasha && d.lord === dasha.lord && d.start === dasha.start;
-              return (
-                <div
-                  key={i}
-                  className={`px-3 py-2 rounded flex justify-between items-baseline ${isCurrent ? "bg-[color:var(--jai-gold)]/10 border border-[color:var(--jai-gold)]/40" : ""}`}
-                >
-                  <div>
-                    <div className={`font-serif-display text-lg ${isCurrent ? "text-[color:var(--jai-gold-soft)]" : "text-[color:var(--jai-parchment)]"}`}>{d.lord}</div>
-                    <div className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">{d.years} yrs</div>
-                  </div>
-                  <div className="text-xs text-[color:var(--jai-text-muted)] text-right">
-                    {d.start}<br/>{d.end}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <DashaExplorer mahadashas={chart.dashas} currentMahadasha={dasha} />
         </div>
       </div>
     </div>
