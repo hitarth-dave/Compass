@@ -48,6 +48,7 @@ export default function Dashboard() {
   const dasha = chart.current_dasha;
   const antar = chart.current_antardasha;
   const navamsa = chart.navamsa;
+  const dasamsa = chart.dasamsa;
   const houseLords = chart.house_lords || [];
   const yogas = chart.yogas || [];
 
@@ -73,89 +74,104 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 fade-up delay-1">
-        <div className="lg:col-span-8 card-surface p-8">
+        <div className="lg:col-span-4 card-surface p-8" data-testid="rasi-card">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <div className="overline">Rasi Chakra · North Indian (D1)</div>
-              <div className="font-serif-display text-3xl mt-1 text-[color:var(--jai-parchment)]">Lagna: {asc.sign_en}</div>
+              <div className="overline">Rasi Chakra · D1</div>
+              <div className="font-serif-display text-2xl mt-1 text-[color:var(--jai-parchment)]">Lagna: {asc.sign_en}</div>
             </div>
             <div className="text-right">
-              <div className="overline">Ascendant Degree</div>
-              <div className="font-serif-display text-2xl text-[color:var(--jai-gold)]">{asc.degree_in_sign}°</div>
+              <div className="overline">Degree</div>
+              <div className="font-serif-display text-xl text-[color:var(--jai-gold)]">{asc.degree_in_sign}°</div>
             </div>
           </div>
           <KundaliChart planets={chart.planets} ascendantSign={asc.sign_idx} ascendant={asc} />
         </div>
 
-        <div className="lg:col-span-4 space-y-6">
-          {dasha && (
-            <div className="card-surface p-6" data-testid="current-dasha">
-              <div className="overline mb-3">Current Dasha</div>
-              <div className="flex items-baseline gap-3">
-                <div className="font-serif-display text-4xl text-[color:var(--jai-gold)]">{dasha.lord}</div>
-                <div className="text-[color:var(--jai-text-muted)]">MD</div>
-              </div>
-              <div className="mt-1 text-xs text-[color:var(--jai-text-muted)]">{dasha.start} → {dasha.end} · {dasha.years}y</div>
-              {antar && (
-                <>
-                  <div className="mt-4 flex items-baseline gap-3">
-                    <div className="font-serif-display text-2xl text-[color:var(--jai-green-deep)]">{antar.lord}</div>
-                    <div className="text-[color:var(--jai-text-muted)] text-xs">AD (Antardasha)</div>
-                  </div>
-                  <div className="mt-1 text-xs text-[color:var(--jai-text-muted)]">{antar.start} → {antar.end}</div>
-                </>
-              )}
-            </div>
-          )}
-
-          <div className="card-surface p-6" data-testid="transits-card">
-            <div className="flex items-center justify-between mb-2">
-              <div className="overline">Live Transits · Today</div>
-              <div className="text-[10px] text-[color:var(--jai-text-muted)]">
-                {new Date(transits.as_of).toLocaleString(undefined, {
-                  timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                })}
-              </div>
-            </div>
-            <KundaliChart
-              planets={transits.planets
-                .filter((t) => t.house_from_lagna)
-                .map((t) => ({ ...t, house: t.house_from_lagna }))}
-              ascendantSign={asc.sign_idx}
-              showNakshatra={false}
-              testid="kundali-chart-transit"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* D9 Navamsa + House Lords + Yogas */}
-      <div className="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-6 fade-up delay-2">
-        <div className="lg:col-span-5 card-surface p-8" data-testid="navamsa-card">
+        <div className="lg:col-span-4 card-surface p-8" data-testid="navamsa-card">
           <div className="flex items-center justify-between mb-6">
             <div>
               <div className="overline">Navamsa · D9</div>
               <div className="font-serif-display text-2xl mt-1 text-[color:var(--jai-parchment)]">D9 Lagna: {navamsa.ascendant.sign_en}</div>
             </div>
-            <div className="text-right text-xs text-[color:var(--jai-text-muted)] max-w-[180px]">
-              D9 reveals second-half of life & marriage
+            <div className="text-right text-[10px] text-[color:var(--jai-text-muted)] max-w-[110px]">
+              Marriage & second half of life
             </div>
           </div>
           <KundaliChart planets={navamsa.planets} ascendantSign={navamsa.ascendant.sign_idx} showNakshatra={false} testid="kundali-chart-d9" />
         </div>
 
-        <div className="lg:col-span-4 card-surface p-8" data-testid="house-lords-card">
+        {dasamsa && (
+          <div className="lg:col-span-4 card-surface p-8" data-testid="dasamsa-card">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <div className="overline">Dasamsa · D10</div>
+                <div className="font-serif-display text-2xl mt-1 text-[color:var(--jai-parchment)]">D10 Lagna: {dasamsa.ascendant.sign_en}</div>
+              </div>
+              <div className="text-right text-[10px] text-[color:var(--jai-text-muted)] max-w-[110px]">
+                Career & professional status
+              </div>
+            </div>
+            <KundaliChart planets={dasamsa.planets} ascendantSign={dasamsa.ascendant.sign_idx} showNakshatra={false} testid="kundali-chart-d10" />
+          </div>
+        )}
+      </div>
+
+      <div className="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-6 fade-up delay-2">
+        {dasha && (
+          <div className="lg:col-span-4 card-surface p-6" data-testid="current-dasha">
+            <div className="overline mb-3">Current Dasha</div>
+            <div className="flex items-baseline gap-3">
+              <div className="font-serif-display text-4xl text-[color:var(--jai-gold)]">{dasha.lord}</div>
+              <div className="text-[color:var(--jai-text-muted)]">MD</div>
+            </div>
+            <div className="mt-1 text-xs text-[color:var(--jai-text-muted)]">{dasha.start} → {dasha.end} · {dasha.years}y</div>
+            {antar && (
+              <>
+                <div className="mt-4 flex items-baseline gap-3">
+                  <div className="font-serif-display text-2xl text-[color:var(--jai-green-deep)]">{antar.lord}</div>
+                  <div className="text-[color:var(--jai-text-muted)] text-xs">AD (Antardasha)</div>
+                </div>
+                <div className="mt-1 text-xs text-[color:var(--jai-text-muted)]">{antar.start} → {antar.end}</div>
+              </>
+            )}
+          </div>
+        )}
+
+        <div className="lg:col-span-8 card-surface p-8" data-testid="transits-card">
+          <div className="flex items-center justify-between mb-4">
+            <div className="overline">Live Transits · Today</div>
+            <div className="text-[10px] text-[color:var(--jai-text-muted)]">
+              {new Date(transits.as_of).toLocaleString(undefined, {
+                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}
+            </div>
+          </div>
+          <KundaliChart
+            planets={transits.planets
+              .filter((t) => t.house_from_lagna)
+              .map((t) => ({ ...t, house: t.house_from_lagna }))}
+            ascendantSign={asc.sign_idx}
+            showNakshatra={false}
+            testid="kundali-chart-transit"
+          />
+        </div>
+      </div>
+
+      {/* House Lords + Yogas */}
+      <div className="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-6 fade-up delay-3">
+        <div className="lg:col-span-7 card-surface p-8" data-testid="house-lords-card">
           <div className="overline mb-5">House Lords (Bhava Adhipati)</div>
           <div className="space-y-1 max-h-[520px] overflow-y-auto pr-1">
             {houseLords.map((h) => (
-              <div key={h.house} className="flex items-baseline justify-between border-b border-[color:var(--jai-border)]/40 py-2 text-sm">
-                <div>
+              <div key={h.house} className="flex items-baseline justify-between border-b border-[color:var(--jai-border)]/40 py-2 text-sm gap-4">
+                <div className="shrink-0">
                   <span className="font-serif-display text-lg text-[color:var(--jai-parchment)]">H{h.house}</span>
                   <span className="ml-2 text-[color:var(--jai-text-muted)]">{h.sign_en}</span>
                 </div>
-                <div className="text-right">
+                <div className="text-right shrink-0">
                   <div className="text-[color:var(--jai-green-deep)] font-semibold">{h.lord}</div>
                   {h.lord_sits_in_house && (
                     <div className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">
@@ -163,12 +179,18 @@ export default function Dashboard() {
                     </div>
                   )}
                 </div>
+                <div className="text-right flex-1 min-w-[90px]">
+                  <div className="text-[9px] uppercase tracking-widest text-[color:var(--jai-text-muted)]/70">Aspected by</div>
+                  <div className="text-xs text-[color:var(--jai-gold-soft)]">
+                    {h.aspected_by && h.aspected_by.length > 0 ? h.aspected_by.join(", ") : "—"}
+                  </div>
+                </div>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="lg:col-span-3 card-surface p-8" data-testid="yogas-card">
+        <div className="lg:col-span-5 card-surface p-8" data-testid="yogas-card">
           <div className="overline mb-5">Detected Yogas</div>
           {yogas.length === 0 && (
             <p className="text-sm text-[color:var(--jai-text-muted)] italic">No tracked yogas active in this chart. Ask Compass Astro to discover subtler combinations.</p>
