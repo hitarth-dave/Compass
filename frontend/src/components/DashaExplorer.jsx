@@ -4,9 +4,9 @@ import { Loader2, ChevronRight } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
-const LEVEL_LABELS = ["Mahadasha", "Antardasha", "Pratyantardasha", "Sookshma Dasha"];
-const LEVEL_ABBR = ["MD", "AD", "PD", "SD"];
-const MAX_DEPTH = 3; // 0=Maha, 1=Antar, 2=Pratyantar, 3=Sookshma (leaf, not clickable further)
+const LEVEL_LABELS = ["Mahadasha", "Antardasha", "Pratyantardasha", "Sookshma Dasha", "Prana Dasha"];
+const LEVEL_ABBR = ["MD", "AD", "PD", "SD", "PR"];
+const MAX_DEPTH = 4; // 0=Maha, 1=Antar, 2=Pratyantar, 3=Sookshma, 4=Prana (leaf, not clickable further)
 
 /**
  * Renders the Vimshottari Dasha timeline as a clickable drill-down:
@@ -30,7 +30,7 @@ export default function DashaExplorer({ mahadashas, currentMahadasha }) {
   };
 
   async function drillInto(node, idx) {
-    if (depth >= MAX_DEPTH) return; // Sookshma is the deepest level, nothing further
+    if (depth >= MAX_DEPTH) return; // Prana is the deepest level, nothing further
     setLoadingIdx(idx);
     try {
       const res = await axios.post(`${API}/dasha/subdivide`, {
