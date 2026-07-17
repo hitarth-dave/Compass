@@ -19,7 +19,7 @@ from datetime import datetime, timezone, timedelta
 
 from astrology import (
     compute_chart, current_transits, current_dasha, current_antardasha,
-    compute_antardashas, build_navamsa,
+    compute_antardashas, build_navamsa, build_dasamsa,
 )
 from knowledge import (
     SEED_CORPUS, search_for_user, list_books_for_user, add_pdf_for_user,
@@ -230,6 +230,7 @@ async def get_chart(user: User = Depends(get_current_user)):
         chart['antardashas'] = []
         chart['current_antardasha'] = None
     chart['navamsa'] = build_navamsa(chart['planets'], chart['ascendant']['longitude'])
+    chart['dasamsa'] = build_dasamsa(chart['planets'], chart['ascendant']['longitude'])
     chart['profile'] = {'name': doc['name'], 'dob': doc['dob'], 'tob': doc['tob'], 'place': doc['place']}
     return chart
 
