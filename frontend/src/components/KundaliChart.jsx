@@ -16,7 +16,7 @@ const PLANET_COLOR = {
   Mercury: "#2E7D32",   // dark green
   Jupiter: "#B8860B",   // dark gold
   Venus: "#B03060",     // magenta / maroon
-  Saturn: "#1F3A5F",    // dark navy
+  Saturn: "#3D6A8A",    // steel blue — visible on both cream and dark cards
   Rahu: "#6B3410",      // dark brown
   Ketu: "#5D6D6E",      // slate gray
 };
@@ -71,7 +71,7 @@ export default function KundaliChart({ planets, ascendantSign, ascendant, showNa
     const asEntry = {
       name: "As",
       _initial: "As",
-      _color: "#0A2E23",
+      _color: "#9C6B2E",
       degree_in_sign: ascendant.degree_in_sign,
       nakshatra: ascendant.nakshatra,
       retrograde: false,
@@ -116,7 +116,7 @@ export default function KundaliChart({ planets, ascendantSign, ascendant, showNa
               {/* Planets stacked vertically at region center */}
               {list.map((p, i) => {
                 const initial = p._initial || ((PLANET_INITIAL[p.name] || p.name.slice(0, 2)) + (p.retrograde ? "R" : ""));
-                const color = p._color || PLANET_COLOR[p.name] || "#0A2E23";
+                const color = p._color || PLANET_COLOR[p.name] || "#8B6F47";
                 const yy = startY + i * lineHeight;
                 const nak = showNakshatra && p.nakshatra ? (NAK_ABBR[p.nakshatra] || p.nakshatra.slice(0, 3)) : "";
                 return (
