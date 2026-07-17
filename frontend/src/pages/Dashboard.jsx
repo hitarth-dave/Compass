@@ -33,6 +33,10 @@ function todaysTransitNote(transits) {
   return MOON_TRANSIT_NOTE[moon.house_from_lagna] || null;
 }
 
+// Antardasha/Pratyantardasha now carry full "YYYY-MM-DD HH:MM:SS" timestamps
+// (needed for Sookshma/Prana precision elsewhere); this strip only needs the date.
+const dateOnly = (str) => (str ? str.split(" ")[0] : str);
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const [chart, setChart] = useState(null);
@@ -111,13 +115,13 @@ export default function Dashboard() {
             {antar && (
               <div className="flex items-baseline gap-2">
                 <span className="font-serif-display text-xl text-[color:var(--jai-green-deep)]">{antar.lord}</span>
-                <span className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">AD · {antar.start} → {antar.end}</span>
+                <span className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">AD · {dateOnly(antar.start)} → {dateOnly(antar.end)}</span>
               </div>
             )}
             {pratyantar && (
               <div className="flex items-baseline gap-2">
                 <span className="font-serif-display text-lg text-[color:var(--jai-gold-soft)]">{pratyantar.lord}</span>
-                <span className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">PD · {pratyantar.start} → {pratyantar.end}</span>
+                <span className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">PD · {dateOnly(pratyantar.start)} → {dateOnly(pratyantar.end)}</span>
               </div>
             )}
           </div>
@@ -201,24 +205,24 @@ export default function Dashboard() {
       {/* House Lords + Yogas */}
       <div className="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-6 fade-up delay-3">
         <div className="lg:col-span-7 card-surface p-8" data-testid="house-lords-card">
-          <div className="overline mb-5">House Lords (Bhava Adhipati)</div>
-          <div className="space-y-1 max-h-[520px] overflow-y-auto pr-1">
+          <div className="overline mb-3">House Lords (Bhava Adhipati)</div>
+          <div className="max-h-[480px] overflow-y-auto pr-1">
             {houseLords.map((h) => (
               <div
                 key={h.house}
-                className="grid items-center border-b border-[color:var(--jai-border)]/40 py-2 text-sm gap-3"
-                style={{ gridTemplateColumns: "100px 1fr 130px" }}
+                className="grid items-center border-b border-[color:var(--jai-border)]/30 py-1.5 text-sm gap-3"
+                style={{ gridTemplateColumns: "95px 1fr 120px" }}
               >
                 <div>
-                  <span className="font-serif-display text-lg text-[color:var(--jai-parchment)]">H{h.house}</span>
-                  <span className="ml-2 text-[color:var(--jai-text-muted)]">{h.sign_en}</span>
+                  <span className="font-serif-display text-base text-[color:var(--jai-parchment)]">H{h.house}</span>
+                  <span className="ml-2 text-xs text-[color:var(--jai-text-muted)]">{h.sign_en}</span>
                 </div>
-                <div>
-                  <div className="text-[color:var(--jai-green-deep)] font-semibold">{h.lord}</div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-[color:var(--jai-green-deep)] font-semibold">{h.lord}</span>
                   {h.lord_sits_in_house && (
-                    <div className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">
-                      sits H{h.lord_sits_in_house} · {h.lord_sits_in_sign_en}
-                    </div>
+                    <span className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">
+                      H{h.lord_sits_in_house} · {h.lord_sits_in_sign_en}
+                    </span>
                   )}
                 </div>
                 <div className="text-right">
