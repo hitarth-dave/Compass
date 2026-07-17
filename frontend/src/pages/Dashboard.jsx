@@ -73,8 +73,26 @@ export default function Dashboard() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 fade-up delay-1">
-        <div className="lg:col-span-4 card-surface p-8" data-testid="rasi-card">
+      {dasha && (
+        <div className="card-surface px-8 py-4 fade-up flex items-center justify-between flex-wrap gap-4" data-testid="current-dasha">
+          <div className="overline shrink-0">Current Dasha</div>
+          <div className="flex items-center gap-6 flex-wrap">
+            <div className="flex items-baseline gap-2">
+              <span className="font-serif-display text-2xl text-[color:var(--jai-gold)]">{dasha.lord}</span>
+              <span className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">MD · {dasha.start} → {dasha.end}</span>
+            </div>
+            {antar && (
+              <div className="flex items-baseline gap-2">
+                <span className="font-serif-display text-xl text-[color:var(--jai-green-deep)]">{antar.lord}</span>
+                <span className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">AD · {antar.start} → {antar.end}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-6 fade-up delay-1">
+        <div className="lg:col-span-6 card-surface p-8" data-testid="rasi-card">
           <div className="flex items-center justify-between mb-6">
             <div>
               <div className="overline">Rasi Chakra · D1</div>
@@ -88,57 +106,7 @@ export default function Dashboard() {
           <KundaliChart planets={chart.planets} ascendantSign={asc.sign_idx} ascendant={asc} />
         </div>
 
-        <div className="lg:col-span-4 card-surface p-8" data-testid="navamsa-card">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <div className="overline">Navamsa · D9</div>
-              <div className="font-serif-display text-2xl mt-1 text-[color:var(--jai-parchment)]">D9 Lagna: {navamsa.ascendant.sign_en}</div>
-            </div>
-            <div className="text-right text-[10px] text-[color:var(--jai-text-muted)] max-w-[110px]">
-              Marriage & second half of life
-            </div>
-          </div>
-          <KundaliChart planets={navamsa.planets} ascendantSign={navamsa.ascendant.sign_idx} showNakshatra={false} testid="kundali-chart-d9" />
-        </div>
-
-        {dasamsa && (
-          <div className="lg:col-span-4 card-surface p-8" data-testid="dasamsa-card">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <div className="overline">Dasamsa · D10</div>
-                <div className="font-serif-display text-2xl mt-1 text-[color:var(--jai-parchment)]">D10 Lagna: {dasamsa.ascendant.sign_en}</div>
-              </div>
-              <div className="text-right text-[10px] text-[color:var(--jai-text-muted)] max-w-[110px]">
-                Career & professional status
-              </div>
-            </div>
-            <KundaliChart planets={dasamsa.planets} ascendantSign={dasamsa.ascendant.sign_idx} showNakshatra={false} testid="kundali-chart-d10" />
-          </div>
-        )}
-      </div>
-
-      <div className="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-6 fade-up delay-2">
-        {dasha && (
-          <div className="lg:col-span-4 card-surface p-6" data-testid="current-dasha">
-            <div className="overline mb-3">Current Dasha</div>
-            <div className="flex items-baseline gap-3">
-              <div className="font-serif-display text-4xl text-[color:var(--jai-gold)]">{dasha.lord}</div>
-              <div className="text-[color:var(--jai-text-muted)]">MD</div>
-            </div>
-            <div className="mt-1 text-xs text-[color:var(--jai-text-muted)]">{dasha.start} → {dasha.end} · {dasha.years}y</div>
-            {antar && (
-              <>
-                <div className="mt-4 flex items-baseline gap-3">
-                  <div className="font-serif-display text-2xl text-[color:var(--jai-green-deep)]">{antar.lord}</div>
-                  <div className="text-[color:var(--jai-text-muted)] text-xs">AD (Antardasha)</div>
-                </div>
-                <div className="mt-1 text-xs text-[color:var(--jai-text-muted)]">{antar.start} → {antar.end}</div>
-              </>
-            )}
-          </div>
-        )}
-
-        <div className="lg:col-span-8 card-surface p-8" data-testid="transits-card">
+        <div className="lg:col-span-6 card-surface p-8" data-testid="transits-card">
           <div className="flex items-center justify-between mb-4">
             <div className="overline">Live Transits · Today</div>
             <div className="text-[10px] text-[color:var(--jai-text-muted)]">
@@ -158,6 +126,36 @@ export default function Dashboard() {
             testid="kundali-chart-transit"
           />
         </div>
+      </div>
+
+      <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-6 fade-up delay-2">
+        <div className="lg:col-span-6 card-surface p-8" data-testid="navamsa-card">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <div className="overline">Navamsa · D9</div>
+              <div className="font-serif-display text-2xl mt-1 text-[color:var(--jai-parchment)]">D9 Lagna: {navamsa.ascendant.sign_en}</div>
+            </div>
+            <div className="text-right text-[10px] text-[color:var(--jai-text-muted)] max-w-[140px]">
+              Marriage & second half of life
+            </div>
+          </div>
+          <KundaliChart planets={navamsa.planets} ascendantSign={navamsa.ascendant.sign_idx} showNakshatra={false} testid="kundali-chart-d9" />
+        </div>
+
+        {dasamsa && (
+          <div className="lg:col-span-6 card-surface p-8" data-testid="dasamsa-card">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <div className="overline">Dasamsa · D10</div>
+                <div className="font-serif-display text-2xl mt-1 text-[color:var(--jai-parchment)]">D10 Lagna: {dasamsa.ascendant.sign_en}</div>
+              </div>
+              <div className="text-right text-[10px] text-[color:var(--jai-text-muted)] max-w-[140px]">
+                Career & professional status
+              </div>
+            </div>
+            <KundaliChart planets={dasamsa.planets} ascendantSign={dasamsa.ascendant.sign_idx} showNakshatra={false} testid="kundali-chart-d10" />
+          </div>
+        )}
       </div>
 
       {/* House Lords + Yogas */}
