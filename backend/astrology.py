@@ -362,11 +362,30 @@ def _detect_yogas(planets: List[Dict], asc_sign: int) -> List[Dict]:
 
 
 def compute_antardashas(mahadasha: Dict) -> List[Dict]:
-    """For a given Mahadasha, compute the 9 Antardasha (sub-period) breakdown."""
-    from datetime import date as _date
+    """For a given Mahadasha (or Antardasha, or Pratyantardasha, or Sookshma —
+    the subdivision math is identical at every level), compute the 9 sub-period
+    breakdown.
+
+    IMPORTANT: dates are carried as full datetimes (not date-only) throughout,
+    because by the time you're 3-4 levels deep (Sookshma, Prana) individual
+    sub-periods are only hours long. Truncating to date-only at each level and
+    re-parsing from that truncated string (the previous approach) silently
+    threw away all sub-day precision, causing every Prana-level period to
+    collapse onto the same calendar date. Display code should format/slice
+    these as needed (e.g. date-only for Mahadasha/Antardasha, full timestamp
+    for Sookshma/Prana) rather than the data losing precision at the source.
+    """
+    start_str = mahadasha["start"]
+    # Accept either a full timestamp (from a deeper recursive call) or a
+    # plain date (from the top-level Mahadasha list, which only ever needs
+    # day precision since those spans are years long).
+    try:
+        start = datetime.strptime(start_str, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        start = datetime.strptime(start_str, "%Y-%m-%d")
+
     lord = mahadasha["lord"]
     total_yrs = mahadasha["years"]
-    start = datetime.strptime(mahadasha["start"], "%Y-%m-%d")
     lord_idx = NAK_LORDS.index(lord)
     subs = []
     for i in range(9):
@@ -375,9 +394,9 @@ def compute_antardashas(mahadasha: Dict) -> List[Dict]:
         end = start + timedelta(days=sub_years * 365.25)
         subs.append({
             "lord": sub_lord,
-            "start": start.date().isoformat(),
-            "end": end.date().isoformat(),
-            "years": round(sub_years, 3),
+            "start": start.strftime("%Y-%m-%d %H:%M:%S"),
+            "end": end.strftime("%Y-%m-%d %H:%M:%S"),
+            "years": round(sub_years, 6),
         })
         start = end
     return subs
@@ -385,9 +404,11 @@ def compute_antardashas(mahadasha: Dict) -> List[Dict]:
 
 def current_antardasha(mahadasha: Dict) -> Dict | None:
     subs = compute_antardashas(mahadasha)
-    today = datetime.now(timezone.utc).date().isoformat()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     for s in subs:
-        if s["start"] <= today <= s["end"]:
+        s_start = datetime.strptime(s["start"], "%Y-%m-%d %H:%M:%S")
+        s_end = datetime.strptime(s["end"], "%Y-%m-%d %H:%M:%S")
+        if s_start <= now <= s_end:
             return s
     return None
 
