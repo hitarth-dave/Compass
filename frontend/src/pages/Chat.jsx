@@ -53,6 +53,20 @@ function splitAnswerLogic(text) {
   return { answer, logic };
 }
 
+/** Groups citations by book name so the same book never appears twice as a
+ * separate pill/heading — each book appears once, with all its excerpts
+ * (from possibly-different chapters) nested underneath. */
+function groupCitationsByBook(citations) {
+  const byBook = new Map();
+  for (const c of citations || []) {
+    if (!byBook.has(c.book)) {
+      byBook.set(c.book, { book: c.book, idx: c.idx, excerpts: [] });
+    }
+    byBook.get(c.book).excerpts.push({ idx: c.idx, chapter: c.chapter, text: c.text });
+  }
+  return Array.from(byBook.values());
+}
+
 export default function Chat() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -402,11 +416,18 @@ export default function Chat() {
             {activeLogic.citations?.length > 0 && (
               <div>
                 <div className="overline mb-3">Shastra excerpts consulted</div>
-                <div className="space-y-3">
-                  {activeLogic.citations.map((c) => (
-                    <div key={c.idx} className="border-l-2 border-[color:var(--jai-gold)] pl-3">
-                      <div className="text-[10px] uppercase tracking-widest text-[color:var(--jai-gold)]">[{c.idx}] {c.book} · {c.chapter}</div>
-                      <div className="mt-1 italic font-serif-display text-sm leading-relaxed text-[color:var(--jai-parchment)]">"{c.text}"</div>
+                <div className="space-y-4">
+                  {groupCitationsByBook(activeLogic.citations).map((grouped) => (
+                    <div key={grouped.book} className="border-l-2 border-[color:var(--jai-gold)] pl-3">
+                      <div className="text-[10px] uppercase tracking-widest text-[color:var(--jai-gold)]">{grouped.book}</div>
+                      <div className="mt-1 space-y-2">
+                        {grouped.excerpts.map((e) => (
+                          <div key={e.idx}>
+                            <div className="text-[9px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">[{e.idx}] {e.chapter}</div>
+                            <div className="mt-0.5 italic font-serif-display text-sm leading-relaxed text-[color:var(--jai-parchment)]">"{e.text}"</div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -463,18 +484,22 @@ function MessageBubble({ msg, idx, onWhy }) {
             >
               <Info size={11} /> Why?
             </button>
-            {(msg.citations || []).slice(0, 3).map((c) => (
-              <TooltipProvider key={c.idx} delayDuration={100}>
+            {groupCitationsByBook(msg.citations).slice(0, 3).map((grouped) => (
+              <TooltipProvider key={grouped.book} delayDuration={100}>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border border-[color:var(--jai-border)] bg-[color:var(--jai-surface)] text-[color:var(--jai-green-deep)] cursor-help" data-testid={`citation-${c.idx}`}>
+                    <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border border-[color:var(--jai-border)] bg-[color:var(--jai-surface)] text-[color:var(--jai-green-deep)] cursor-help" data-testid={`citation-${grouped.idx}`}>
                       <ScrollText size={11} className="text-[color:var(--jai-gold)]" />
-                      {c.book}
+                      {grouped.book}
                     </span>
                   </TooltipTrigger>
-                  <TooltipContent className="max-w-md bg-[color:var(--jai-surface)] border-[color:var(--jai-border)] text-[color:var(--jai-parchment)]">
-                    <div className="text-[10px] uppercase tracking-widest text-[color:var(--jai-gold)] mb-1">{c.chapter}</div>
-                    <div className="italic font-serif-display text-sm leading-relaxed">{c.text}</div>
+                  <TooltipContent className="max-w-md bg-[color:var(--jai-surface)] border-[color:var(--jai-border)] text-[color:var(--jai-parchment)] space-y-2">
+                    {grouped.excerpts.map((e) => (
+                      <div key={e.idx}>
+                        <div className="text-[10px] uppercase tracking-widest text-[color:var(--jai-gold)] mb-1">{e.chapter}</div>
+                        <div className="italic font-serif-display text-sm leading-relaxed">{e.text}</div>
+                      </div>
+                    ))}
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
