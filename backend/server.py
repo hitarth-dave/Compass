@@ -469,6 +469,38 @@ def _summarize_prior_messages(prior: List[dict], max_turns: int = 6) -> str:
     return "\n\nPRIOR CONVERSATION (for continuity):\n" + "\n".join(lines)
 
 
+async def _extract_search_query(raw_message: str) -> str:
+    """The raw chat message (with conversational filler — 'can you', 'please',
+    'reconfirm', trailing '?', etc.) makes a poor search query against the
+    classical texts: those extra words dilute the one or two terms that
+    actually matter (e.g. 'Muhurta') and pull in irrelevant passages. This
+    extracts a short, focused search query before retrieval, using the same
+    lightweight/cheap model pattern already used for thread auto-naming.
+    Falls back to the raw message if the call fails, so retrieval never
+    breaks because of this step."""
+    try:
+        query = ""
+        async with anthropic_client.messages.stream(
+            model=CLAUDE_TITLE_MODEL,
+            max_tokens=40,
+            system=(
+                "Extract a short, focused search query (3-8 words) capturing the core "
+                "astrological topic in this message, for searching classical Vedic "
+                "astrology texts. Strip conversational filler (please, can you, thanks, "
+                "reconfirm, etc.) and keep only the substantive topic/terms. Reply with "
+                "ONLY the query text, no quotes, no punctuation."
+            ),
+            messages=[{"role": "user", "content": raw_message.strip()[:500]}],
+        ) as stream:
+            async for text_delta in stream.text_stream:
+                query += text_delta
+        query = query.strip().strip('"').strip("'").split("\n")[0][:150]
+        return query or raw_message
+    except Exception as e:
+        logging.exception("query extraction failed, falling back to raw message: %s", e)
+        return raw_message
+
+
 async def _auto_name_thread(session_id: str, first_question: str):
     """Fire-and-forget: ask Claude to generate a 2-4 word title. Update thread name."""
     try:
@@ -510,7 +542,8 @@ async def chat_stream(req: ChatRequest, user: User = Depends(get_current_user)):
     books_avail = await list_books_for_user(db, user.user_id)
     book_names = [b["book"] for b in books_avail["seed"]] + [b["book"] for b in books_avail["custom"]]
     scoped = detect_book_scope(req.message, book_names)
-    retrieved = await search_for_user(db, user.user_id, req.message, k=8, book_names=scoped)
+    search_query = await _extract_search_query(req.message)
+    retrieved = await search_for_user(db, user.user_id, search_query, k=8, book_names=scoped)
 
     context_block = _build_context(chart, transits, retrieved)
 
