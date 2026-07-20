@@ -94,8 +94,20 @@ def _passage_to_chunk(p: Dict) -> Dict:
 
 
 async def search_for_user(db, user_id: str, query: str, k: int = 8, book_names: Optional[Set[str]] = None) -> List[Dict]:
-    """VedAstro search across the seed corpus + BM25 over this user's uploaded chunks,
-    merged and re-ranked by VedAstro's own relevance score for the seed half."""
+    """VedAstro search across the seed corpus + BM25 over this user's uploaded chunks.
+
+    IMPORTANT: seed results (VedAstro's own relevance score, roughly 0-1) and
+    custom-upload results (BM25 score, unbounded and on a totally different
+    scale) are NOT comparable as raw numbers. Merging them by raw score value
+    silently biases every result toward whichever scoring system happens to
+    produce larger numbers for a given query — which is exactly the
+    "prioritizing one source over the other" behavior we want to avoid. Both
+    result lists are already sorted by relevance within their own source, so
+    instead of comparing incompatible raw scores, we merge by RANK using
+    Reciprocal Rank Fusion (RRF) — a standard, scale-invariant technique for
+    combining heterogeneous ranked lists. A result's fused score depends only
+    on how relevant it was *within its own source*, not on which scoring
+    system produced a bigger number."""
     if not query.strip():
         return []
 
@@ -133,9 +145,18 @@ async def search_for_user(db, user_id: str, query: str, k: int = 8, book_names: 
         ranked = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
         user_results = [{**user_chunks[i], "score": float(scores[i])} for i in ranked[:k] if scores[i] > 0]
 
-    combined = seed_results + user_results
-    combined.sort(key=lambda c: c.get("score", 0.0), reverse=True)
-    return combined[:k]
+    # Reciprocal Rank Fusion: fuse by position within each source's own
+    # ranking (rank 0 = most relevant in that source), not by raw score.
+    RRF_K = 60  # standard constant from the RRF literature
+    fused: List[Dict] = []
+    for rank, chunk in enumerate(seed_results):
+        fused.append({**chunk, "_rrf": 1.0 / (RRF_K + rank)})
+    for rank, chunk in enumerate(user_results):
+        fused.append({**chunk, "_rrf": 1.0 / (RRF_K + rank)})
+    fused.sort(key=lambda c: c["_rrf"], reverse=True)
+    for c in fused:
+        c.pop("_rrf", None)
+    return fused[:k]
 
 
 async def list_books_for_user(db, user_id: str) -> Dict:
