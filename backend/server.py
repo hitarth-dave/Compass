@@ -340,6 +340,17 @@ async def upload_book(file: UploadFile = File(...), user: User = Depends(get_cur
         result = await add_pdf_for_user(db, user.user_id, file.filename, content)
     except Exception as e:
         raise HTTPException(400, f"Failed to parse PDF: {e}")
+    if not result.get("chunks_added"):
+        # This is the real, honest failure mode: the PDF parsed without error but
+        # yielded no extractable text — almost always a scanned/image-only PDF,
+        # which our text extraction can't read (no OCR). Silently "succeeding"
+        # with 0 chunks and no visible book is confusing; a clear error is better.
+        raise HTTPException(
+            400,
+            "No readable text found in this PDF. This usually means it's a scanned "
+            "or image-based PDF rather than a text PDF — try a different file, or a "
+            "text-searchable version of this one."
+        )
     return result
 
 
