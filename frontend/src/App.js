@@ -8,7 +8,10 @@ import { AuthProvider } from "@/context/AuthContext";
 import { ThemeProvider, useTheme } from "@/context/ThemeContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AppShell from "@/components/AppShell";
-import Landing from "@/pages/Landing";
+import Home from "@/pages/Home";
+import Astrology from "@/pages/Astrology";
+import Pricing from "@/pages/Pricing";
+import Contact from "@/pages/Contact";
 import AuthCallback from "@/pages/AuthCallback";
 import Onboarding from "@/pages/Onboarding";
 import Dashboard from "@/pages/Dashboard";
@@ -35,7 +38,13 @@ function AppRouter() {
   }
   return (
     <Routes>
-      <Route path="/" element={<Landing />} />
+      {/* Public marketing site */}
+      <Route path="/" element={<Home />} />
+      <Route path="/astrology" element={<Astrology />} />
+      <Route path="/pricing" element={<Pricing />} />
+      <Route path="/contact" element={<Contact />} />
+
+      {/* App (protected) */}
       <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
       <Route path="/dashboard" element={<ProtectedRoute><AppShell><Dashboard /></AppShell></ProtectedRoute>} />
       <Route path="/chat" element={<ProtectedRoute><AppShell><Chat /></AppShell></ProtectedRoute>} />
