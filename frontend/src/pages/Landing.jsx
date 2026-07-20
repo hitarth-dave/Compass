@@ -1,3 +1,4 @@
+// cache-bust: force-recompile 2026-07-20-1
 import { Compass, Sparkles, BookOpen, MessageCircle, Sun, Moon } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
