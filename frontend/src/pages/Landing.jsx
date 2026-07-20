@@ -2,6 +2,7 @@ import { Compass, Sparkles, BookOpen, MessageCircle, Sun, Moon } from "lucide-re
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { Navigate } from "react-router-dom";
+import { createPortal } from "react-dom";
 
 // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
 export default function Landing() {
@@ -19,14 +20,24 @@ export default function Landing() {
 
   return (
     <div className="relative min-h-screen overflow-hidden" data-testid="landing-page">
-      <button
-        onClick={toggleTheme}
-        className="fixed top-4 right-4 z-20 w-10 h-10 rounded-full flex items-center justify-center bg-[color:var(--jai-surface)] border border-[color:var(--jai-border)] text-[color:var(--jai-gold)] hover:text-[color:var(--jai-gold-soft)] hover:border-[color:var(--jai-border-gold)] transition-colors shadow-sm"
-        title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-        data-testid="theme-toggle-btn"
-      >
-        {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
-      </button>
+      {/* Rendered via portal directly into document.body — NOT as a normal child
+          here. A plain `fixed` element positions relative to the nearest
+          ancestor that has a CSS transform/filter/perspective applied (this
+          page's fade-up scroll animations use transform), which can silently
+          reposition or hide a fixed element far from where it visually
+          should be, even though its code and styles are both correct. The
+          portal sidesteps that entirely by attaching straight to <body>. */}
+      {createPortal(
+        <button
+          onClick={toggleTheme}
+          className="fixed top-4 right-4 z-[9999] w-10 h-10 rounded-full flex items-center justify-center bg-[color:var(--jai-surface)] border border-[color:var(--jai-border)] text-[color:var(--jai-gold)] hover:text-[color:var(--jai-gold-soft)] hover:border-[color:var(--jai-border-gold)] transition-colors shadow-md"
+          title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          data-testid="theme-toggle-btn"
+        >
+          {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+        </button>,
+        document.body
+      )}
 
       <div className="absolute inset-0 -z-10">
         <div
