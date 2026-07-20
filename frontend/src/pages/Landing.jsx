@@ -1,10 +1,12 @@
-import { Compass, Sparkles, BookOpen, MessageCircle } from "lucide-react";
+import { Compass, Sparkles, BookOpen, MessageCircle, Sun, Moon } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { useTheme } from "@/context/ThemeContext";
 import { Navigate } from "react-router-dom";
 
 // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
 export default function Landing() {
   const { user, loading } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   if (loading) return null;
   if (user) return <Navigate to="/dashboard" replace />;
@@ -17,6 +19,15 @@ export default function Landing() {
 
   return (
     <div className="relative min-h-screen overflow-hidden" data-testid="landing-page">
+      <button
+        onClick={toggleTheme}
+        className="fixed top-4 right-4 z-20 w-10 h-10 rounded-full flex items-center justify-center bg-[color:var(--jai-surface)] border border-[color:var(--jai-border)] text-[color:var(--jai-gold)] hover:text-[color:var(--jai-gold-soft)] hover:border-[color:var(--jai-border-gold)] transition-colors shadow-sm"
+        title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+        data-testid="theme-toggle-btn"
+      >
+        {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+      </button>
+
       <div className="absolute inset-0 -z-10">
         <div
           className="absolute inset-0 opacity-25"
