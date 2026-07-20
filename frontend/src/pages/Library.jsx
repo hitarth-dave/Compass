@@ -78,8 +78,8 @@ export default function Library() {
   };
 
   const totalChunks =
-    seed.reduce((s, b) => s + b.chunk_count, 0) +
-    custom.reduce((s, b) => s + b.chunk_count, 0);
+    seed.reduce((s, b) => s + (b.chunk_count || 0), 0) +
+    custom.reduce((s, b) => s + (b.chunk_count || 0), 0);
 
   return (
     <div className="max-w-6xl mx-auto px-8 py-12" data-testid="library-page">
@@ -216,7 +216,7 @@ function BookCard({ book, onDelete, testid }) {
       </div>
       <h3 className="font-serif-display text-2xl text-[color:var(--jai-parchment)] leading-tight">{book.book}</h3>
       <div className="mt-3 text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">
-        {book.chunk_count} indexed passages
+        {book.chunk_count != null ? `${book.chunk_count} indexed passages` : "Live searchable"}
       </div>
       <p className="mt-4 text-sm text-[color:var(--jai-text-muted)] italic leading-relaxed line-clamp-3">
         "{book.sample}..."
