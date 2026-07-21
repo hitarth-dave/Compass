@@ -21,7 +21,7 @@ from astrology import (
     compute_chart, current_transits, current_dasha, current_antardasha,
     compute_antardashas, build_navamsa, build_dasamsa,
 )
-from muhurta import find_best_windows, ACTIVITY_HOUSES
+from muhurta import find_best_windows, ACTIVITY_HOUSES, detect_activity_intent
 if os.environ.get('KNOWLEDGE_SOURCE', 'original') == 'v1':
     from knowledge_v1 import (
         SEED_CORPUS, search_for_user, list_books_for_user, add_pdf_for_user,
@@ -380,6 +380,7 @@ SYSTEM_PROMPT = """You are Compass Astro — a warm, calm Vedic astrology guide.
 5. A practical suggestion or remedy is OPTIONAL, not automatic. Only include one if the chart genuinely points to a real challenge, imbalance, or something actionable (in plain words, e.g. "chant on Tuesday mornings" instead of "Mangal beej mantra"). If the question is neutral, informational, or the placement is already strong, end on the insight — do not manufacture a remedy just to have one. Never include a remedy in more than roughly half of your replies across a conversation; if you notice you've given one recently, lean toward skipping it this time unless clearly warranted.
 6. Avoid repeating the same planet or dasha-lord's name more than necessary within a short span of text — refer back with "it", "this planet", or similar once you've named it, rather than restating the name every sentence.
 7. Never mention "as per BPHS [1]", "shastra", "citations", or reference numbers to the user. That reasoning lives ONLY in the LOGIC block below.
+8. If the context below includes a "CALCULATED MUHURTA WINDOWS" section, use those exact date ranges as your recommended timing — do not compute or invent different dates yourself. If that section is absent, answer timing questions from the chart context as you already do.
 
 ## LOGIC BLOCK (technical — hidden from the user, always required)
 After your plain-language answer, output exactly this on a new line:
@@ -402,7 +403,7 @@ Structure it as exactly these 5 bullet categories, one bullet each:
 Do NOT deviate from this two-section format."""
 
 
-def _build_context(chart: dict, transits: dict, retrieved: List[dict]) -> str:
+def _build_context(chart: dict, transits: dict, retrieved: List[dict], timing_windows: List[dict] | None = None) -> str:
     p = chart['profile']
     asc = chart['ascendant']
     md = chart.get('current_dasha')
@@ -451,6 +452,10 @@ CLASSICAL YOGAS DETECTED:
         ctx += "\nRELEVANT SHASTRA EXCERPTS (single source of truth — cite these):\n"
         for i, r in enumerate(retrieved, 1):
             ctx += f"\n[{i}] {r['book']} — {r['chapter']}\n{r['text']}\n"
+    if timing_windows:
+        ctx += "\nCALCULATED MUHURTA WINDOWS (from Bhava Bala, Antardasha strength, gochara, and Panchang — use these EXACT dates, do not invent different ones):\n"
+        for w in timing_windows:
+            ctx += f"- {w['start_date']} to {w['end_date']} (score {w['avg_score']}/100): {'; '.join(w['reasons'])}\n"
     return ctx
 
 
@@ -539,6 +544,9 @@ async def chat_stream(req: ChatRequest, user: User = Depends(get_current_user)):
         chart['current_antardasha'] = current_antardasha(chart['current_dasha'])
     transits = current_transits(chart)
 
+    activity_intent = detect_activity_intent(req.message)
+    timing_windows = find_best_windows(chart, chart['dashas'], activity_intent) if activity_intent else None
+
     # Per-message book scoping (NEVER sticks past this message)
     books_avail = await list_books_for_user(db, user.user_id)
     book_names = [b["book"] for b in books_avail["seed"]] + [b["book"] for b in books_avail["custom"]]
@@ -546,7 +554,7 @@ async def chat_stream(req: ChatRequest, user: User = Depends(get_current_user)):
     search_query = await _extract_search_query(req.message)
     retrieved = await search_for_user(db, user.user_id, search_query, k=8, book_names=scoped)
 
-    context_block = _build_context(chart, transits, retrieved)
+    context_block = _build_context(chart, transits, retrieved, timing_windows)
 
     # Load prior conversation for memory
     prior = await db.messages.find(
