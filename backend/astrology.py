@@ -862,7 +862,7 @@ def compute_antardashas(mahadasha: Dict) -> List[Dict]:
 
 def current_antardasha(mahadasha: Dict) -> Dict | None:
     subs = compute_antardashas(mahadasha)
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = at if at is not None else datetime.now(timezone.utc).replace(tzinfo=None)
     for s in subs:
         s_start = datetime.strptime(s["start"], "%Y-%m-%d %H:%M:%S")
         s_end = datetime.strptime(s["end"], "%Y-%m-%d %H:%M:%S")
@@ -917,11 +917,11 @@ def current_dasha(dashas: List[Dict]) -> Dict | None:
     return None
 
 
-def current_transits(natal_chart: Dict | None = None) -> Dict:
+def current_transits(natal_chart: Dict | None = None, at: datetime | None = None) -> Dict:
     """Compute current sidereal planetary positions.
     If natal_chart is given, also compute which house each transit falls in
     from natal Lagna and from natal Moon (Chandra Lagna)."""
-    now = datetime.now(timezone.utc)
+    now = at if at is not None else datetime.now(timezone.utc)
     jd = _julday(now)
     natal_asc_sign = natal_chart["ascendant"]["sign_idx"] if natal_chart else None
     natal_moon_sign = None
