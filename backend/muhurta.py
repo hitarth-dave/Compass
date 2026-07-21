@@ -156,15 +156,66 @@ def find_best_windows(
         for w in windows[:top_n]
     ]
 ACTIVITY_KEYWORDS = {
-    "career_change": ["change job", "changing job", "new job", "switch job", "career change", "quit my job", "leave my job", "job change", "shift job", "shift my job"],
-    "start_business": ["start a business", "start my business", "launch my business", "start a company", "launch my app", "launch my startup", "launch the app", "launch my", "start my own"],
-    "relocation_travel": ["relocate", "relocation", "move to", "moving to", "immigration", "visa"],
-    "marriage": ["marriage", "marry", "wedding", "engagement"],
-    "education": ["study abroad", "admission", "which college", "which university", "enroll"],
-    "financial_investment": ["invest", "investment", "buy stock", "buy property", "purchase property", "mutual fund"],
-    "health_decision": ["surgery", "health decision", "medical procedure", "operation"],
+    "career_change": [
+        "change job", "changing job", "change jobs", "new job", "switch job", "switching job",
+        "career change", "career switch", "quit my job", "quit job", "leave my job", "leaving my job",
+        "resign", "resignation", "job change", "shift job", "shift my job", "job offer",
+        "job interview", "interview call", "notice period", "job switch", "better opportunity",
+        "promotion", "get promoted", "will i get promoted", "career growth", "career move",
+        "government job", "govt job", "sarkari naukri", "layoff", "laid off", "fired",
+        "job loss", "lose my job", "toxic boss", "toxic workplace", "switch industries",
+        "new career", "second career", "remote job", "work from home job", "higher position",
+        "job security", "career progress", "career prospects", "job hunt", "job search",
+        "when will i get a job", "when will i get a good job",
+    ],
+    "start_business": [
+        "start a business", "start my business", "start my own business", "launch my business",
+        "start a company", "own company", "launch my app", "launch my startup", "launch the app",
+        "launch my product", "start my own", "become an entrepreneur", "entrepreneurship",
+        "open a shop", "open a store", "open my own", "open a restaurant", "open a clinic",
+        "open an office", "register my company", "incorporate my company", "side hustle",
+        "freelance business", "become self employed", "quit job to start", "raise funding",
+        "find an investor", "franchise", "launch website", "go into business",
+        "business partnership", "new venture", "startup launch", "product launch",
+    ],
+    "relocation_travel": [
+        "relocate", "relocation", "relocating", "move to", "moving to", "shift to another city",
+        "shift base", "shift house", "immigration", "immigrate", "migrate", "migration",
+        "green card", "pr application", "permanent residency", "work visa", "study visa",
+        "h1b", "visa interview", "settle abroad", "move abroad", "foreign posting",
+        "transfer to another city", "job transfer", "posting abroad", "shift overseas",
+        "move to another country", "leave the country", "foreign trip", "long trip abroad",
+    ],
+    "marriage": [
+        "marriage", "get married", "getting married", "marry him", "marry her", "wedding date",
+        "wedding muhurat", "shubh vivah", "vivah muhurat", "when will i get married",
+        "second marriage", "propose", "proposal", "engagement", "engagement ceremony",
+        "roka", "sagai", "court marriage", "tie the knot", "love marriage",
+        "arranged marriage", "marriage timing", "right partner", "life partner",
+        "will i get married", "wedding planning",
+    ],
+    "education": [
+        "study abroad", "admission", "college admission", "university admission",
+        "which college", "which university", "higher studies", "masters degree", "mba admission",
+        "phd", "entrance exam", "competitive exam", "which stream", "which course",
+        "enroll in", "join college", "start a course", "further studies", "grad school",
+        "exam result", "will i pass", "clear the exam", "study visa for college",
+    ],
+    "financial_investment": [
+        "invest", "investment", "stock market", "buy stocks", "mutual fund", "sip investment",
+        "buy property", "buy land", "buy a house", "real estate investment", "purchase property",
+        "cryptocurrency", "crypto investment", "buy gold", "gold investment", "fixed deposit",
+        "take a loan", "home loan", "ipo", "trading", "put money in", "financial decision",
+        "big purchase", "buy a plot", "invest in shares", "start sip",
+    ],
+    "health_decision": [
+        "surgery", "operation", "medical procedure", "ivf", "fertility treatment",
+        "when will i conceive", "childbirth", "delivery date", "c-section", "chemotherapy",
+        "dental surgery", "cosmetic surgery", "knee replacement", "hip replacement",
+        "health decision", "when will i recover", "start treatment", "elective surgery",
+    ],
 }
-
+}
 
 def detect_activity_intent(message: str) -> str | None:
     """Lightweight keyword match routing a chat question to a Muhurta
