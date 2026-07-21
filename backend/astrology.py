@@ -862,7 +862,7 @@ def compute_antardashas(mahadasha: Dict) -> List[Dict]:
 
 def current_antardasha(mahadasha: Dict) -> Dict | None:
     subs = compute_antardashas(mahadasha)
-    now = at if at is not None else datetime.now(timezone.utc).replace(tzinfo=None)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     for s in subs:
         s_start = datetime.strptime(s["start"], "%Y-%m-%d %H:%M:%S")
         s_end = datetime.strptime(s["end"], "%Y-%m-%d %H:%M:%S")
