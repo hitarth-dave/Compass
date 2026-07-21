@@ -155,3 +155,24 @@ def find_best_windows(
         }
         for w in windows[:top_n]
     ]
+ACTIVITY_KEYWORDS = {
+    "career_change": ["change job", "changing job", "new job", "switch job", "career change", "quit my job", "leave my job", "job change", "shift job", "shift my job"],
+    "start_business": ["start a business", "start my business", "launch my business", "start a company", "launch my app", "launch my startup", "launch the app", "launch my", "start my own"],
+    "relocation_travel": ["relocate", "relocation", "move to", "moving to", "immigration", "visa"],
+    "marriage": ["marriage", "marry", "wedding", "engagement"],
+    "education": ["study abroad", "admission", "which college", "which university", "enroll"],
+    "financial_investment": ["invest", "investment", "buy stock", "buy property", "purchase property", "mutual fund"],
+    "health_decision": ["surgery", "health decision", "medical procedure", "operation"],
+}
+
+
+def detect_activity_intent(message: str) -> str | None:
+    """Lightweight keyword match routing a chat question to a Muhurta
+    activity type. Deliberately conservative: fires only on clear phrasing,
+    so ordinary questions ('how's my week') pass through untouched. Returns
+    None when nothing matches, in which case chat behaves exactly as before."""
+    msg = message.lower()
+    for activity, keywords in ACTIVITY_KEYWORDS.items():
+        if any(kw in msg for kw in keywords):
+            return activity
+    return None
