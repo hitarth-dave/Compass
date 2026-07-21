@@ -1,26 +1,18 @@
 """
-Phase 1 — Decision Timing (Muhurta-lite).
+Phase 1 + Phase 2 — Decision Timing with Panchang-aware Muhurta scoring.
 
-Not full classical Muhurta: no Panchang (today's Tithi/Nakshatra/Yoga/
-Karana), no electional-lagna calculation for the moment of action itself.
-That's Phase 2. This scores candidate DATE windows using data this
-codebase already computes and verifies:
-
-  1. Bhava Bala (house strength, from Shadbala) of the houses that
-     classically signify the decision (career, marriage, travel, etc.)
-  2. The active Antardasha lord's own Shadbala strength, and whether it
-     rules/sits in/aspects those same houses (karakatva)
-  3. Transiting Jupiter/Saturn/Mars/Rahu/Ketu over those houses (gochara)
-
-Depends only on: current_transits(), compute_antardashas() from
-astrology.py — both confirmed present. current_transits() must have the
-`at` parameter added (see astrology.py patch) for future-date scanning.
+Combines: Bhava Bala / Antardasha strength / gochara (Phase 1) with real
+Tithi/Karana/Yoga caution flags from panchang.py (Phase 2). Electional-
+lagna calculation for the exact moment of action is still not built —
+that requires locating auspicious Lagna-rise windows via iterative
+ephemeris search, a further step beyond this.
 """
 
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional
 
 from astrology import current_transits, compute_antardashas
+from panchang import compute_panchang
 
 ACTIVITY_HOUSES = {
     "career_change":        {"primary": [10, 6], "secondary": [2, 11]},
@@ -37,10 +29,6 @@ MALEFIC_TRANSITS = {"Saturn", "Mars", "Rahu", "Ketu", "Sun"}
 
 
 def _antardasha_at(dashas: List[Dict], at: datetime) -> Optional[Dict]:
-    """Find the active Antardasha at an arbitrary future/past datetime.
-    Mahadasha list uses date-only strings; Antardasha subs use full
-    'YYYY-MM-DD HH:MM:SS' timestamps (per astrology.py's precision fix) —
-    handled accordingly."""
     at_date = at.date().isoformat()
     maha = next((d for d in dashas if d["start"] <= at_date <= d["end"]), None)
     if not maha:
@@ -64,13 +52,9 @@ def score_window(natal_chart: Dict, dashas: List[Dict], activity: str, at: datet
     house_lords = {h["house"]: h for h in natal_chart["house_lords"]}
     shadbala = natal_chart.get("shadbala", {})
 
-    # Bhava Bala of the primary houses — real Shadbala-derived house strength.
     bala_values = [house_lords[h]["bhava_bala"]["total_rupas"] for h in primary if h in house_lords]
     if bala_values:
         avg_bala = sum(bala_values) / len(bala_values)
-        # Relative scaling: this partial-Shadbala system runs lower than full
-        # classical totals (see astrology.py's own scope note), so compare
-        # against the chart's own house average rather than a fixed absolute.
         all_bala = [h["bhava_bala"]["total_rupas"] for h in house_lords.values()]
         chart_avg = sum(all_bala) / len(all_bala) if all_bala else avg_bala
         if avg_bala > chart_avg:
@@ -102,6 +86,12 @@ def score_window(natal_chart: Dict, dashas: List[Dict], activity: str, at: datet
             reasons.append(f"{lord} sits directly in house {lord_house}.")
 
     transits = current_transits(natal_chart, at=at)
+    sun_row = next(p for p in transits["planets"] if p["name"] == "Sun")
+    moon_row = next(p for p in transits["planets"] if p["name"] == "Moon")
+    sun_lon = sun_row["sign_idx"] * 30 + sun_row["degree_in_sign"]
+    moon_lon = moon_row["sign_idx"] * 30 + moon_row["degree_in_sign"]
+    panchang = compute_panchang(sun_lon, moon_lon, at)
+
     for row in transits["planets"]:
         h = row.get("house_from_lagna")
         if h in primary:
@@ -112,7 +102,16 @@ def score_window(natal_chart: Dict, dashas: List[Dict], activity: str, at: datet
                 score -= 8
                 reasons.append(f"Transiting {row['name']} is in house {h} from Lagna — proceed with more care.")
 
-    return {"date": at.date().isoformat(), "score": max(0, min(100, round(score, 1))), "reasons": reasons}
+    # Panchang cautions — flat penalty per widely-agreed inauspicious factor.
+    score -= 15 * len(panchang["cautions"])
+    reasons.extend(panchang["cautions"])
+
+    return {
+        "date": at.date().isoformat(),
+        "score": max(0, min(100, round(score, 1))),
+        "reasons": reasons,
+        "panchang": {k: v for k, v in panchang.items() if k != "cautions"},
+    }
 
 
 def find_best_windows(
@@ -134,10 +133,11 @@ def find_best_windows(
     for r in scored:
         if r["score"] >= threshold:
             if current is None:
-                current = {"start": r["date"], "end": r["date"], "scores": [], "reasons": set()}
+                current = {"start": r["date"], "end": r["date"], "scores": [], "reasons": set(), "panchangs": []}
             current["end"] = r["date"]
             current["scores"].append(r["score"])
             current["reasons"].update(r["reasons"])
+            current["panchangs"].append(r["panchang"])
         elif current is not None:
             windows.append(current)
             current = None
@@ -151,6 +151,7 @@ def find_best_windows(
             "end_date": w["end"],
             "avg_score": round(sum(w["scores"]) / len(w["scores"]), 1),
             "reasons": sorted(w["reasons"]),
+            "panchang_at_start": w["panchangs"][0],
         }
         for w in windows[:top_n]
     ]
