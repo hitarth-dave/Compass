@@ -21,6 +21,7 @@ from astrology import (
     compute_chart, current_transits, current_dasha, current_antardasha,
     compute_antardashas, build_navamsa, build_dasamsa,
 )
+from muhurta import find_best_windows, ACTIVITY_HOUSES
 if os.environ.get('KNOWLEDGE_SOURCE', 'original') == 'v1':
     from knowledge_v1 import (
         SEED_CORPUS, search_for_user, list_books_for_user, add_pdf_for_user,
@@ -732,6 +733,16 @@ async def geocode(q: str):
     except Exception as e:
         return {"results": [], "error": str(e)}
 
+@api_router.get("/decision-timing/{activity}")
+async def decision_timing(activity: str, user: User = Depends(get_current_user)):
+    if activity not in ACTIVITY_HOUSES:
+        raise HTTPException(400, f"Unknown activity. Choose from: {list(ACTIVITY_HOUSES)}")
+    doc = await db.profiles.find_one({"user_id": user.user_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Set up your birth details first")
+    chart = compute_chart(doc['dob'], doc['tob'], doc['tz_offset'], doc['lat'], doc['lon'])
+    windows = find_best_windows(chart, chart["dashas"], activity)
+    return {"activity": activity, "windows": windows}
 
 app.include_router(api_router)
 
