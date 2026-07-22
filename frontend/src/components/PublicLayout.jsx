@@ -1,6 +1,7 @@
-import { Compass } from "lucide-react";
+import { Compass, Sun, Moon } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
+import { useTheme } from "@/context/ThemeContext";
 import AuthModal from "@/components/AuthModal";
 
 const NAV = [
@@ -13,6 +14,7 @@ const NAV = [
 export function PublicNav() {
   const location = useLocation();
   const { user, openAuthModal } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   return (
     <header className="relative z-20 flex items-center justify-between max-w-6xl mx-auto px-6 lg:px-12 py-8 fade-up">
       <Link to="/" className="flex items-center gap-3" data-testid="nav-brand">
@@ -45,13 +47,23 @@ export function PublicNav() {
         })}
       </nav>
 
-      <button
-        onClick={user ? undefined : () => openAuthModal("signin")}
-        className="gold-btn rounded-full px-6 py-2.5 text-sm inline-flex items-center gap-2"
-        data-testid="nav-signin"
-      >
-        {user ? "Open app" : "Sign in"}
-      </button>
+      <div className="flex items-center gap-3">
+        <button
+          onClick={toggleTheme}
+          className="w-10 h-10 rounded-full flex items-center justify-center border border-[color:var(--jai-border)] text-[color:var(--jai-gold)] hover:text-[color:var(--jai-gold-soft)] hover:border-[color:var(--jai-border-gold)] transition-colors"
+          title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          data-testid="theme-toggle-btn"
+        >
+          {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
+        <button
+          onClick={user ? undefined : () => openAuthModal("signin")}
+          className="gold-btn rounded-full px-6 py-2.5 text-sm inline-flex items-center gap-2"
+          data-testid="nav-signin"
+        >
+          {user ? "Open app" : "Sign in"}
+        </button>
+      </div>
     </header>
   );
 }
