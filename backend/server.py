@@ -117,6 +117,16 @@ class LoginRequest(BaseModel):
     remember_me: bool = False
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    email: str
+    code: str
+    new_password: str
+
+
 # ---------- Dependency: current user ----------
 async def get_current_user(
     session_token: Optional[str] = Cookie(default=None),
@@ -190,6 +200,35 @@ async def _send_verification_email(to_email: str, code: str, name: str = "") -> 
     if r.status_code >= 400:
         logging.error("Resend send failed (%s): %s", r.status_code, r.text)
         raise HTTPException(status_code=502, detail="Could not send verification email. Please try again.")
+
+
+async def _send_password_reset_email(to_email: str, code: str, name: str = "", has_password: bool = True) -> None:
+    """Send a 6-digit password reset/set code via Resend. Copy is worded
+    slightly differently for accounts that don't have a password yet (i.e.
+    Google-only accounts using this flow to add one) vs. a genuine reset."""
+    if not RESEND_API_KEY:
+        logging.warning("RESEND_API_KEY not set — password reset code for %s is %s", to_email, code)
+        return
+    action_word = "reset" if has_password else "set"
+    async with httpx.AsyncClient(timeout=15) as h:
+        r = await h.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {RESEND_API_KEY}"},
+            json={
+                "from": RESEND_FROM_EMAIL,
+                "to": [to_email],
+                "subject": f"{action_word.capitalize()} your Compass Astro password",
+                "html": (
+                    f"<p>Hi{f' {name}' if name else ''},</p>"
+                    f"<p>Use this code to {action_word} your Compass Astro password:</p>"
+                    f"<h2 style='letter-spacing:4px'>{code}</h2>"
+                    f"<p>This code expires in 15 minutes. If you didn't request this, you can ignore this email — your account is unaffected.</p>"
+                ),
+            },
+        )
+    if r.status_code >= 400:
+        logging.error("Resend send failed (%s): %s", r.status_code, r.text)
+        raise HTTPException(status_code=502, detail="Could not send the password reset email. Please try again.")
 
 
 async def _find_or_create_user(email: str, name: str, picture: Optional[str] = None) -> str:
@@ -404,6 +443,72 @@ async def login(payload: LoginRequest, response: Response):
         raise HTTPException(status_code=401, detail="Incorrect email or password.")
 
     session_token = await _create_session(user_doc["user_id"], response, remember_me=payload.remember_me)
+    user_doc.pop("password_hash", None)
+    return {**user_doc, "session_token": session_token}
+
+
+@api_router.post("/auth/forgot-password")
+async def forgot_password(payload: ForgotPasswordRequest):
+    """Start a password reset. This also doubles as 'set a password' for
+    accounts that only have Google sign-in — the code and reset step are
+    identical either way, only the email copy changes. Always returns {"ok":
+    true} regardless of whether the email is registered, so this endpoint
+    can't be used to probe which emails have accounts."""
+    email = payload.email.strip().lower()
+    user_doc = await db.users.find_one({"email": email}, {"_id": 0})
+    if user_doc:
+        code = _generate_verification_code()
+        await db.password_resets.update_one(
+            {"email": email},
+            {"$set": {
+                "email": email,
+                "code": code,
+                "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=15)).isoformat(),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }},
+            upsert=True,
+        )
+        await _send_password_reset_email(
+            email, code, user_doc.get("name", ""), has_password=bool(user_doc.get("password_hash"))
+        )
+    return {"ok": True}
+
+
+@api_router.post("/auth/reset-password")
+async def reset_password(payload: ResetPasswordRequest, response: Response):
+    """Confirm the emailed code and set the account's password — whether
+    that's a genuine reset or the first password a Google-only account has
+    ever had. Logs the user in immediately afterward, same as /auth/verify."""
+    email = payload.email.strip().lower()
+    reset_doc = await db.password_resets.find_one({"email": email}, {"_id": 0})
+    if not reset_doc:
+        raise HTTPException(status_code=404, detail="No password reset requested for this email. Please request a new code.")
+
+    expires_at = reset_doc.get("expires_at")
+    if isinstance(expires_at, str):
+        expires_at = datetime.fromisoformat(expires_at)
+    if expires_at and expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at and expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="This code has expired. Request a new one.")
+
+    if payload.code.strip() != reset_doc["code"]:
+        raise HTTPException(status_code=400, detail="Incorrect code.")
+
+    if len(payload.new_password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
+
+    user_doc = await db.users.find_one({"email": email}, {"_id": 0})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="No account found for this email.")
+
+    await db.users.update_one(
+        {"user_id": user_doc["user_id"]},
+        {"$set": {"password_hash": _hash_password(payload.new_password)}},
+    )
+    await db.password_resets.delete_one({"email": email})
+
+    session_token = await _create_session(user_doc["user_id"], response)
     user_doc.pop("password_hash", None)
     return {**user_doc, "session_token": session_token}
 
