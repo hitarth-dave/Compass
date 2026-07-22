@@ -5,7 +5,6 @@ import {
   LayoutGrid,
   MessageSquare,
   BookOpen,
-  Compass,
   LogOut,
   Menu,
   ChevronRight,
@@ -140,7 +139,9 @@ export default function AppShell({ children }) {
           </button>
           {!collapsed && (
             <div className="flex-1 min-w-0 flex items-center gap-2">
-              <Compass size={16} className="text-[color:var(--jai-gold)]" />
+              <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: "#F7F1E1" }}>
+                <img src="/compass-mark.png" alt="" className="w-3.5 h-[1.1rem] object-contain" />
+              </div>
               <div>
                 <div className="font-serif-display text-xl leading-none text-[color:var(--jai-green-deep)]">Compass Astro</div>
                 <div className="overline mt-1">Ancient wisdom</div>
