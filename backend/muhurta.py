@@ -215,7 +215,6 @@ ACTIVITY_KEYWORDS = {
         "health decision", "when will i recover", "start treatment", "elective surgery",
     ],
 }
-}
 
 def detect_activity_intent(message: str) -> str | None:
     """Lightweight keyword match routing a chat question to a Muhurta
