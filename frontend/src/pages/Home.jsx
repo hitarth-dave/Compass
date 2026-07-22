@@ -25,7 +25,7 @@ export default function Home() {
             timing, direction. No jargon. Real depth on demand.
           </p>
           <div className="mt-12">
-            <AuthButtons />
+            <AuthButtons label="Get your chart — sign in" />
             <p className="mt-4 text-xs text-[color:var(--jai-text-muted)] max-w-md">
               Your chart, chats and uploaded books stay private to your account.
             </p>
@@ -73,7 +73,7 @@ export default function Home() {
         </h2>
         <p className="mt-5 text-[color:var(--jai-text-muted)]">Sign in and your chart is ready in seconds.</p>
         <div className="mt-8 flex justify-center">
-          <AuthButtons />
+          <AuthButtons compact label="Sign in" />
         </div>
       </section>
     </PublicLayout>
