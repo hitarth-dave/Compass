@@ -41,6 +41,11 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Auth modal — shared across the header "Sign in" button, the hero CTA,
+  // and the bottom-of-page CTA, so there's exactly ONE real sign-in/sign-up
+  // surface in the app instead of duplicated button sets on every page.
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState("signin"); // "signin" | "signup"
 
   const checkAuth = useCallback(async () => {
     try {
@@ -54,12 +59,6 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    // CRITICAL: If returning from OAuth callback, skip the /me check.
-    // AuthCallback will exchange the session_id and establish the session first.
-    if (window.location.hash?.includes("session_id=")) {
-      setLoading(false);
-      return;
-    }
     checkAuth();
   }, [checkAuth]);
 
@@ -69,8 +68,19 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
+  const openAuthModal = (mode = "signin") => {
+    setAuthModalMode(mode);
+    setAuthModalOpen(true);
+  };
+  const closeAuthModal = () => setAuthModalOpen(false);
+
   return (
-    <AuthContext.Provider value={{ user, setUser, loading, refresh: checkAuth, logout }}>
+    <AuthContext.Provider
+      value={{
+        user, setUser, loading, refresh: checkAuth, logout,
+        authModalOpen, authModalMode, openAuthModal, closeAuthModal,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
