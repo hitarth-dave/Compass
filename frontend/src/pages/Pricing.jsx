@@ -1,6 +1,7 @@
 import { Check } from "lucide-react";
-import PublicLayout, { useSignIn } from "@/components/PublicLayout";
+import PublicLayout from "@/components/PublicLayout";
 import AuthButtons from "@/components/AuthButtons";
+import { useAuth } from "@/context/AuthContext";
 
 const TIERS = [
   {
@@ -105,12 +106,13 @@ export default function Pricing() {
   );
 }
 
-// A single button that routes into the same sign-in flow, styled by prominence.
+// A single button that opens the same auth modal every other sign-in
+// trigger uses, styled by prominence.
 function AuthButtonsInline({ label, featured }) {
-  const signIn = useSignIn();
+  const { openAuthModal } = useAuth();
   return (
     <button
-      onClick={signIn}
+      onClick={() => openAuthModal("signin")}
       className={`w-full rounded-full px-6 py-3 font-serif-display text-lg transition-colors ${
         featured
           ? "bg-[color:var(--jai-green)] text-[color:var(--jai-surface)] hover:bg-[color:var(--jai-green-deep)]"
