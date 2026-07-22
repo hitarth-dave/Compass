@@ -22,7 +22,13 @@ from astrology import (
     compute_antardashas, build_navamsa, build_dasamsa,
 )
 from muhurta import find_best_windows, ACTIVITY_HOUSES, detect_activity_intent
-if os.environ.get('KNOWLEDGE_SOURCE', 'original') == 'v1':
+_KNOWLEDGE_SOURCE = os.environ.get('KNOWLEDGE_SOURCE', 'original')
+if _KNOWLEDGE_SOURCE == 'v2':
+    from knowledge_v2 import (
+        SEED_CORPUS, search_for_user, list_books_for_user, add_pdf_for_user,
+        delete_book_for_user, detect_book_scope,
+    )
+elif _KNOWLEDGE_SOURCE == 'v1':
     from knowledge_v1 import (
         SEED_CORPUS, search_for_user, list_books_for_user, add_pdf_for_user,
         delete_book_for_user, detect_book_scope,
@@ -765,6 +771,22 @@ app.add_middleware(
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+class SeedChunkIn(BaseModel):
+    book: str
+    chapter: str = ""
+    text: str
+
+class SeedChunksIn(BaseModel):
+    chunks: List[SeedChunkIn]
+
+ADMIN_INGEST_SECRET = os.environ.get('ADMIN_INGEST_SECRET')
+
+@api_router.post("/admin/seed-chunks")
+async def ingest_seed_chunks(payload: SeedChunksIn, x_admin_secret: Optional[str] = Header(default=None)):
+    if not ADMIN_INGEST_SECRET or x_admin_secret != ADMIN_INGEST_SECRET:
+        raise HTTPException(401, "Invalid or missing admin secret")
+    from knowledge_v2 import add_seed_chunks_bulk
+    return await add_seed_chunks_bulk(db, [c.model_dump() for c in payload.chunks])
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
