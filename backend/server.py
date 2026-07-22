@@ -340,6 +340,7 @@ async def google_auth(payload: GoogleAuthRequest, response: Response):
     email = idinfo.get("email")
     if not email or not idinfo.get("email_verified", False):
         raise HTTPException(status_code=401, detail="Google account email is not verified")
+    email = email.strip().lower()
     name = idinfo.get("name") or email.split("@")[0]
     picture = idinfo.get("picture")
 
@@ -502,10 +503,28 @@ async def reset_password(payload: ResetPasswordRequest, response: Response):
     if not user_doc:
         raise HTTPException(status_code=404, detail="No account found for this email.")
 
-    await db.users.update_one(
+    update_result = await db.users.update_one(
         {"user_id": user_doc["user_id"]},
         {"$set": {"password_hash": _hash_password(payload.new_password)}},
     )
+    if update_result.matched_count == 0:
+        logging.error(
+            "reset-password: update matched 0 documents for user_id=%s email=%s — password NOT saved",
+            user_doc["user_id"], email,
+        )
+        raise HTTPException(status_code=500, detail="Could not save your new password. Please try again or contact support.")
+
+    # Verify the write actually took, rather than trusting update_one's report —
+    # a previous version of this endpoint created the session regardless of
+    # whether the password was really saved, which silently masked failures.
+    verify_doc = await db.users.find_one({"user_id": user_doc["user_id"]}, {"_id": 0, "password_hash": 1})
+    if not verify_doc or not verify_doc.get("password_hash"):
+        logging.error(
+            "reset-password: password_hash still missing after update for user_id=%s email=%s",
+            user_doc["user_id"], email,
+        )
+        raise HTTPException(status_code=500, detail="Could not save your new password. Please try again or contact support.")
+
     await db.password_resets.delete_one({"email": email})
 
     session_token = await _create_session(user_doc["user_id"], response)
