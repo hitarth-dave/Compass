@@ -1,15 +1,7 @@
 import { Compass } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-
-// Emergent OAuth redirect — do NOT hardcode a URL or fallback; derive from origin.
-// This mirrors the working flow in Landing.jsx exactly.
-export function useSignIn() {
-  return () => {
-    const redirectUrl = window.location.origin + "/dashboard";
-    window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
-  };
-}
+import AuthModal from "@/components/AuthModal";
 
 const NAV = [
   { to: "/", label: "Home" },
@@ -20,8 +12,7 @@ const NAV = [
 
 export function PublicNav() {
   const location = useLocation();
-  const signIn = useSignIn();
-  const { user } = useAuth();
+  const { user, openAuthModal } = useAuth();
   return (
     <header className="relative z-20 flex items-center justify-between max-w-6xl mx-auto px-6 lg:px-12 py-8 fade-up">
       <Link to="/" className="flex items-center gap-3" data-testid="nav-brand">
@@ -55,7 +46,7 @@ export function PublicNav() {
       </nav>
 
       <button
-        onClick={user ? undefined : signIn}
+        onClick={user ? undefined : () => openAuthModal("signin")}
         className="gold-btn rounded-full px-6 py-2.5 text-sm inline-flex items-center gap-2"
         data-testid="nav-signin"
       >
@@ -111,6 +102,7 @@ export default function PublicLayout({ children }) {
       <PublicNav />
       <main className="relative z-10">{children}</main>
       <PublicFooter />
+      <AuthModal />
     </div>
   );
 }
