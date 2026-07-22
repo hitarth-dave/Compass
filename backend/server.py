@@ -10,12 +10,16 @@ import json
 import uuid
 import base64
 import re
+import secrets
 import asyncio
 import httpx
+import bcrypt
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, BeforeValidator
 from typing import List, Optional, Annotated, Any
 from datetime import datetime, timezone, timedelta
+from google.oauth2 import id_token as google_id_token
+from google.auth.transport import requests as google_requests
 
 from astrology import (
     compute_chart, current_transits, current_dasha, current_antardasha,
@@ -56,7 +60,9 @@ ANTHROPIC_API_KEY = os.environ['ANTHROPIC_API_KEY']
 CLAUDE_MODEL = os.environ.get('CLAUDE_MODEL', 'claude-sonnet-4-5-20250929')
 CLAUDE_TITLE_MODEL = os.environ.get('CLAUDE_TITLE_MODEL', 'claude-haiku-4-5-20251001')
 anthropic_client = AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
-EMERGENT_AUTH_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
+GOOGLE_CLIENT_ID = os.environ['GOOGLE_CLIENT_ID']
+RESEND_API_KEY = os.environ.get('RESEND_API_KEY')
+RESEND_FROM_EMAIL = os.environ.get('RESEND_FROM_EMAIL', 'Compass Astro <onboarding@resend.dev>')
 
 app = FastAPI(title="Compass Astro")
 api_router = APIRouter(prefix="/api")
@@ -86,8 +92,29 @@ class LocationUpdate(BaseModel):
     place: str
 
 
-class SessionExchange(BaseModel):
-    session_id: str
+class GoogleAuthRequest(BaseModel):
+    credential: str  # Google Identity Services ID token (JWT), verified against Google's own public keys
+
+
+class SignupRequest(BaseModel):
+    name: str
+    email: str
+    password: str
+
+
+class VerifyCodeRequest(BaseModel):
+    email: str
+    code: str
+
+
+class ResendCodeRequest(BaseModel):
+    email: str
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+    remember_me: bool = False
 
 
 # ---------- Dependency: current user ----------
@@ -119,6 +146,93 @@ async def get_current_user(
     if isinstance(user_doc.get("created_at"), str):
         user_doc["created_at"] = datetime.fromisoformat(user_doc["created_at"])
     return User(**user_doc)
+
+
+# ---------- Auth helpers (shared by Google + email/password flows) ----------
+def _hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def _verify_password(password: str, password_hash: str) -> bool:
+    try:
+        return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
+    except (ValueError, TypeError):
+        return False
+
+
+def _generate_verification_code() -> str:
+    return f"{secrets.randbelow(1_000_000):06d}"
+
+
+async def _send_verification_email(to_email: str, code: str, name: str = "") -> None:
+    """Send a 6-digit signup verification code via Resend. If RESEND_API_KEY
+    isn't configured yet, log the code instead of failing outright, so local/
+    early testing isn't blocked on having the email provider wired up."""
+    if not RESEND_API_KEY:
+        logging.warning("RESEND_API_KEY not set — verification code for %s is %s", to_email, code)
+        return
+    async with httpx.AsyncClient(timeout=15) as h:
+        r = await h.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {RESEND_API_KEY}"},
+            json={
+                "from": RESEND_FROM_EMAIL,
+                "to": [to_email],
+                "subject": "Your Compass Astro verification code",
+                "html": (
+                    f"<p>Hi{f' {name}' if name else ''},</p>"
+                    f"<p>Your Compass Astro verification code is:</p>"
+                    f"<h2 style='letter-spacing:4px'>{code}</h2>"
+                    f"<p>This code expires in 10 minutes. If you didn't request this, you can ignore this email.</p>"
+                ),
+            },
+        )
+    if r.status_code >= 400:
+        logging.error("Resend send failed (%s): %s", r.status_code, r.text)
+        raise HTTPException(status_code=502, detail="Could not send verification email. Please try again.")
+
+
+async def _find_or_create_user(email: str, name: str, picture: Optional[str] = None) -> str:
+    """Find-or-create by email — the same identity rule the old Emergent flow
+    used, so existing Google users are matched to their existing account with
+    no migration needed."""
+    existing = await db.users.find_one({"email": email}, {"_id": 0})
+    if existing:
+        user_id = existing["user_id"]
+        updates = {}
+        if name and name != existing.get("name"):
+            updates["name"] = name
+        if picture and picture != existing.get("picture"):
+            updates["picture"] = picture
+        if updates:
+            await db.users.update_one({"user_id": user_id}, {"$set": updates})
+    else:
+        user_id = f"user_{uuid.uuid4().hex[:12]}"
+        await db.users.insert_one({
+            "user_id": user_id, "email": email, "name": name, "picture": picture,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    return user_id
+
+
+async def _create_session(user_id: str, response: Response, remember_me: bool = False) -> str:
+    """Mint our own opaque session token (previously supplied by Emergent) and
+    set it as an httpOnly cookie. `remember_me` extends the session from the
+    usual 7 days to 30."""
+    session_token = secrets.token_urlsafe(32)
+    days = 30 if remember_me else 7
+    expires_at = datetime.now(timezone.utc) + timedelta(days=days)
+    await db.user_sessions.insert_one({
+        "user_id": user_id,
+        "session_token": session_token,
+        "expires_at": expires_at.isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    response.set_cookie(
+        key="session_token", value=session_token, httponly=True, secure=True,
+        samesite="none", path="/", max_age=days * 24 * 3600,
+    )
+    return session_token
 
 
 # ---------- Domain models ----------
@@ -172,44 +286,126 @@ async def root():
 
 
 # ---------- Auth endpoints ----------
-@api_router.post("/auth/session")
-async def create_session(payload: SessionExchange, response: Response):
-    """Exchange Emergent session_id for a session_token; set httpOnly cookie."""
-    async with httpx.AsyncClient(timeout=15) as h:
-        r = await h.get(EMERGENT_AUTH_URL, headers={"X-Session-ID": payload.session_id})
-    if r.status_code != 200:
-        raise HTTPException(status_code=401, detail=f"Auth exchange failed: {r.status_code}")
-    data = r.json()
-    email = data.get("email")
-    name = data.get("name") or (email.split("@")[0] if email else "Seeker")
-    picture = data.get("picture")
-    session_token = data.get("session_token")
-    if not email or not session_token:
-        raise HTTPException(status_code=401, detail="Malformed auth response")
+@api_router.post("/auth/google")
+async def google_auth(payload: GoogleAuthRequest, response: Response):
+    """Verify a Google Identity Services ID token directly against Google's
+    public keys — no third-party auth proxy involved. Same find-or-create-by-
+    email + session creation as every other login path below."""
+    try:
+        idinfo = google_id_token.verify_oauth2_token(
+            payload.credential, google_requests.Request(), GOOGLE_CLIENT_ID
+        )
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Invalid Google credential")
+
+    email = idinfo.get("email")
+    if not email or not idinfo.get("email_verified", False):
+        raise HTTPException(status_code=401, detail="Google account email is not verified")
+    name = idinfo.get("name") or email.split("@")[0]
+    picture = idinfo.get("picture")
+
+    user_id = await _find_or_create_user(email, name, picture)
+    session_token = await _create_session(user_id, response)
+    user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0, "password_hash": 0})
+    return {**user_doc, "session_token": session_token}
+
+
+@api_router.post("/auth/signup")
+async def signup(payload: SignupRequest):
+    """Start email/password signup. Nothing permanent is created yet — the
+    email + hashed password sit in `pending_signups` until the 6-digit code
+    is confirmed via /auth/verify, so an unclaimed email never occupies a
+    real account."""
+    email = payload.email.strip().lower()
+    existing = await db.users.find_one({"email": email}, {"_id": 0})
+    if existing:
+        raise HTTPException(status_code=409, detail="An account with this email already exists. Try signing in instead.")
+    if len(payload.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
+
+    code = _generate_verification_code()
+    await db.pending_signups.update_one(
+        {"email": email},
+        {"$set": {
+            "email": email,
+            "name": payload.name.strip() or email.split("@")[0],
+            "password_hash": _hash_password(payload.password),
+            "code": code,
+            "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
+    await _send_verification_email(email, code, payload.name)
+    return {"ok": True, "email": email}
+
+
+@api_router.post("/auth/resend-code")
+async def resend_code(payload: ResendCodeRequest):
+    email = payload.email.strip().lower()
+    pending = await db.pending_signups.find_one({"email": email}, {"_id": 0})
+    if not pending:
+        raise HTTPException(status_code=404, detail="No pending signup found for this email.")
+    code = _generate_verification_code()
+    await db.pending_signups.update_one(
+        {"email": email},
+        {"$set": {"code": code, "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()}},
+    )
+    await _send_verification_email(email, code, pending.get("name", ""))
+    return {"ok": True}
+
+
+@api_router.post("/auth/verify")
+async def verify_signup(payload: VerifyCodeRequest, response: Response):
+    """Confirm the emailed code and turn a pending signup into a real account."""
+    email = payload.email.strip().lower()
+    pending = await db.pending_signups.find_one({"email": email}, {"_id": 0})
+    if not pending:
+        raise HTTPException(status_code=404, detail="No pending signup found for this email. Please sign up again.")
+
+    expires_at = pending.get("expires_at")
+    if isinstance(expires_at, str):
+        expires_at = datetime.fromisoformat(expires_at)
+    if expires_at and expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at and expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="This code has expired. Request a new one.")
+
+    if payload.code.strip() != pending["code"]:
+        raise HTTPException(status_code=400, detail="Incorrect code.")
 
     existing = await db.users.find_one({"email": email}, {"_id": 0})
     if existing:
-        user_id = existing["user_id"]
-        await db.users.update_one({"user_id": user_id}, {"$set": {"name": name, "picture": picture}})
+        user_id = existing["user_id"]  # race-condition guard: account already exists somehow
     else:
         user_id = f"user_{uuid.uuid4().hex[:12]}"
         await db.users.insert_one({
-            "user_id": user_id, "email": email, "name": name, "picture": picture,
+            "user_id": user_id,
+            "email": email,
+            "name": pending["name"],
+            "picture": None,
+            "password_hash": pending["password_hash"],
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
 
-    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
-    await db.user_sessions.insert_one({
-        "user_id": user_id,
-        "session_token": session_token,
-        "expires_at": expires_at.isoformat(),
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    })
-    response.set_cookie(
-        key="session_token", value=session_token, httponly=True, secure=True,
-        samesite="none", path="/", max_age=7 * 24 * 3600,
-    )
-    return {"user_id": user_id, "email": email, "name": name, "picture": picture, "session_token": session_token}
+    await db.pending_signups.delete_one({"email": email})
+    session_token = await _create_session(user_id, response)
+    user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0, "password_hash": 0})
+    return {**user_doc, "session_token": session_token}
+
+
+@api_router.post("/auth/login")
+async def login(payload: LoginRequest, response: Response):
+    email = payload.email.strip().lower()
+    user_doc = await db.users.find_one({"email": email}, {"_id": 0})
+    if not user_doc or not user_doc.get("password_hash"):
+        raise HTTPException(status_code=401, detail="No password-based account found for this email. Try Google sign-in instead.")
+    if not _verify_password(payload.password, user_doc["password_hash"]):
+        raise HTTPException(status_code=401, detail="Incorrect email or password.")
+
+    session_token = await _create_session(user_doc["user_id"], response, remember_me=payload.remember_me)
+    user_doc.pop("password_hash", None)
+    return {**user_doc, "session_token": session_token}
 
 
 @api_router.get("/auth/me", response_model=User)
