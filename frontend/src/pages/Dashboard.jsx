@@ -253,6 +253,32 @@ export default function Dashboard() {
                 </div>
                 <div className="flex items-baseline gap-2">
                   <span className="text-[color:var(--jai-green-deep)] font-semibold">{h.lord}</span>
+                  <span className="flex items-center gap-1">
+                    {h.lord_natural_nature && (
+                      <span
+                        className="text-[9px] font-bold px-1 rounded leading-none py-0.5"
+                        style={{
+                          color: h.lord_natural_nature === "benefic" ? "#0F5132" : "#A0522D",
+                          background: h.lord_natural_nature === "benefic" ? "rgba(15,81,50,0.12)" : "rgba(160,82,45,0.12)",
+                        }}
+                        title={`Natural nature: ${h.lord_natural_nature === "benefic" ? "Benefic" : "Malefic"}`}
+                      >
+                        {h.lord_natural_nature === "benefic" ? "B" : "M"}
+                      </span>
+                    )}
+                    {h.lord_functional_nature && (
+                      <span
+                        className="text-[9px] font-bold px-1 rounded leading-none py-0.5"
+                        style={{
+                          color: h.lord_functional_nature === "benefic" ? "#0F5132" : "#A0522D",
+                          background: h.lord_functional_nature === "benefic" ? "rgba(15,81,50,0.12)" : "rgba(160,82,45,0.12)",
+                        }}
+                        title={`Functional nature for this Lagna: ${h.lord_functional_nature === "benefic" ? "Benefic" : "Malefic"}`}
+                      >
+                        {h.lord_functional_nature === "benefic" ? "FB" : "FM"}
+                      </span>
+                    )}
+                  </span>
                   {h.lord_sits_in_house && (
                     <span className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">
                       H{h.lord_sits_in_house} · {h.lord_sits_in_sign_en}
