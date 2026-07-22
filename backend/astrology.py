@@ -224,6 +224,13 @@ def compute_chart(dob_iso: str, tob: str, tz_offset_hours: float, lat: float, lo
     m_nak_idx, _ = _nakshatra_from_lon(moon_lon)
     dashas = _vimshottari_dashas(moon_lon, local, m_nak_idx)
 
+    # Natural (fixed) + Functional (Lagna-dependent) benefic/malefic
+    # classification for every planet — see _natural_nature/_functional_nature
+    # for the exact rules.
+    sun = next(p for p in planets_out if p["name"] == "Sun")
+    natural_nature = {p["name"]: _natural_nature(p["name"], sun["longitude"], moon_lon) for p in planets_out}
+    functional_nature = _functional_nature(asc_sign)
+
     # House lords: for each house (1-12), the sign occupying it and its dispositor
     house_aspects = _compute_house_aspects(planets_out)
     planet_signs = {p["name"]: p["sign_idx"] for p in planets_out if p["name"] in ASHTAKAVARGA_PLANETS}
@@ -244,6 +251,8 @@ def compute_chart(dob_iso: str, tob: str, tz_offset_hours: float, lat: float, lo
             "lord_degree": lord_planet["degree_in_sign"] if lord_planet else None,
             "aspected_by": house_aspects[h],
             "ashtakavarga_sav": ashtakavarga["sav"][sign_idx],
+            "lord_natural_nature": natural_nature.get(lord),
+            "lord_functional_nature": functional_nature.get(lord),
         })
 
     yogas = _detect_yogas(planets_out, asc_sign)
@@ -270,6 +279,13 @@ def compute_chart(dob_iso: str, tob: str, tz_offset_hours: float, lat: float, lo
         "yogas": yogas,
         "ashtakavarga": ashtakavarga,
         "shadbala": shadbala,
+        "planet_nature": {
+            p["name"]: {
+                "natural": natural_nature.get(p["name"]),
+                "functional": functional_nature.get(p["name"]),  # None for Rahu/Ketu (no sign lordship)
+            }
+            for p in planets_out
+        },
     }
 
 
@@ -278,6 +294,81 @@ SIGN_LORDS = [
     "Mars", "Venus", "Mercury", "Moon", "Sun", "Mercury",
     "Venus", "Mars", "Jupiter", "Saturn", "Saturn", "Jupiter",
 ]
+
+# --- Natural & Functional Benefic/Malefic classification ---
+# Natural (Naisargika) nature is fixed for every chart. Functional
+# (Tatkalika) nature depends on which houses a planet rules FROM THIS
+# LAGNA, and is what actually determines whether a planet helps or hurts
+# in this particular chart — a natural benefic can be a functional malefic
+# for a given ascendant, and vice versa.
+
+NATURAL_BENEFIC_PLANETS = {"Jupiter", "Venus", "Mercury"}  # Moon handled separately (waxing/waning)
+NATURAL_MALEFIC_PLANETS = {"Sun", "Mars", "Saturn", "Rahu", "Ketu"}
+
+
+def _natural_nature(name: str, sun_lon: float, moon_lon: float) -> str:
+    """Fixed, chart-independent benefic/malefic status. Waxing Moon (0-180
+    degrees from Sun) is a natural benefic; waning Moon is a natural malefic."""
+    if name == "Moon":
+        elongation = (moon_lon - sun_lon) % 360
+        return "benefic" if elongation <= 180 else "malefic"
+    if name in NATURAL_BENEFIC_PLANETS:
+        return "benefic"
+    return "malefic"  # Sun, Mars, Saturn, Rahu, Ketu
+
+
+def _functional_nature(asc_sign: int) -> Dict[str, str]:
+    """Classify each of the 7 sign-ruling planets as a functional benefic or
+    malefic FOR THIS LAGNA, based on which houses it rules. Rahu/Ketu don't
+    rule signs classically, so they're excluded here (their badge falls back
+    to natural nature only).
+
+    Rules (Parashari), checked in priority order, first match wins:
+      1. Rules the Lagna (1st) -> benefic. The 1st is both kendra and
+         trikona, and lagna lordship is always auspicious.
+      2. Rules a trikona (5th/9th) -> benefic. (A planet ruling both a
+         kendra and a trikona -- e.g. Mars for Cancer/Leo lagna, Venus for
+         Virgo/Libra lagna -- is a Yogakaraka, the strongest functional
+         benefic; still bucketed as "benefic" here, just without that
+         extra label.)
+      3. Rules a dusthana (6th/8th/12th), with none of the above -> malefic.
+      4. Rules only a kendra (4th/7th/10th), with none of the above ->
+         Kendradhipatya dosha: a natural malefic here loses its edge and
+         becomes functionally benefic; a natural benefic here loses its
+         edge and becomes functionally malefic.
+      5. Rules only neutral houses (2nd/3rd/11th) -> benefic by default
+         (none of these are dusthana).
+
+    This is a defensible, commonly used simplification of a genuinely
+    debated area of classical astrology (schools differ especially on
+    mixed trikona+dusthana rulership, and on how strongly to weight
+    3rd/11th) — a reasonable default, not the only valid reading.
+    """
+    houses_ruled: Dict[str, List[int]] = {}
+    for h in range(1, 13):
+        sign_idx = (asc_sign + h - 1) % 12
+        lord = SIGN_LORDS[sign_idx]
+        houses_ruled.setdefault(lord, []).append(h)
+
+    TRIKONA = {5, 9}
+    DUSTHANA = {6, 8, 12}
+    KENDRA_ONLY = {4, 7, 10}
+
+    result = {}
+    for planet, houses in houses_ruled.items():
+        hs = set(houses)
+        if 1 in hs:
+            result[planet] = "benefic"
+        elif hs & TRIKONA:
+            result[planet] = "benefic"
+        elif hs & DUSTHANA:
+            result[planet] = "malefic"
+        elif hs & KENDRA_ONLY:
+            result[planet] = "benefic" if planet in NATURAL_MALEFIC_PLANETS else "malefic"
+        else:
+            result[planet] = "benefic"
+    return result
+
 
 # --- Ashtakavarga (Sarvashtakavarga / Bhinnashtakavarga) ---
 # Classical BPHS Chapter 66 benefic-place tables. Each of the 7 planets has a
