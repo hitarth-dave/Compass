@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Loader2, MoveRight } from "lucide-react";
+import { Loader2, MoveRight, ChevronDown } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import KundaliChart from "@/components/KundaliChart";
 import DashaExplorer from "@/components/DashaExplorer";
@@ -42,6 +42,9 @@ export default function Dashboard() {
   const [chart, setChart] = useState(null);
   const [transits, setTransits] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Controls whether Transit / D9 / D10 charts are shown alongside D1,
+  // or collapsed so D1 can take the spotlight.
+  const [showAll, setShowAll] = useState(true);
 
   useEffect(() => {
     (async () => {
@@ -128,12 +131,29 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-6 fade-up delay-1 items-stretch">
-        <div className="lg:col-span-6 card-surface p-8 flex flex-col" data-testid="rasi-card">
+      <div className={`mt-6 grid grid-cols-1 ${showAll ? "lg:grid-cols-12" : ""} gap-6 fade-up delay-1 items-stretch`}>
+        <div
+          className={`${showAll ? "lg:col-span-6" : "w-full max-w-2xl mx-auto"} card-surface p-8 flex flex-col transition-all duration-300`}
+          data-testid="rasi-card"
+        >
           <div className="flex items-center justify-between mb-6">
-            <div>
-              <div className="overline">Rasi Chakra · D1</div>
-              <div className="font-serif-display text-2xl mt-1 text-[color:var(--jai-parchment)]">Lagna: {asc.sign_en}</div>
+            <div className="flex items-start gap-3">
+              <button
+                type="button"
+                onClick={() => setShowAll((v) => !v)}
+                className="mt-0.5 w-7 h-7 shrink-0 rounded-full flex items-center justify-center border border-[color:var(--jai-border)] text-[color:var(--jai-text-muted)] hover:text-[color:var(--jai-gold)] hover:border-[color:var(--jai-gold)] transition-colors"
+                title={showAll ? "Collapse Transit, D9 & D10" : "Show Transit, D9 & D10"}
+                data-testid="toggle-extra-charts"
+              >
+                <ChevronDown
+                  size={14}
+                  className={`transition-transform duration-300 ${showAll ? "" : "rotate-180"}`}
+                />
+              </button>
+              <div>
+                <div className="overline">Rasi Chakra · D1</div>
+                <div className="font-serif-display text-2xl mt-1 text-[color:var(--jai-parchment)]">Lagna: {asc.sign_en}</div>
+              </div>
             </div>
             <div className="text-right">
               <div className="overline">Degree</div>
@@ -145,62 +165,76 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="lg:col-span-6 card-surface p-8 flex flex-col" data-testid="transits-card">
-          <div className="flex items-center justify-between mb-1">
-            <div className="overline">Live Transits · Today</div>
-            <div className="text-[10px] text-[color:var(--jai-text-muted)]">
-              {new Date(transits.as_of).toLocaleString(undefined, {
-                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                dateStyle: "medium",
-                timeStyle: "short",
-              })}
-            </div>
-          </div>
-          <div className="font-serif-display text-base mt-1 mb-4 text-[color:var(--jai-parchment)] leading-snug min-h-[3.5rem]">
-            {todaysTransitNote(transits) || "Today's sky, mapped against your birth chart."}
-          </div>
-          <div className="flex-1 flex items-center">
-            <KundaliChart
-              planets={transits.planets
-                .filter((t) => t.house_from_lagna)
-                .map((t) => ({ ...t, house: t.house_from_lagna }))}
-              ascendantSign={asc.sign_idx}
-              showNakshatra={false}
-              testid="kundali-chart-transit"
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-6 fade-up delay-2">
-        <div className="lg:col-span-6 card-surface p-8" data-testid="navamsa-card">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <div className="overline">Navamsa · D9</div>
-              <div className="font-serif-display text-2xl mt-1 text-[color:var(--jai-parchment)]">D9 Lagna: {navamsa.ascendant.sign_en}</div>
-            </div>
-            <div className="text-right text-[10px] text-[color:var(--jai-text-muted)] max-w-[140px]">
-              Marriage & second half of life
-            </div>
-          </div>
-          <KundaliChart planets={navamsa.planets} ascendantSign={navamsa.ascendant.sign_idx} showNakshatra={false} testid="kundali-chart-d9" />
-        </div>
-
-        {dasamsa && (
-          <div className="lg:col-span-6 card-surface p-8" data-testid="dasamsa-card">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <div className="overline">Dasamsa · D10</div>
-                <div className="font-serif-display text-2xl mt-1 text-[color:var(--jai-parchment)]">D10 Lagna: {dasamsa.ascendant.sign_en}</div>
-              </div>
-              <div className="text-right text-[10px] text-[color:var(--jai-text-muted)] max-w-[140px]">
-                Career & professional status
+        {showAll && (
+          <div className="lg:col-span-6 card-surface p-8 flex flex-col" data-testid="transits-card">
+            <div className="flex items-center justify-between mb-1">
+              <div className="overline">Live Transits · Today</div>
+              <div className="text-[10px] text-[color:var(--jai-text-muted)]">
+                {new Date(transits.as_of).toLocaleString(undefined, {
+                  timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                })}
               </div>
             </div>
-            <KundaliChart planets={dasamsa.planets} ascendantSign={dasamsa.ascendant.sign_idx} showNakshatra={false} testid="kundali-chart-d10" />
+            <div className="font-serif-display text-base mt-1 mb-4 text-[color:var(--jai-parchment)] leading-snug min-h-[3.5rem]">
+              {todaysTransitNote(transits) || "Today's sky, mapped against your birth chart."}
+            </div>
+            <div className="flex-1 flex items-center">
+              <KundaliChart
+                planets={transits.planets
+                  .filter((t) => t.house_from_lagna)
+                  .map((t) => ({ ...t, house: t.house_from_lagna }))}
+                ascendantSign={asc.sign_idx}
+                showNakshatra={false}
+                testid="kundali-chart-transit"
+              />
+            </div>
           </div>
         )}
       </div>
+
+      {showAll ? (
+        <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-6 fade-up delay-2">
+          <div className="lg:col-span-6 card-surface p-8" data-testid="navamsa-card">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <div className="overline">Navamsa · D9</div>
+                <div className="font-serif-display text-2xl mt-1 text-[color:var(--jai-parchment)]">D9 Lagna: {navamsa.ascendant.sign_en}</div>
+              </div>
+              <div className="text-right text-[10px] text-[color:var(--jai-text-muted)] max-w-[140px]">
+                Marriage &amp; second half of life
+              </div>
+            </div>
+            <KundaliChart planets={navamsa.planets} ascendantSign={navamsa.ascendant.sign_idx} showNakshatra={false} testid="kundali-chart-d9" />
+          </div>
+
+          {dasamsa && (
+            <div className="lg:col-span-6 card-surface p-8" data-testid="dasamsa-card">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <div className="overline">Dasamsa · D10</div>
+                  <div className="font-serif-display text-2xl mt-1 text-[color:var(--jai-parchment)]">D10 Lagna: {dasamsa.ascendant.sign_en}</div>
+                </div>
+                <div className="text-right text-[10px] text-[color:var(--jai-text-muted)] max-w-[140px]">
+                  Career &amp; professional status
+                </div>
+              </div>
+              <KundaliChart planets={dasamsa.planets} ascendantSign={dasamsa.ascendant.sign_idx} showNakshatra={false} testid="kundali-chart-d10" />
+            </div>
+          )}
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setShowAll(true)}
+          className="mt-4 w-full max-w-2xl mx-auto flex items-center justify-center gap-2 text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)] hover:text-[color:var(--jai-gold)] py-3 border border-dashed border-[color:var(--jai-border)] rounded-full transition-colors fade-up delay-2"
+          data-testid="expand-extra-charts"
+        >
+          <ChevronDown size={12} className="rotate-180" />
+          Transit · D9 · D10 — click to expand
+        </button>
+      )}
 
       {/* House Lords + Yogas */}
       <div className="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-6 fade-up delay-3">
