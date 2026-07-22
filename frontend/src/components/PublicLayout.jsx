@@ -1,4 +1,4 @@
-import { Compass, Sun, Moon } from "lucide-react";
+import { Sun, Moon } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
@@ -18,8 +18,11 @@ export function PublicNav() {
   return (
     <header className="relative z-20 flex items-center justify-between max-w-6xl mx-auto px-6 lg:px-12 py-8 fade-up">
       <Link to="/" className="flex items-center gap-3" data-testid="nav-brand">
-        <div className="w-10 h-10 rounded-full border border-[color:var(--jai-gold)] flex items-center justify-center">
-          <Compass size={18} className="text-[color:var(--jai-gold)]" />
+        {/* Badge is deliberately always cream, not theme-linked — the mark's
+            navy/gold are fixed brand colors from the style guide, and this
+            keeps them legible against the dark-mode page background too. */}
+        <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: "#F7F1E1" }}>
+          <img src="/compass-mark.png" alt="" className="w-6 h-[1.9rem] object-contain" />
         </div>
         <div>
           <div className="font-serif-display text-2xl leading-none text-[color:var(--jai-green-deep)]">Compass Astro</div>
