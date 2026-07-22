@@ -21,12 +21,12 @@ function waitForGoogle(timeoutMs = 8000) {
   });
 }
 
-const emptyForm = { name: "", email: "", password: "", rememberMe: false, code: "" };
+const emptyForm = { name: "", email: "", password: "", newPassword: "", rememberMe: false, code: "" };
 
 export default function AuthModal() {
   const { authModalOpen, authModalMode, closeAuthModal, setUser } = useAuth();
   const [mode, setMode] = useState("signin"); // "signin" | "signup"
-  const [step, setStep] = useState("form"); // "form" | "verify"
+  const [step, setStep] = useState("form"); // "form" | "verify" | "forgot" | "reset"
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState(emptyForm);
@@ -126,6 +126,44 @@ export default function AuthModal() {
     }
   }
 
+  async function handleForgotPassword(e) {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await axios.post(`${API}/auth/forgot-password`, { email: form.email });
+      setStep("reset");
+      toast.success("If that email has an account, a code is on its way");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Could not send reset code");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleResendResetCode() {
+    try {
+      await axios.post(`${API}/auth/forgot-password`, { email: form.email });
+      toast.success("New code sent");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Could not resend code");
+    }
+  }
+
+  async function handleResetPassword(e) {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const res = await axios.post(`${API}/auth/reset-password`, {
+        email: form.email, code: form.code, new_password: form.newPassword,
+      });
+      await afterLogin(res.data);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Could not reset password");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleLogin(e) {
     e.preventDefault();
     setLoading(true);
@@ -220,14 +258,24 @@ export default function AuthModal() {
               </div>
 
               {mode === "signin" && (
-                <label className="flex items-center gap-2 text-sm text-[color:var(--jai-text-muted)]">
-                  <input
-                    type="checkbox"
-                    checked={form.rememberMe}
-                    onChange={(e) => setForm({ ...form, rememberMe: e.target.checked })}
-                  />
-                  Remember me
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 text-sm text-[color:var(--jai-text-muted)]">
+                    <input
+                      type="checkbox"
+                      checked={form.rememberMe}
+                      onChange={(e) => setForm({ ...form, rememberMe: e.target.checked })}
+                    />
+                    Remember me
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setStep("forgot")}
+                    className="text-sm text-[color:var(--jai-gold)] hover:underline"
+                    data-testid="auth-forgot-password-link"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
               )}
 
               <button
@@ -292,6 +340,101 @@ export default function AuthModal() {
             </form>
             <p className="mt-4 text-center text-sm">
               <button onClick={handleResendCode} className="text-[color:var(--jai-gold)] hover:underline" data-testid="auth-resend-code-btn">
+                Resend code
+              </button>
+            </p>
+          </>
+        )}
+
+        {step === "forgot" && (
+          <>
+            <h2 className="font-serif-display text-2xl text-[color:var(--jai-parchment)] mb-2">Reset your password</h2>
+            <p className="text-sm text-[color:var(--jai-text-muted)] mb-6">
+              Enter your email and we'll send you a code — including if you've only ever signed in with Google
+              and want to add a password.
+            </p>
+            <form onSubmit={handleForgotPassword} className="space-y-4">
+              <input
+                type="email"
+                placeholder="Email"
+                required
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                className="w-full px-4 py-3 rounded-lg bg-transparent border border-[color:var(--jai-border)] text-[color:var(--jai-parchment)] focus:outline-none focus:border-[color:var(--jai-gold)]"
+                data-testid="auth-forgot-email-input"
+              />
+              <button
+                type="submit"
+                disabled={loading}
+                className="gold-btn w-full rounded-full px-6 py-3 font-serif-display text-lg inline-flex items-center justify-center gap-2 disabled:opacity-60"
+                data-testid="auth-forgot-submit-btn"
+              >
+                {loading && <Loader2 size={16} className="animate-spin" />}
+                Send code
+              </button>
+            </form>
+            <p className="mt-6 text-center text-sm">
+              <button
+                onClick={() => { setMode("signin"); setStep("form"); }}
+                className="text-[color:var(--jai-gold)] hover:underline"
+              >
+                Back to sign in
+              </button>
+            </p>
+          </>
+        )}
+
+        {step === "reset" && (
+          <>
+            <h2 className="font-serif-display text-2xl text-[color:var(--jai-parchment)] mb-2">Enter your code</h2>
+            <p className="text-sm text-[color:var(--jai-text-muted)] mb-6">
+              We sent a 6-digit code to <span className="text-[color:var(--jai-parchment)]">{form.email}</span>.
+              Enter it along with your new password.
+            </p>
+            <form onSubmit={handleResetPassword} className="space-y-4">
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="6-digit code"
+                required
+                value={form.code}
+                onChange={(e) => setForm({ ...form, code: e.target.value.replace(/\D/g, "") })}
+                className="w-full px-4 py-3 rounded-lg bg-transparent border border-[color:var(--jai-border)] text-[color:var(--jai-parchment)] text-center tracking-[0.5em] text-xl focus:outline-none focus:border-[color:var(--jai-gold)]"
+                data-testid="auth-reset-code-input"
+              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="New password"
+                  required
+                  minLength={8}
+                  value={form.newPassword}
+                  onChange={(e) => setForm({ ...form, newPassword: e.target.value })}
+                  className="w-full px-4 py-3 pr-11 rounded-lg bg-transparent border border-[color:var(--jai-border)] text-[color:var(--jai-parchment)] focus:outline-none focus:border-[color:var(--jai-gold)]"
+                  data-testid="auth-new-password-input"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--jai-text-muted)] hover:text-[color:var(--jai-gold)]"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="gold-btn w-full rounded-full px-6 py-3 font-serif-display text-lg inline-flex items-center justify-center gap-2 disabled:opacity-60"
+                data-testid="auth-reset-submit-btn"
+              >
+                {loading && <Loader2 size={16} className="animate-spin" />}
+                Set password &amp; sign in
+              </button>
+            </form>
+            <p className="mt-4 text-center text-sm">
+              <button onClick={handleResendResetCode} className="text-[color:var(--jai-gold)] hover:underline" data-testid="auth-resend-reset-code-btn">
                 Resend code
               </button>
             </p>
