@@ -98,7 +98,7 @@ export default function DashaExplorer({ mahadashas, currentMahadasha }) {
         {LEVEL_LABELS[depth]}{depth < MAX_DEPTH ? " — click a period to drill deeper" : ""}
       </div>
 
-      <div className="space-y-1 max-h-80 overflow-y-auto pr-1">
+      <div className="space-y-1 max-h-[480px] overflow-y-auto pr-1">
         {currentList.map((d, i) => {
           const clickable = depth < MAX_DEPTH;
           const highlighted = isCurrentRow(d);
