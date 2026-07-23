@@ -22,7 +22,7 @@ export function PublicNav() {
             navy/gold are fixed brand colors from the style guide, and this
             keeps them legible against the dark-mode page background too. */}
         <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: "#F7F1E1" }}>
-          <img src="/compass-mark.png" alt="" className="w-6 h-[1.9rem] object-contain" />
+          <img src="/compass-mark.svg" alt="" className="w-6 h-6 object-contain" />
         </div>
         <div>
           <div className="font-serif-display text-2xl leading-none text-[color:var(--jai-green-deep)]">Compass Astro</div>
