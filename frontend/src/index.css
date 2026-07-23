@@ -19,6 +19,7 @@
     --jai-terracotta: #A0522D;      /* warm accent */
     --jai-parchment-ink: #1F2A24;   /* near-black ink */
     --jai-navy: #0D2A5C;            /* Compass Astro mark — brand navy */
+    --jai-planet-moon: #4A6FA5;     /* silver-blue, unchanged in light mode */
     --jai-text: var(--jai-green);
     --jai-text-muted: var(--jai-olive);
     --jai-parchment: var(--jai-parchment-ink);
@@ -41,6 +42,7 @@
     --jai-terracotta: #D2795A;
     --jai-parchment-ink: #EDE6D6;
     --jai-navy: #7C9CDC;            /* lighter than brand navy so the mark reads against dark bg */
+    --jai-planet-moon: #A8D8BE;     /* matches heading green in dark mode instead of blue */
     --jai-text: var(--jai-green);
     --jai-text-muted: var(--jai-olive);
     --jai-parchment: var(--jai-parchment-ink);
