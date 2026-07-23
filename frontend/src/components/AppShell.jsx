@@ -139,9 +139,11 @@ export default function AppShell({ children }) {
           </button>
           {!collapsed && (
             <div className="flex-1 min-w-0 flex items-center">
-              <div className="rounded-full flex items-center justify-center px-4 py-3" style={{ backgroundColor: "#F7F1E1" }}>
-                <img src="/compass-lockup.png" alt="Compass Astro" className="h-14 w-auto object-contain" />
-              </div>
+              <img
+                src={theme === "dark" ? "/compass-lockup-dark.png" : "/compass-lockup-light.png"}
+                alt="Compass Astro"
+                className="h-14 w-auto object-contain"
+              />
             </div>
           )}
         </div>
