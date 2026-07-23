@@ -17,16 +17,12 @@ export function PublicNav() {
   const { theme, toggleTheme } = useTheme();
   return (
     <header className="relative z-20 flex items-center justify-between max-w-6xl mx-auto px-6 lg:px-12 py-8 fade-up">
-      <Link to="/" className="flex items-center gap-3" data-testid="nav-brand">
-        {/* Badge is deliberately always cream, not theme-linked — the mark's
+      <Link to="/" className="flex items-center" data-testid="nav-brand">
+        {/* Pill is deliberately always cream, not theme-linked — the logo's
             navy/gold are fixed brand colors from the style guide, and this
-            keeps them legible against the dark-mode page background too. */}
-        <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: "#F7F1E1" }}>
-          <img src="/compass-mark.svg" alt="" className="w-6 h-6 object-contain" />
-        </div>
-        <div>
-          <div className="font-serif-display text-2xl leading-none text-[color:var(--jai-green-deep)]">Compass Astro</div>
-          <div className="overline mt-1">Ancient wisdom, clear direction</div>
+            keeps it legible against the dark-mode page background too. */}
+        <div className="rounded-full flex items-center justify-center px-4 py-2" style={{ backgroundColor: "#F7F1E1" }}>
+          <img src="/compass-lockup.png" alt="Compass Astro" className="h-9 w-auto object-contain" />
         </div>
       </Link>
 
