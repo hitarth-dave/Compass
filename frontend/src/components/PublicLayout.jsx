@@ -24,7 +24,7 @@ export function PublicNav() {
         <img
           src={theme === "dark" ? "/compass-lockup-dark.png" : "/compass-lockup-light.png"}
           alt="Compass Astro"
-          className="h-9 w-auto object-contain"
+          className="h-[4.5rem] w-auto object-contain"
         />
       </Link>
 
