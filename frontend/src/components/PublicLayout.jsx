@@ -49,7 +49,7 @@ export function PublicNav() {
       <div className="flex items-center gap-3">
         <button
           onClick={toggleTheme}
-          className="w-10 h-10 rounded-full flex items-center justify-center border border-[color:var(--jai-border)] text-[color:var(--jai-gold)] hover:text-[color:var(--jai-gold-soft)] hover:border-[color:var(--jai-border-gold)] transition-colors"
+          className="w-10 h-10 rounded-full flex items-center justify-center border border-[color:var(--jai-border)] text-[color:var(--jai-gold)] hover:text-[color:var(--jai-gold-soft)] hover:border-[color:var(--jai-border-gold)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--jai-green-deep)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--jai-bg)]"
           title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
           data-testid="theme-toggle-btn"
         >
