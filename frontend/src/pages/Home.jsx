@@ -12,7 +12,7 @@ export default function Home() {
   return (
     <PublicLayout>
       {/* HERO */}
-      <section className="max-w-6xl mx-auto px-6 lg:px-12 pt-6 pb-10 grid lg:grid-cols-[0.7fr_1.3fr] gap-8 items-center">
+      <section className="max-w-[92rem] mx-auto px-6 lg:px-12 pt-6 pb-10 grid lg:grid-cols-[0.55fr_1.45fr] gap-8 items-start">
         <div className="fade-up">
           <div className="overline mb-6">Sanatan · Jyotish · Personal Counsel</div>
           <h1 className="font-serif-display text-5xl sm:text-6xl lg:text-7xl leading-[0.95] text-[color:var(--jai-parchment)]">
