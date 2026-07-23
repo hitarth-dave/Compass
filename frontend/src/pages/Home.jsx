@@ -12,7 +12,7 @@ export default function Home() {
   return (
     <PublicLayout>
       {/* HERO */}
-      <section className="max-w-6xl mx-auto px-6 lg:px-12 pt-6 pb-10 grid lg:grid-cols-2 gap-8 items-start">
+      <section className="max-w-6xl mx-auto px-6 lg:px-12 pt-0 pb-10 grid lg:grid-cols-2 gap-8 items-start">
         <div className="fade-up">
           <div className="overline mb-6">Sanatan · Jyotish · Personal Counsel</div>
           <h1 className="font-serif-display text-5xl sm:text-6xl lg:text-7xl leading-[0.95] text-[color:var(--jai-parchment)]">
@@ -32,11 +32,13 @@ export default function Home() {
         </div>
 
         {/* This wrapper is intentionally wider than its grid column (via
-            lg:w-[58vw]) and left-anchored (justify-self-start), so it bleeds
+            lg:w-[64vw]) and left-anchored (justify-self-start), so it bleeds
             past the container's right edge instead of being squeezed into
             the column. The page root already has overflow-x-hidden, so this
-            clips cleanly at the viewport edge with no horizontal scrollbar. */}
-        <div className="fade-up delay-1 lg:w-[58vw] justify-self-start">
+            clips cleanly at the viewport edge with no horizontal scrollbar.
+            The negative margin pulls it left to close the gap against the
+            text column, without touching the text column itself. */}
+        <div className="fade-up delay-1 lg:w-[64vw] lg:-ml-24 justify-self-start">
           <img
             src="/compass-hero-photo.png"
             alt="A compass marking Growth, Success, Love, Wisdom, Marriage, Happiness, Health and Money, set against a starfield"
