@@ -138,13 +138,9 @@ export default function AppShell({ children }) {
             <Menu size={18} />
           </button>
           {!collapsed && (
-            <div className="flex-1 min-w-0 flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: "#F7F1E1" }}>
-                <img src="/compass-mark.svg" alt="" className="w-3.5 h-3.5 object-contain" />
-              </div>
-              <div>
-                <div className="font-serif-display text-xl leading-none text-[color:var(--jai-green-deep)]">Compass Astro</div>
-                <div className="overline mt-1">Ancient wisdom</div>
+            <div className="flex-1 min-w-0 flex items-center">
+              <div className="rounded-full flex items-center justify-center px-2.5 py-1.5" style={{ backgroundColor: "#F7F1E1" }}>
+                <img src="/compass-lockup.png" alt="Compass Astro" className="h-7 w-auto object-contain" />
               </div>
             </div>
           )}
