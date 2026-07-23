@@ -251,7 +251,7 @@ export default function AppShell({ children }) {
 
       <button
         onClick={toggleTheme}
-        className="fixed top-4 right-4 z-20 w-10 h-10 rounded-full flex items-center justify-center bg-[color:var(--jai-surface)] border border-[color:var(--jai-border)] text-[color:var(--jai-gold)] hover:text-[color:var(--jai-gold-soft)] hover:border-[color:var(--jai-border-gold)] transition-colors shadow-sm"
+        className="fixed top-4 right-4 z-20 w-10 h-10 rounded-full flex items-center justify-center bg-[color:var(--jai-surface)] border border-[color:var(--jai-border)] text-[color:var(--jai-gold)] hover:text-[color:var(--jai-gold-soft)] hover:border-[color:var(--jai-border-gold)] transition-colors shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--jai-green-deep)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--jai-bg)]"
         title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
         data-testid="theme-toggle-btn"
       >
