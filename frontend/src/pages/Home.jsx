@@ -1,17 +1,11 @@
-import { useState } from "react";
 import { Sparkles, BookOpen, MessageCircle, Compass as CompassIcon } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { Navigate, Link } from "react-router-dom";
 import PublicLayout from "@/components/PublicLayout";
 import AuthButtons from "@/components/AuthButtons";
-import Compass3D from "@/components/Compass3D";
 
 export default function Home() {
   const { user, loading } = useAuth();
-  // Static compass photo (with its own cosmic/splash background, feathered
-  // to blend into the page) is the default hero visual; the interactive 3D
-  // compass stays available as an alternate view behind a small toggle.
-  const [heroView, setHeroView] = useState("photo"); // "photo" | "3d"
   if (loading) return null;
   if (user) return <Navigate to="/dashboard" replace />;
 
@@ -37,26 +31,12 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="fade-up delay-1 flex flex-col items-center">
-          <div className="relative flex justify-center items-center" style={{ minHeight: "380px" }}>
-            {heroView === "photo" ? (
-              <img
-                src="/compass-hero-photo.png"
-                alt="A compass marking Career, Success, Love, Purpose, Health, Wealth and Marriage, set against a starfield"
-                className="w-full h-auto object-contain"
-              />
-            ) : (
-              <Compass3D />
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={() => setHeroView(heroView === "photo" ? "3d" : "photo")}
-            className="mt-2 text-xs uppercase tracking-widest text-[color:var(--jai-text-muted)] hover:text-[color:var(--jai-gold)] transition-colors"
-            data-testid="hero-view-toggle"
-          >
-            {heroView === "photo" ? "Prefer the interactive view? →" : "← Back to compass"}
-          </button>
+        <div className="fade-up delay-1 flex justify-center">
+          <img
+            src="/compass-hero-photo.png"
+            alt="A compass marking Growth, Success, Love, Wisdom, Marriage, Happiness, Health and Money, set against a starfield"
+            className="w-full h-auto object-contain"
+          />
         </div>
       </section>
 
