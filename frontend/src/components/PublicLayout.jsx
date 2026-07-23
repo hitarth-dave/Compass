@@ -18,12 +18,14 @@ export function PublicNav() {
   return (
     <header className="relative z-20 flex items-center justify-between max-w-6xl mx-auto px-6 lg:px-12 py-8 fade-up">
       <Link to="/" className="flex items-center" data-testid="nav-brand">
-        {/* Pill is deliberately always cream, not theme-linked — the logo's
-            navy/gold are fixed brand colors from the style guide, and this
-            keeps it legible against the dark-mode page background too. */}
-        <div className="rounded-full flex items-center justify-center px-4 py-2" style={{ backgroundColor: "#F7F1E1" }}>
-          <img src="/compass-lockup.png" alt="Compass Astro" className="h-9 w-auto object-contain" />
-        </div>
+        {/* Navy recolored to match the heading green per-theme, so the mark
+            reads correctly on both light and dark backgrounds without
+            needing a fixed backing plate anymore. */}
+        <img
+          src={theme === "dark" ? "/compass-lockup-dark.png" : "/compass-lockup-light.png"}
+          alt="Compass Astro"
+          className="h-9 w-auto object-contain"
+        />
       </Link>
 
       <nav className="hidden md:flex items-center gap-8">
