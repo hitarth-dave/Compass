@@ -11,7 +11,7 @@ const PLANET_INITIAL = {
 
 const PLANET_COLOR = {
   Sun: "#B0341A",       // fiery red
-  Moon: "#4A6FA5",      // silver-blue
+  Moon: "var(--jai-planet-moon)", // silver-blue in light mode, green in dark mode
   Mars: "#C0392B",      // red
   Mercury: "#2E7D32",   // dark green
   Jupiter: "#B8860B",   // dark gold
