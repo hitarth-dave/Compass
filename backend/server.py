@@ -24,9 +24,10 @@ from google.auth.transport import requests as google_requests
 from astrology import (
     compute_chart, current_transits, current_dasha, current_antardasha,
     compute_antardashas, build_navamsa, build_dasamsa,
-    build_varga, EXTRA_VARGAS,
+    build_varga, EXTRA_VARGAS, sun_rise_set, sun_moon_longitudes,
 )
 from muhurta import find_best_windows, ACTIVITY_HOUSES, detect_activity_intent
+from panchang import compute_panchang, compute_daily_muhurta
 _KNOWLEDGE_SOURCE = os.environ.get('KNOWLEDGE_SOURCE', 'original')
 if _KNOWLEDGE_SOURCE == 'v2':
     from knowledge_v2 import (
@@ -1076,6 +1077,39 @@ async def geocode(q: str):
         return {"results": [{"place": loc.address, "lat": loc.latitude, "lon": loc.longitude}]}
     except Exception as e:
         return {"results": [], "error": str(e)}
+
+@api_router.get("/muhurta/today")
+async def muhurta_today(user: User = Depends(get_current_user)):
+    doc = await db.profiles.find_one({"user_id": user.user_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Set up your birth details first")
+
+    # Prefer the user's current location (Settings -> Current Location) for
+    # sunrise/sunset, since Rahu Kaal etc. are about where they are TODAY,
+    # not where they were born. Falls back to birth place if not set.
+    lat = user.current_lat if user.current_lat is not None else doc["lat"]
+    lon = user.current_lon if user.current_lon is not None else doc["lon"]
+    # No separate "current timezone" field exists yet — birth timezone is
+    # used as the best available default. Fine for users who haven't
+    # crossed timezones since birth; a known limitation otherwise.
+    tz_offset = doc["tz_offset"]
+
+    local_today = (datetime.now(timezone.utc) + timedelta(hours=tz_offset)).date().isoformat()
+    rs = sun_rise_set(local_today, tz_offset, lat, lon)
+    weekday_idx = datetime.fromisoformat(local_today).weekday()
+
+    # Day's Tithi/Yoga/Karana are read at sunrise, per classical convention
+    # (that's what "today's Panchang" refers to).
+    sun_lon, moon_lon = sun_moon_longitudes(rs["sunrise"], tz_offset)
+    panchang = compute_panchang(sun_lon, moon_lon, rs["sunrise"])
+    daily_muhurta = compute_daily_muhurta(rs["sunrise"], rs["sunset"], rs["next_sunrise"], weekday_idx)
+
+    return {
+        "date": local_today,
+        "panchang": panchang,
+        **daily_muhurta,
+    }
+
 
 @api_router.get("/decision-timing/{activity}")
 async def decision_timing(activity: str, user: User = Depends(get_current_user)):

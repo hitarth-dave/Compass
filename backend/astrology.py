@@ -1250,3 +1250,50 @@ EXTRA_VARGAS = {
     "chaturvimsamsa": (_chaturvimsamsa_sign, "D24 · Education & learning"),
     "shashtiamsa": (_shashtiamsa_sign, "D60 · Fine-grained life reading"),
 }
+
+
+# --- Sunrise / sunset (needed for Rahu Kaal, Choghadiya, Abhijit Muhurta —
+# all of these divide the LOCAL solar day, not the clock day) ---
+
+def sun_rise_set(date_iso: str, tz_offset_hours: float, lat: float, lon: float) -> Dict:
+    """Sunrise/sunset for the local calendar date `date_iso` at (lat, lon),
+    plus the *next* day's sunrise (needed to size the night portion, which
+    runs from tonight's sunset to tomorrow's sunrise). Returns local
+    datetimes (already shifted by tz_offset_hours, so callers don't have to
+    juggle UTC)."""
+    y, m, d = map(int, date_iso.split("-"))
+    # Search from local midnight (converted to UTC) so we land on today's
+    # rise/set, not a leftover one from just before midnight UTC.
+    local_midnight = datetime(y, m, d, 0, 0)
+    utc_search_start = local_midnight - timedelta(hours=tz_offset_hours)
+    jd_start = _julday(utc_search_start)
+
+    geopos = (lon, lat, 0)  # (longitude, latitude, altitude-in-meters)
+    _, rise_ret = swe.rise_trans(jd_start, swe.SUN, swe.CALC_RISE, geopos)
+    _, set_ret = swe.rise_trans(jd_start, swe.SUN, swe.CALC_SET, geopos)
+    # Next sunrise: search starting just after today's sunset.
+    _, next_rise_ret = swe.rise_trans(set_ret[0] + 0.001, swe.SUN, swe.CALC_RISE, geopos)
+
+    def _jd_to_local(jd: float) -> datetime:
+        yy, mm, dd, hh = swe.revjul(jd)
+        h = int(hh)
+        mi = int(round((hh - h) * 60))
+        base = datetime(yy, mm, dd, h, mi)
+        return base + timedelta(hours=tz_offset_hours)
+
+    return {
+        "sunrise": _jd_to_local(rise_ret[0]),
+        "sunset": _jd_to_local(set_ret[0]),
+        "next_sunrise": _jd_to_local(next_rise_ret[0]),
+    }
+
+
+def sun_moon_longitudes(local_dt: datetime, tz_offset_hours: float) -> Tuple[float, float]:
+    """Sidereal Sun/Moon longitude at a given local datetime — used by the
+    daily Panchang (Tithi/Yoga/Karana), which is read at sunrise rather
+    than at chart-birth time."""
+    utc_dt = local_dt - timedelta(hours=tz_offset_hours)
+    jd = _julday(utc_dt)
+    sun_lon, _ = _sidereal_lon(jd, swe.SUN)
+    moon_lon, _ = _sidereal_lon(jd, swe.MOON)
+    return sun_lon, moon_lon

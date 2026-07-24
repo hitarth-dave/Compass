@@ -111,3 +111,88 @@ def compute_panchang(sun_lon: float, moon_lon: float, at: datetime) -> Dict:
         "cautions": cautions,
         "is_favorable": len(cautions) == 0,
     }
+
+
+# --- Daily time-slot Muhurta: Rahu Kaal, Yamaganda Kaal, Gulika Kaal,
+# Abhijit Muhurta, and Choghadiya. This is the "what does Drik Panchang
+# show for today" layer — distinct from compute_panchang above, which
+# answers "is THIS instant auspicious" for the 6-month decision scanner.
+#
+# CONFIDENCE NOTE: Rahu Kaal / Yamaganda / Gulika Kaal use the equal-eighth
+# day-division method, which is the most common one across Vedic astrology
+# software — the weekday->octant tables below are standard and I'm
+# confident in them. The Choghadiya weekday-start tables are also standard,
+# but (same honesty policy as the rest of this module) haven't been checked
+# against a published worked example — spot-check a known date/city against
+# Drik Panchang before fully trusting it.
+
+from datetime import timedelta
+
+# Which of the 8 equal day-segments (1-indexed, sunrise=segment 1) each
+# inauspicious period falls in, by weekday (Monday=0 .. Sunday=6, matching
+# Python's date.weekday() and this module's existing VARA_NAMES order).
+RAHU_KAAL_OCTANT =      [2, 7, 5, 6, 4, 3, 8]  # Mon..Sun
+YAMAGANDA_OCTANT =      [4, 3, 2, 1, 7, 6, 5]  # Mon..Sun
+GULIKA_KAAL_OCTANT =    [6, 5, 4, 3, 2, 1, 7]  # Mon..Sun
+
+CHOGHADIYA_CYCLE = ["Udveg", "Chal", "Labh", "Amrit", "Kaal", "Shubh", "Rog"]
+CHOGHADIYA_QUALITY = {
+    "Amrit": "good", "Shubh": "good", "Labh": "good",
+    "Chal": "neutral",
+    "Udveg": "bad", "Rog": "bad", "Kaal": "bad",
+}
+# Starting Choghadiya name for the 8 day-segments and 8 night-segments, by
+# weekday (Monday=0 .. Sunday=6). Each subsequent segment advances through
+# CHOGHADIYA_CYCLE in order.
+CHOGHADIYA_DAY_START =   ["Amrit", "Rog", "Labh", "Shubh", "Chal", "Kaal", "Udveg"]    # Mon..Sun
+CHOGHADIYA_NIGHT_START = ["Chal", "Kaal", "Udveg", "Amrit", "Rog", "Labh", "Shubh"]     # Mon..Sun
+
+
+def _octant_window(sunrise: datetime, segment_len: timedelta, octant_1indexed: int) -> Dict:
+    start = sunrise + segment_len * (octant_1indexed - 1)
+    end = start + segment_len
+    return {"start": start.strftime("%H:%M"), "end": end.strftime("%H:%M")}
+
+
+def _choghadiya_segments(period_start: datetime, segment_len: timedelta, start_name: str) -> list:
+    idx = CHOGHADIYA_CYCLE.index(start_name)
+    out = []
+    for i in range(8):
+        name = CHOGHADIYA_CYCLE[(idx + i) % len(CHOGHADIYA_CYCLE)]
+        seg_start = period_start + segment_len * i
+        seg_end = seg_start + segment_len
+        out.append({
+            "name": name,
+            "quality": CHOGHADIYA_QUALITY[name],
+            "start": seg_start.strftime("%H:%M"),
+            "end": seg_end.strftime("%H:%M"),
+        })
+    return out
+
+
+def compute_daily_muhurta(sunrise: datetime, sunset: datetime, next_sunrise: datetime, weekday_idx: int) -> Dict:
+    """weekday_idx: Monday=0 .. Sunday=6 (Python's date.weekday()), for the
+    calendar day `sunrise` falls on. sunrise/sunset/next_sunrise: local
+    datetimes from astrology.sun_rise_set()."""
+    day_len = sunset - sunrise
+    night_len = next_sunrise - sunset
+    day_octant = day_len / 8
+    night_octant = night_len / 8
+
+    # Abhijit Muhurta: the 8th of 15 equal divisions of the day — roughly
+    # straddles local solar noon, but sized proportionally to day length
+    # (the classically correct behavior) rather than a fixed 48 minutes.
+    day_muhurta = day_len / 15
+    abhijit_start = sunrise + day_muhurta * 7
+    abhijit_end = sunrise + day_muhurta * 8
+
+    return {
+        "sunrise": sunrise.strftime("%H:%M"),
+        "sunset": sunset.strftime("%H:%M"),
+        "rahu_kaal": _octant_window(sunrise, day_octant, RAHU_KAAL_OCTANT[weekday_idx]),
+        "yamaganda_kaal": _octant_window(sunrise, day_octant, YAMAGANDA_OCTANT[weekday_idx]),
+        "gulika_kaal": _octant_window(sunrise, day_octant, GULIKA_KAAL_OCTANT[weekday_idx]),
+        "abhijit_muhurta": {"start": abhijit_start.strftime("%H:%M"), "end": abhijit_end.strftime("%H:%M")},
+        "choghadiya_day": _choghadiya_segments(sunrise, day_octant, CHOGHADIYA_DAY_START[weekday_idx]),
+        "choghadiya_night": _choghadiya_segments(sunset, night_octant, CHOGHADIYA_NIGHT_START[weekday_idx]),
+    }
