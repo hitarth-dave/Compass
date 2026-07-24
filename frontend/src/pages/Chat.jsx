@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import axios from "axios";
 import { getStoredToken } from "@/context/AuthContext";
+import { useDisplayMode } from "@/context/DisplayModeContext";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -70,6 +71,7 @@ function groupCitationsByBook(citations) {
 export default function Chat() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { isAdvanced } = useDisplayMode();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -305,7 +307,9 @@ export default function Chat() {
           <div className="mt-8 space-y-8 fade-up">
             <p className="text-[color:var(--jai-text-muted)] max-w-xl">
               Ask anything — career, love, timing, life direction. Answers come in plain language.
-              Curious about the reasoning? Tap <span className="text-[color:var(--jai-gold)]">Why?</span> on any reply.
+              {isAdvanced && (
+                <> Curious about the reasoning? Tap <span className="text-[color:var(--jai-gold)]">Why?</span> on any reply.</>
+              )}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl">
               {SUGGESTIONS.map((s) => (
@@ -324,7 +328,7 @@ export default function Chat() {
         )}
 
         {messages.map((m, i) => (
-          <MessageBubble key={i} msg={m} idx={i} onWhy={openLogic} />
+          <MessageBubble key={i} msg={m} idx={i} onWhy={openLogic} advanced={isAdvanced} />
         ))}
         {streaming && (
           <div className="text-[color:var(--jai-text-muted)] text-sm flex items-center gap-2">
@@ -440,7 +444,7 @@ export default function Chat() {
   );
 }
 
-function MessageBubble({ msg, idx, onWhy }) {
+function MessageBubble({ msg, idx, onWhy, advanced }) {
   if (msg.role === "user") {
     return (
       <div className="flex justify-end">
@@ -475,7 +479,7 @@ function MessageBubble({ msg, idx, onWhy }) {
             </ReactMarkdown>
           </div>
         </div>
-        {(hasLogic || (msg.citations?.length ?? 0) > 0) && (
+        {advanced && (hasLogic || (msg.citations?.length ?? 0) > 0) && (
           <div className="mt-3 flex items-center gap-2 flex-wrap">
             <button
               onClick={() => onWhy(msg)}

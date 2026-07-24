@@ -5,6 +5,7 @@ import { Loader2, MoveRight, ChevronDown } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import KundaliChart from "@/components/KundaliChart";
 import DashaExplorer from "@/components/DashaExplorer";
+import { useDisplayMode } from "@/context/DisplayModeContext";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -39,6 +40,7 @@ const dateOnly = (str) => (str ? str.split(" ")[0] : str);
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { isAdvanced } = useDisplayMode();
   const [chart, setChart] = useState(null);
   const [transits, setTransits] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -121,7 +123,7 @@ export default function Dashboard() {
                 <span className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">AD · {dateOnly(antar.start)} → {dateOnly(antar.end)}</span>
               </div>
             )}
-            {pratyantar && (
+            {isAdvanced && pratyantar && (
               <div className="flex items-baseline gap-2">
                 <span className="font-serif-display text-lg text-[color:var(--jai-gold-soft)]">{pratyantar.lord}</span>
                 <span className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">PD · {dateOnly(pratyantar.start)} → {dateOnly(pratyantar.end)}</span>
@@ -236,7 +238,9 @@ export default function Dashboard() {
         </button>
       )}
 
-      {/* House Lords + Yogas */}
+      {/* House Lords + Yogas — technical detail meant for astrologers, not
+          shown in Simple mode. */}
+      {isAdvanced && (
       <div className="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-6 fade-up delay-3">
         <div className="lg:col-span-7 card-surface p-8" data-testid="house-lords-card">
           <div className="overline mb-3">House Lords (Bhava Adhipati)</div>
@@ -334,11 +338,13 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+      )}
 
-      <div className="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-6 fade-up delay-3">
-        <div className="lg:col-span-7 card-surface p-8">
+      <div className={`mt-8 grid grid-cols-1 ${isAdvanced ? "lg:grid-cols-12" : ""} gap-6 fade-up delay-3`}>
+        <div className={`${isAdvanced ? "lg:col-span-7" : ""} card-surface p-8`}>
           <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
             <div className="overline">Natal Planets · Sidereal</div>
+            {isAdvanced && (
             <div className="flex flex-wrap gap-2 text-[10px] font-semibold" data-testid="dignity-legend">
               <span className="px-2 py-0.5 rounded-full" style={{ background: "rgba(15,81,50,0.12)", color: "#0F5132" }}>↑ Exalted</span>
               <span className="px-2 py-0.5 rounded-full" style={{ background: "rgba(160,82,45,0.15)", color: "#A0522D" }}>↓ Debilitated</span>
@@ -346,14 +352,15 @@ export default function Dashboard() {
               <span className="px-2 py-0.5 rounded-full" style={{ background: "rgba(218,165,32,0.18)", color: "#8B6914" }}>OWN Own</span>
               <span className="px-2 py-0.5 rounded-full" style={{ background: "rgba(59,76,153,0.15)", color: "#3B4C99" }}>VG Vargottama</span>
             </div>
+            )}
           </div>
-          <div className="grid grid-cols-2 gap-x-8 gap-y-3">
+          <div className={`grid ${isAdvanced ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2"} gap-x-8 gap-y-3`}>
             {chart.planets.map((p) => (
               <div key={p.name} className="flex items-baseline justify-between border-b border-[color:var(--jai-border)]/50 py-2">
                 <div>
                   <div className="font-serif-display text-lg text-[color:var(--jai-parchment)] flex items-center gap-2">
                     {p.name}{p.retrograde ? " ℞" : ""}
-                    {p.dignity && p.dignity.map((d) => (
+                    {isAdvanced && p.dignity && p.dignity.map((d) => (
                       <span
                         key={d}
                         className="text-[9px] font-semibold px-1.5 py-0.5 rounded"
@@ -376,12 +383,14 @@ export default function Dashboard() {
                       </span>
                     ))}
                   </div>
-                  <div className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">{p.nakshatra} · pada {p.pada} · D9 {p.navamsa_sign}</div>
+                  <div className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">
+                    {isAdvanced ? <>{p.nakshatra} · pada {p.pada} · D9 {p.navamsa_sign}</> : p.nakshatra}
+                  </div>
                 </div>
                 <div className="text-right">
                   <div className="text-sm text-[color:var(--jai-gold)]">{p.sign_en} {p.degree_in_sign}°</div>
                   <div className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">house {p.house}</div>
-                  {chart.shadbala && chart.shadbala[p.name] && (
+                  {isAdvanced && chart.shadbala && chart.shadbala[p.name] && (
                     <div
                       className="text-[10px] mt-0.5"
                       style={{ color: "var(--jai-gold-soft)" }}
@@ -396,10 +405,12 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {isAdvanced && (
         <div className="lg:col-span-5 card-surface p-8" data-testid="dasha-timeline">
           <div className="overline mb-5">Vimshottari Dasha · 120-Year Cycle</div>
           <DashaExplorer mahadashas={chart.dashas} currentMahadasha={dasha} />
         </div>
+        )}
       </div>
     </div>
   );
