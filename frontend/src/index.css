@@ -25,6 +25,12 @@
     --jai-parchment: var(--jai-parchment-ink);
     --jai-border: rgba(15, 61, 46, 0.18);
     --jai-border-gold: rgba(184, 134, 11, 0.35);
+    /* Solid (not opacity-modifier) tint backgrounds for good/neutral/bad
+       quality chips (Choghadiya, etc.) — baked-in alpha so they don't rely
+       on Tailwind's color-mix opacity-modifier support on CSS vars. */
+    --jai-tint-good: rgba(15, 61, 46, 0.08);
+    --jai-tint-neutral: rgba(184, 134, 11, 0.10);
+    --jai-tint-bad: rgba(160, 82, 45, 0.10);
 }
 
 .dark {
@@ -48,6 +54,11 @@
     --jai-parchment: var(--jai-parchment-ink);
     --jai-border: rgba(212, 167, 44, 0.15);
     --jai-border-gold: rgba(212, 167, 44, 0.35);
+    /* Same idea as :root above, but tuned for the dark palette so the tint
+       is actually visible against the deep indigo card background. */
+    --jai-tint-good: rgba(168, 216, 190, 0.14);
+    --jai-tint-neutral: rgba(212, 167, 44, 0.14);
+    --jai-tint-bad: rgba(210, 121, 90, 0.16);
 }
 
 .dark {
