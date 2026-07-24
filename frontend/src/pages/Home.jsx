@@ -3,6 +3,9 @@ import { useAuth } from "@/context/AuthContext";
 import { Navigate, Link } from "react-router-dom";
 import PublicLayout from "@/components/PublicLayout";
 import AuthButtons from "@/components/AuthButtons";
+import CredibilityBar from "@/components/CredibilityBar";
+import HowItWorks from "@/components/HowItWorks";
+import ProductPreview from "@/components/ProductPreview";
 
 export default function Home() {
   const { user, loading } = useAuth();
@@ -12,7 +15,7 @@ export default function Home() {
   return (
     <PublicLayout>
       {/* HERO */}
-      <section className="max-w-6xl mx-auto px-6 lg:px-12 pt-0 pb-10 grid lg:grid-cols-2 gap-8 items-start">
+      <section className="max-w-6xl mx-auto px-6 lg:px-12 pt-0 pb-6 grid lg:grid-cols-2 gap-8 items-start overflow-x-hidden">
         <div className="fade-up">
           <div className="overline mb-6">Sanatan · Jyotish · Personal Counsel</div>
           <h1 className="font-serif-display text-5xl sm:text-6xl lg:text-7xl leading-[0.95] text-[color:var(--jai-parchment)]">
@@ -24,31 +27,36 @@ export default function Home() {
             timing, direction. No jargon. Real depth on demand.
           </p>
           <div className="mt-12">
-            <AuthButtons label="Get your chart — sign in" />
+            <AuthButtons label="See your chart — free to start" />
             <p className="mt-4 text-xs text-[color:var(--jai-text-muted)] max-w-md">
               Your chart, chats and uploaded books stay private to your account.
             </p>
           </div>
         </div>
 
-        {/* This wrapper is intentionally wider than its grid column (via
-            lg:w-[64vw]) and left-anchored (justify-self-start), so it bleeds
-            past the container's right edge instead of being squeezed into
-            the column. The page root already has overflow-x-hidden, so this
-            clips cleanly at the viewport edge with no horizontal scrollbar.
-            The negative margin pulls it left to close the gap against the
-            text column, without touching the text column itself. */}
-        <div className="fade-up delay-1 lg:w-[64vw] lg:-ml-24 justify-self-start">
+        {/* Wide bleed like the original, no border/frame. compass-hero-tight.png
+            is cropped much closer to the compass itself (the source photo had
+            a lot of faint starfield padding on all sides, especially left/
+            right, which is what was reading as empty space) — so the same
+            bleed treatment now shows more compass and less blank margin,
+            without a big dead gap under it either. */}
+        <div className="fade-up delay-1 lg:w-[52vw] justify-self-start">
           <img
-            src="/compass-hero-photo.png"
+            src="/compass-hero-tight.png"
             alt="A compass marking Growth, Success, Love, Wisdom, Marriage, Happiness, Health and Money, set against a starfield"
             className="w-full h-auto object-contain"
           />
         </div>
       </section>
 
+      <CredibilityBar />
+
+      <HowItWorks />
+
+      <ProductPreview />
+
       {/* FEATURES */}
-      <section className="max-w-6xl mx-auto px-6 lg:px-12 mt-16 grid grid-cols-1 sm:grid-cols-3 gap-6 fade-up delay-2">
+      <section className="max-w-6xl mx-auto px-6 lg:px-12 mt-24 grid grid-cols-1 sm:grid-cols-3 gap-6 fade-up delay-2">
         <FeatureCard Icon={Sparkles} title="A living Kundali"
           body="Sidereal chart, planetary positions, current Mahadasha and today's transits — all computed from Swiss Ephemeris the moment you land." />
         <FeatureCard Icon={MessageCircle} title="Ask anything, plainly"
@@ -83,7 +91,7 @@ export default function Home() {
         </h2>
         <p className="mt-5 text-[color:var(--jai-text-muted)]">Sign in and your chart is ready in seconds.</p>
         <div className="mt-8 flex justify-center">
-          <AuthButtons compact label="Sign in" />
+          <AuthButtons compact label="Cast your chart free" />
         </div>
       </section>
     </PublicLayout>
