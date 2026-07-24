@@ -6,25 +6,19 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const LEVEL_LABELS = ["Mahadasha", "Antardasha", "Pratyantardasha", "Sookshma Dasha", "Prana Dasha"];
 const LEVEL_ABBR = ["MD", "AD", "PD", "SD", "PR"];
-const MAX_DEPTH = 4; // 0=Maha, 1=Antar, 2=Pratyantar, 3=Sookshma, 4=Prana (leaf, not clickable further)
-
-/** Backend now returns full "YYYY-MM-DD HH:MM:SS" timestamps (needed so Prana-
- * level sub-day periods stay distinct). Higher levels span months/years so
- * showing the time-of-day is just noise; Prana spans only hours, so that's
- * the one level worth showing time for. */
-function formatDashaDate(str, depth) {
-  const [datePart, timePart] = str.split(" ");
-  if (depth < MAX_DEPTH || !timePart) return datePart;
-  return `${datePart} ${timePart.slice(0, 5)}`;
-}
 
 /**
  * Renders the Vimshottari Dasha timeline as a clickable drill-down:
- * Mahadasha -> Antardasha -> Pratyantardasha -> Sookshma Dasha.
+ * Mahadasha -> Antardasha -> Pratyantardasha -> Sookshma Dasha -> Prana Dasha.
  * Each level reuses the same /api/dasha/subdivide endpoint, since the
  * Vimshottari subdivision math is identical at every depth.
+ *
+ * maxDepth caps how far a caller lets the user drill — Simple mode passes
+ * 1 (Mahadasha -> Antardasha only, matching what a general user needs),
+ * Advanced passes the default 4 (all the way to Prana Dasha).
+ * compact shrinks the type scale for the smaller Simple-mode card.
  */
-export default function DashaExplorer({ mahadashas, currentMahadasha }) {
+export default function DashaExplorer({ mahadashas, currentMahadasha, maxDepth = 4, compact = false }) {
   // path: array of {lord, start, end, years} selected at each level so far
   const [path, setPath] = useState([]);
   // childrenByLevel[i] = the list of sub-periods shown at depth i+1 (i.e. children of path[i])
@@ -39,8 +33,18 @@ export default function DashaExplorer({ mahadashas, currentMahadasha }) {
     return d.lord === currentMahadasha.lord && d.start === currentMahadasha.start;
   };
 
+  /** Backend returns full "YYYY-MM-DD HH:MM:SS" timestamps (needed so Prana-
+   * level sub-day periods stay distinct). Higher levels span months/years so
+   * showing the time-of-day is just noise; only the deepest level reachable
+   * here is worth showing time for. */
+  function formatDashaDate(str, atDepth) {
+    const [datePart, timePart] = str.split(" ");
+    if (atDepth < maxDepth || !timePart) return datePart;
+    return `${datePart} ${timePart.slice(0, 5)}`;
+  }
+
   async function drillInto(node, idx) {
-    if (depth >= MAX_DEPTH) return; // Prana is the deepest level, nothing further
+    if (depth >= maxDepth) return; // deepest level this instance allows — nothing further
     setLoadingIdx(idx);
     try {
       const res = await axios.post(`${API}/dasha/subdivide`, {
@@ -71,10 +75,15 @@ export default function DashaExplorer({ mahadashas, currentMahadasha }) {
     }
   }
 
+  const lordSize = compact ? "text-sm" : "text-lg";
+  const rowPad = compact ? "px-2.5 py-1.5" : "px-3 py-2";
+  const dateSize = compact ? "text-[10px]" : "text-xs";
+  const listMaxH = compact ? "max-h-[260px]" : "max-h-[480px]";
+
   return (
     <div data-testid="dasha-explorer">
       {/* Breadcrumb */}
-      <div className="flex items-center flex-wrap gap-1 mb-4 text-xs">
+      <div className={`flex items-center flex-wrap gap-1 mb-4 ${compact ? "text-[10px]" : "text-xs"}`}>
         <button
           onClick={() => jumpTo(-1)}
           className={`px-2 py-1 rounded transition-colors ${depth === 0 ? "text-[color:var(--jai-gold-soft)]" : "text-[color:var(--jai-text-muted)] hover:text-[color:var(--jai-gold-soft)]"}`}
@@ -83,7 +92,7 @@ export default function DashaExplorer({ mahadashas, currentMahadasha }) {
         </button>
         {path.map((node, i) => (
           <span key={i} className="flex items-center gap-1">
-            <ChevronRight size={12} className="text-[color:var(--jai-text-muted)]/50" />
+            <ChevronRight size={compact ? 10 : 12} className="text-[color:var(--jai-text-muted)]/50" />
             <button
               onClick={() => jumpTo(i)}
               className={`px-2 py-1 rounded transition-colors ${i === path.length - 1 ? "text-[color:var(--jai-gold-soft)]" : "text-[color:var(--jai-text-muted)] hover:text-[color:var(--jai-gold-soft)]"}`}
@@ -95,31 +104,31 @@ export default function DashaExplorer({ mahadashas, currentMahadasha }) {
       </div>
 
       <div className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]/70 mb-2">
-        {LEVEL_LABELS[depth]}{depth < MAX_DEPTH ? " — click a period to drill deeper" : ""}
+        {LEVEL_LABELS[depth]}{depth < maxDepth ? " — click a period to drill deeper" : ""}
       </div>
 
-      <div className="space-y-1 max-h-[480px] overflow-y-auto pr-1">
+      <div className={`space-y-1 ${listMaxH} overflow-y-auto pr-1`}>
         {currentList.map((d, i) => {
-          const clickable = depth < MAX_DEPTH;
+          const clickable = depth < maxDepth;
           const highlighted = isCurrentRow(d);
           return (
             <div
               key={i}
               onClick={() => clickable && drillInto(d, i)}
-              className={`px-3 py-2 rounded flex justify-between items-baseline transition-colors ${
+              className={`${rowPad} rounded flex justify-between items-baseline transition-colors ${
                 highlighted ? "bg-[color:var(--jai-gold)]/10 border border-[color:var(--jai-gold)]/40" : ""
               } ${clickable ? "cursor-pointer hover:bg-[color:var(--jai-gold)]/5" : ""}`}
               data-testid={`dasha-row-${depth}-${i}`}
             >
               <div>
-                <div className={`font-serif-display text-lg flex items-center gap-2 ${highlighted ? "text-[color:var(--jai-gold-soft)]" : "text-[color:var(--jai-parchment)]"}`}>
+                <div className={`font-serif-display ${lordSize} flex items-center gap-2 ${highlighted ? "text-[color:var(--jai-gold-soft)]" : "text-[color:var(--jai-parchment)]"}`}>
                   {d.lord}
                   {loadingIdx === i && <Loader2 size={12} className="animate-spin text-[color:var(--jai-text-muted)]" />}
                   {clickable && loadingIdx !== i && <ChevronRight size={12} className="text-[color:var(--jai-text-muted)]/40" />}
                 </div>
                 <div className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">{d.years} yrs</div>
               </div>
-              <div className="text-xs text-[color:var(--jai-text-muted)] text-right">
+              <div className={`${dateSize} text-[color:var(--jai-text-muted)] text-right`}>
                 {formatDashaDate(d.start, depth)}<br />{formatDashaDate(d.end, depth)}
               </div>
             </div>
