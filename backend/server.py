@@ -25,6 +25,7 @@ from astrology import (
     compute_chart, current_transits, current_dasha, current_antardasha,
     compute_antardashas, build_navamsa, build_dasamsa,
     build_varga, EXTRA_VARGAS, sun_rise_set, sun_moon_longitudes,
+    current_utc_offset_hours,
 )
 from muhurta import find_best_windows, ACTIVITY_HOUSES, detect_activity_intent
 from panchang import compute_panchang, compute_daily_muhurta
@@ -1089,10 +1090,12 @@ async def muhurta_today(user: User = Depends(get_current_user)):
     # not where they were born. Falls back to birth place if not set.
     lat = user.current_lat if user.current_lat is not None else doc["lat"]
     lon = user.current_lon if user.current_lon is not None else doc["lon"]
-    # No separate "current timezone" field exists yet — birth timezone is
-    # used as the best available default. Fine for users who haven't
-    # crossed timezones since birth; a known limitation otherwise.
-    tz_offset = doc["tz_offset"]
+    # Real current timezone at that location, right now — DST-aware, and
+    # correct even if the user has traveled since birth. NOT the birth
+    # timezone (that would be wrong the moment someone's actual location
+    # differs from where they were born, which is exactly the case this
+    # endpoint needs to get right).
+    tz_offset = current_utc_offset_hours(lat, lon)
 
     local_today = (datetime.now(timezone.utc) + timedelta(hours=tz_offset)).date().isoformat()
     rs = sun_rise_set(local_today, tz_offset, lat, lon)

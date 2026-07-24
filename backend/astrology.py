@@ -1297,3 +1297,27 @@ def sun_moon_longitudes(local_dt: datetime, tz_offset_hours: float) -> Tuple[flo
     sun_lon, _ = _sidereal_lon(jd, swe.SUN)
     moon_lon, _ = _sidereal_lon(jd, swe.MOON)
     return sun_lon, moon_lon
+
+
+# --- Real current-location timezone (for "today" features like Panchang/
+# Muhurta — these must use wherever the user actually is RIGHT NOW, with
+# correct daylight-saving handling, not their birth timezone) ---
+from zoneinfo import ZoneInfo
+try:
+    from timezonefinder import TimezoneFinder
+    _TZF = TimezoneFinder()
+except ImportError:  # pragma: no cover — guards against a stale env during rollout
+    _TZF = None
+
+
+def current_utc_offset_hours(lat: float, lon: float) -> float:
+    """Real UTC offset RIGHT NOW at (lat, lon), correctly handling daylight
+    saving (unlike a fixed birth-timezone number, which goes stale the
+    moment a user travels or DST flips). Falls back to a longitude-based
+    estimate (15° per hour) if the timezone database lookup fails —
+    directionally correct, not DST-aware, but better than nothing."""
+    tzname = _TZF.timezone_at(lat=lat, lng=lon) if _TZF else None
+    if tzname:
+        now_there = datetime.now(timezone.utc).astimezone(ZoneInfo(tzname))
+        return now_there.utcoffset().total_seconds() / 3600
+    return round(lon / 15, 2)
