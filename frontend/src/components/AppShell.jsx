@@ -16,6 +16,7 @@ import {
   Settings,
   Sun,
   Moon,
+  CalendarClock,
 } from "lucide-react";
 import { useTheme } from "@/context/ThemeContext";
 import { useDisplayMode } from "@/context/DisplayModeContext";
@@ -242,6 +243,7 @@ export default function AppShell({ children }) {
             )}
           </div>
 
+          <SideItem to="/muhurta" label="Muhurta" Icon={CalendarClock} collapsed={collapsed} testId="nav-muhurta" />
           <SideItem to="/library" label="Library" Icon={BookOpen} collapsed={collapsed} testId="nav-library" />
           <SideItem to="/settings" label="Settings" Icon={Settings} collapsed={collapsed} testId="nav-settings" />
         </nav>
