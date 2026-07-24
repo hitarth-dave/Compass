@@ -6,6 +6,7 @@ import "@/App.css";
 
 import { AuthProvider } from "@/context/AuthContext";
 import { ThemeProvider, useTheme } from "@/context/ThemeContext";
+import { DisplayModeProvider } from "@/context/DisplayModeContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AppShell from "@/components/AppShell";
 import Home from "@/pages/Home";
@@ -59,8 +60,10 @@ function App() {
       <BrowserRouter>
         <ThemeProvider>
           <AuthProvider>
-            <ThemedToaster />
-            <AppRouter />
+            <DisplayModeProvider>
+              <ThemedToaster />
+              <AppRouter />
+            </DisplayModeProvider>
           </AuthProvider>
         </ThemeProvider>
       </BrowserRouter>
