@@ -68,7 +68,7 @@ export default function Astrology() {
           See your own chart <em className="text-[color:var(--jai-gold)]">read aloud.</em>
         </h2>
         <div className="mt-8 flex justify-center">
-          <AuthButtons />
+          <AuthButtons label="Sign in and cast it" />
         </div>
       </section>
     </PublicLayout>

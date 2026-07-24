@@ -1,7 +1,31 @@
 import { Check } from "lucide-react";
 import PublicLayout from "@/components/PublicLayout";
 import AuthButtons from "@/components/AuthButtons";
+import FAQ from "@/components/FAQ";
 import { useAuth } from "@/context/AuthContext";
+
+const FAQ_ITEMS = [
+  {
+    q: "What happens when I use up my free questions?",
+    a: "Seeker includes up to 10 questions a month at no cost. Once you've used them, you can wait for next month's reset or move to Sadhaka for unlimited questions.",
+  },
+  {
+    q: "Can I cancel anytime?",
+    a: "Yes — there's no lock-in. Cancel from Settings and you'll keep access through the end of your current billing period.",
+  },
+  {
+    q: "Is my birth data and chat history private?",
+    a: "Your chart, conversations and any PDFs you upload are private to your account. We don't sell or share your data.",
+  },
+  {
+    q: "How is this different from a generic horoscope app?",
+    a: "Compass Astro reads your actual sidereal Kundali — computed from Swiss Ephemeris — against classical texts like Brihat Parashara Hora Shastra, not generic sun-sign content. Every answer can show its reasoning.",
+  },
+  {
+    q: "Can I upload my own astrology texts?",
+    a: "Yes, on Sadhaka and above — upload PDFs and Compass Astro will read them alongside the standard classical corpus.",
+  },
+];
 
 const TIERS = [
   {
@@ -99,9 +123,11 @@ export default function Pricing() {
           share one sign-in.
         </p>
         <div className="mt-8 flex justify-center">
-          <AuthButtons />
+          <AuthButtons label="Start free, no card needed" />
         </div>
       </section>
+
+      <FAQ items={FAQ_ITEMS} title="Before you start." />
     </PublicLayout>
   );
 }
