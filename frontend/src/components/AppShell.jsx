@@ -270,11 +270,13 @@ export default function AppShell({ children }) {
         </div>
       </aside>
 
-      {/* Simple / Advanced — switches how much technical chart detail is
-          shown across Dashboard and Chat. Left = Simple (default, for
-          everyday users), right = Advanced (for astrologers who want the
+      {/* Basic / Advanced — switches how much technical chart detail is
+          shown across Dashboard, Chat and Muhurta. Left = Basic (default,
+          for everyday users; internally still keyed "simple" — only the
+          label changed), right = Advanced (for astrologers who want the
           full technical readout: Shadbala, Ashtakavarga, dignity, yogas,
-          the full Dasha tree, and the "Why?" reasoning panel in Chat). */}
+          the full Dasha tree, the "Why?" reasoning panel in Chat, and the
+          tomorrow view in Muhurta). */}
       <div
         className="fixed top-4 right-16 z-20 flex items-center rounded-full border border-[color:var(--jai-border)] bg-[color:var(--jai-surface)] p-0.5 shadow-sm"
         data-testid="display-mode-toggle"
@@ -289,7 +291,7 @@ export default function AppShell({ children }) {
           title="Plain-language view — for everyday users"
           data-testid="display-mode-simple-btn"
         >
-          Simple
+          Basic
         </button>
         <button
           onClick={() => setMode("advanced")}
