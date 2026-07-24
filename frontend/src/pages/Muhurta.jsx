@@ -21,23 +21,28 @@ const ACTIVITIES = [
   { key: "health_decision", label: "Health decision", Icon: HeartPulse },
 ];
 
+// Colors below use the theme's CSS custom properties (via Tailwind's
+// arbitrary-value + opacity-modifier syntax, e.g. text-[color:var(--x)]/40)
+// rather than fixed hex, so they stay legible in both light and dark mode —
+// --jai-green-deep, --jai-gold and --jai-terracotta all flip to lighter,
+// higher-contrast values under .dark (see index.css).
 function scoreLabel(score) {
-  if (score >= 80) return { text: "Strongly favorable", color: "#0F5132" };
-  if (score >= 60) return { text: "Favorable", color: "#B8860B" };
-  return { text: "Mixed", color: "#A0522D" };
+  if (score >= 80) return { text: "Strongly favorable", colorClass: "text-[color:var(--jai-green-deep)]" };
+  if (score >= 60) return { text: "Favorable", colorClass: "text-[color:var(--jai-gold)]" };
+  return { text: "Mixed", colorClass: "text-[color:var(--jai-terracotta)]" };
 }
 
 const QUALITY_STYLE = {
-  good: { bg: "rgba(15,81,50,0.10)", text: "#0F5132", label: "Good" },
-  neutral: { bg: "rgba(184,134,11,0.10)", text: "#8B6914", label: "Neutral" },
-  bad: { bg: "rgba(160,82,45,0.12)", text: "#A0522D", label: "Avoid" },
+  good: { bgClass: "bg-[color:var(--jai-green-deep)]/10", textClass: "text-[color:var(--jai-green-deep)]", label: "Good" },
+  neutral: { bgClass: "bg-[color:var(--jai-gold)]/10", textClass: "text-[color:var(--jai-gold)]", label: "Neutral" },
+  bad: { bgClass: "bg-[color:var(--jai-terracotta)]/10", textClass: "text-[color:var(--jai-terracotta)]", label: "Avoid" },
 };
 
-function TimeChip({ label, start, end, tone }) {
+function TimeChip({ label, start, end, colorClass }) {
   return (
     <div className="card-surface p-4" data-testid={`muhurta-chip-${label.toLowerCase().replace(/\s/g, "-")}`}>
       <div className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">{label}</div>
-      <div className="font-serif-display text-lg mt-1" style={{ color: tone }}>{start} – {end}</div>
+      <div className={`font-serif-display text-lg mt-1 ${colorClass}`}>{start} – {end}</div>
     </div>
   );
 }
@@ -48,9 +53,9 @@ function ChoghadiyaRow({ segments }) {
       {segments.map((s, i) => {
         const st = QUALITY_STYLE[s.quality];
         return (
-          <div key={i} className="rounded-lg px-3 py-2" style={{ background: st.bg }} data-testid={`choghadiya-${s.start}`}>
-            <div className="text-[9px] uppercase tracking-widest" style={{ color: st.text }}>{st.label}</div>
-            <div className="font-serif-display text-sm mt-0.5" style={{ color: st.text }}>{s.name}</div>
+          <div key={i} className={`rounded-lg px-3 py-2 ${st.bgClass}`} data-testid={`choghadiya-${s.start}`}>
+            <div className={`text-[9px] uppercase tracking-widest ${st.textClass}`}>{st.label}</div>
+            <div className={`font-serif-display text-sm mt-0.5 ${st.textClass}`}>{s.name}</div>
             <div className="text-[10px] text-[color:var(--jai-text-muted)] mt-0.5">{s.start} – {s.end}</div>
           </div>
         );
@@ -132,16 +137,16 @@ export default function Muhurta() {
         <div className="fade-up delay-1 space-y-8">
           {/* Sunrise / sunset + Abhijit */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <TimeChip label="Sunrise" start={today.sunrise} end="" tone="var(--jai-gold)" />
-            <TimeChip label="Abhijit Muhurta" start={today.abhijit_muhurta.start} end={today.abhijit_muhurta.end} tone="#0F5132" />
-            <TimeChip label="Rahu Kaal" start={today.rahu_kaal.start} end={today.rahu_kaal.end} tone="#A0522D" />
-            <TimeChip label="Sunset" start={today.sunset} end="" tone="var(--jai-gold)" />
+            <TimeChip label="Sunrise" start={today.sunrise} end="" colorClass="text-[color:var(--jai-gold)]" />
+            <TimeChip label="Abhijit Muhurta" start={today.abhijit_muhurta.start} end={today.abhijit_muhurta.end} colorClass="text-[color:var(--jai-green-deep)]" />
+            <TimeChip label="Rahu Kaal" start={today.rahu_kaal.start} end={today.rahu_kaal.end} colorClass="text-[color:var(--jai-terracotta)]" />
+            <TimeChip label="Sunset" start={today.sunset} end="" colorClass="text-[color:var(--jai-gold)]" />
           </div>
 
           {isAdvanced && (
             <div className="grid grid-cols-2 gap-4 max-w-md">
-              <TimeChip label="Yamaganda Kaal" start={today.yamaganda_kaal.start} end={today.yamaganda_kaal.end} tone="#A0522D" />
-              <TimeChip label="Gulika Kaal" start={today.gulika_kaal.start} end={today.gulika_kaal.end} tone="#A0522D" />
+              <TimeChip label="Yamaganda Kaal" start={today.yamaganda_kaal.start} end={today.yamaganda_kaal.end} colorClass="text-[color:var(--jai-terracotta)]" />
+              <TimeChip label="Gulika Kaal" start={today.gulika_kaal.start} end={today.gulika_kaal.end} colorClass="text-[color:var(--jai-terracotta)]" />
             </div>
           )}
 
@@ -243,7 +248,7 @@ export default function Muhurta() {
                               <div className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">
                                 {isAdvanced ? "Score" : ""}
                               </div>
-                              <div className="font-serif-display text-xl" style={{ color: sl.color }}>
+                              <div className={`font-serif-display text-xl ${sl.colorClass}`}>
                                 {sl.text}{isAdvanced ? ` · ${w.avg_score}/100` : ""}
                               </div>
                             </div>
