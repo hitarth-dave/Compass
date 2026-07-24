@@ -18,6 +18,7 @@ import {
   Moon,
 } from "lucide-react";
 import { useTheme } from "@/context/ThemeContext";
+import { useDisplayMode } from "@/context/DisplayModeContext";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -46,6 +47,7 @@ export default function AppShell({ children }) {
   const location = useLocation();
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const { mode, setMode } = useDisplayMode();
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem("jyotish_sidebar_collapsed") === "1"
   );
@@ -250,6 +252,41 @@ export default function AppShell({ children }) {
           )}
         </div>
       </aside>
+
+      {/* Simple / Advanced — switches how much technical chart detail is
+          shown across Dashboard and Chat. Left = Simple (default, for
+          everyday users), right = Advanced (for astrologers who want the
+          full technical readout: Shadbala, Ashtakavarga, dignity, yogas,
+          the full Dasha tree, and the "Why?" reasoning panel in Chat). */}
+      <div
+        className="fixed top-4 right-16 z-20 flex items-center rounded-full border border-[color:var(--jai-border)] bg-[color:var(--jai-surface)] p-0.5 shadow-sm"
+        data-testid="display-mode-toggle"
+      >
+        <button
+          onClick={() => setMode("simple")}
+          className={`px-3 py-1.5 rounded-full text-[11px] uppercase tracking-widest font-semibold transition-colors ${
+            mode === "simple"
+              ? "bg-[color:var(--jai-green)] text-[color:var(--jai-surface)]"
+              : "text-[color:var(--jai-text-muted)] hover:text-[color:var(--jai-green-deep)]"
+          }`}
+          title="Plain-language view — for everyday users"
+          data-testid="display-mode-simple-btn"
+        >
+          Simple
+        </button>
+        <button
+          onClick={() => setMode("advanced")}
+          className={`px-3 py-1.5 rounded-full text-[11px] uppercase tracking-widest font-semibold transition-colors ${
+            mode === "advanced"
+              ? "bg-[color:var(--jai-gold)] text-[color:var(--jai-surface)]"
+              : "text-[color:var(--jai-text-muted)] hover:text-[color:var(--jai-green-deep)]"
+          }`}
+          title="Full technical chart data — for astrologers"
+          data-testid="display-mode-advanced-btn"
+        >
+          Advanced
+        </button>
+      </div>
 
       <button
         onClick={toggleTheme}
