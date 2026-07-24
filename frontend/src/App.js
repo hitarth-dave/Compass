@@ -15,6 +15,7 @@ import Pricing from "@/pages/Pricing";
 import Contact from "@/pages/Contact";
 import Onboarding from "@/pages/Onboarding";
 import Dashboard from "@/pages/Dashboard";
+import Muhurta from "@/pages/Muhurta";
 import Chat from "@/pages/Chat";
 import Library from "@/pages/Library";
 import Settings from "@/pages/Settings";
@@ -42,6 +43,7 @@ function AppRouter() {
       {/* App (protected) */}
       <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
       <Route path="/dashboard" element={<ProtectedRoute><AppShell><Dashboard /></AppShell></ProtectedRoute>} />
+      <Route path="/muhurta" element={<ProtectedRoute><AppShell><Muhurta /></AppShell></ProtectedRoute>} />
       <Route path="/chat" element={<ProtectedRoute><AppShell><Chat /></AppShell></ProtectedRoute>} />
       <Route path="/library" element={<ProtectedRoute><AppShell><Library /></AppShell></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><AppShell><Settings /></AppShell></ProtectedRoute>} />
