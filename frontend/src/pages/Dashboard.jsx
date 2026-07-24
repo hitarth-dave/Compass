@@ -362,8 +362,8 @@ export default function Dashboard() {
       </div>
       )}
 
-      <div className={`mt-8 grid grid-cols-1 ${isAdvanced ? "lg:grid-cols-12" : ""} gap-6 fade-up delay-3`}>
-        <div className={`${isAdvanced ? "lg:col-span-7" : ""} card-surface p-8`}>
+      <div className="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-6 fade-up delay-3">
+        <div className="lg:col-span-7 card-surface p-8">
           <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
             <div className="overline">Natal Planets · Sidereal</div>
             {isAdvanced && (
@@ -376,7 +376,7 @@ export default function Dashboard() {
             </div>
             )}
           </div>
-          <div className={`grid ${isAdvanced ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2"} gap-x-8 gap-y-3`}>
+          <div className={`grid ${isAdvanced ? "grid-cols-2" : "grid-cols-1"} gap-x-8 gap-y-3`}>
             {chart.planets.map((p) => (
               <div key={p.name} className="flex items-baseline justify-between border-b border-[color:var(--jai-border)]/50 py-2">
                 <div>
@@ -427,10 +427,33 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {isAdvanced && (
+        {isAdvanced ? (
         <div className="lg:col-span-5 card-surface p-8" data-testid="dasha-timeline">
           <div className="overline mb-5">Vimshottari Dasha · 120-Year Cycle</div>
           <DashaExplorer mahadashas={chart.dashas} currentMahadasha={dasha} />
+        </div>
+        ) : (
+        <div className="lg:col-span-5 card-surface p-8" data-testid="dasha-simple-card">
+          <div className="overline mb-6">Vimshottari Dasha</div>
+          <div className="space-y-8">
+            {dasha && (
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">Mahadasha · main period</div>
+                <div className="font-serif-display text-3xl text-[color:var(--jai-gold)] mt-1">{dasha.lord}</div>
+                <div className="text-xs text-[color:var(--jai-text-muted)] mt-1">{dasha.start} → {dasha.end}</div>
+              </div>
+            )}
+            {antar && (
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">Antardasha · current sub-period</div>
+                <div className="font-serif-display text-2xl text-[color:var(--jai-green-deep)] mt-1">{antar.lord}</div>
+                <div className="text-xs text-[color:var(--jai-text-muted)] mt-1">{dateOnly(antar.start)} → {dateOnly(antar.end)}</div>
+              </div>
+            )}
+            {!dasha && (
+              <p className="text-sm text-[color:var(--jai-text-muted)] italic">Dasha data unavailable.</p>
+            )}
+          </div>
         </div>
         )}
       </div>
