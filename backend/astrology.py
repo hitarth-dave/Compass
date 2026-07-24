@@ -118,6 +118,87 @@ def _dasamsa_sign(lon: float) -> int:
     return (start + dasamsa_idx) % 12
 
 
+# --- Remaining Shodasha Varga (16-chart system) divisional signs ---
+# Each follows the classical Parashari division rule for that chart. Where a
+# tradition offers more than one accepted method (D4, D6 in particular), the
+# most widely implemented Parashari rule is used below.
+
+def _hora_sign(lon: float) -> int:
+    """D2 Hora — wealth/resources. Sign split into two 15° halves, each
+    assigned to the Sun's Hora (Leo) or the Moon's Hora (Cancer). Odd signs
+    run Leo-then-Cancer; even signs run Cancer-then-Leo."""
+    sign, deg = _rashi_from_lon(lon)
+    half = int(deg // 15)  # 0 or 1
+    is_odd_sign = (sign % 2 == 0)
+    LEO, CANCER = 4, 3
+    if is_odd_sign:
+        return LEO if half == 0 else CANCER
+    return CANCER if half == 0 else LEO
+
+
+def _chaturthamsa_sign(lon: float) -> int:
+    """D4 Chaturthamsa — property, home, fixed assets. Sign split into four
+    7.5° parts, mapped to the same/4th/7th/10th sign from itself (kendras)."""
+    sign, deg = _rashi_from_lon(lon)
+    idx = int(deg // 7.5)  # 0..3
+    return (sign + idx * 3) % 12
+
+
+def _shashthamsa_sign(lon: float) -> int:
+    """D6 Shashthamsa — health, obstacles, enemies. Sign split into six 5°
+    parts; movable signs start counting from Aries, fixed signs from Libra,
+    dual signs from Sagittarius."""
+    sign, deg = _rashi_from_lon(lon)
+    idx = int(deg // 5)  # 0..5
+    element = sign % 3  # 0=movable, 1=fixed, 2=dual
+    start_map = {0: 0, 1: 6, 2: 8}
+    return (start_map[element] + idx) % 12
+
+
+def _saptamsa_sign(lon: float) -> int:
+    """D7 Saptamsa — children, progeny. Sign split into seven ~4.2857° parts;
+    odd signs count from themselves, even signs count from the 7th sign
+    from themselves."""
+    sign, deg = _rashi_from_lon(lon)
+    idx = int(deg // (30 / 7))  # 0..6
+    is_odd_sign = (sign % 2 == 0)
+    start = sign if is_odd_sign else (sign + 6) % 12
+    return (start + idx) % 12
+
+
+def _shodasamsa_sign(lon: float) -> int:
+    """D16 Shodasamsa (Kalamsa) — vehicles, comforts, general happiness.
+    Sign split into sixteen 1.875° parts; movable signs start from Aries,
+    fixed signs from Leo, dual signs from Sagittarius."""
+    sign, deg = _rashi_from_lon(lon)
+    idx = int(deg // 1.875)  # 0..15
+    element = sign % 3
+    start_map = {0: 0, 1: 4, 2: 8}
+    return (start_map[element] + idx) % 12
+
+
+def _chaturvimsamsa_sign(lon: float) -> int:
+    """D24 Chaturvimsamsa (Siddhamsa) — education, learning. Sign split into
+    twenty-four 1.25° parts; odd signs start counting from Leo, even signs
+    from Cancer."""
+    sign, deg = _rashi_from_lon(lon)
+    idx = int(deg // 1.25)  # 0..23
+    is_odd_sign = (sign % 2 == 0)
+    start = 4 if is_odd_sign else 3  # Leo : Cancer
+    return (start + idx) % 12
+
+
+def _shashtiamsa_sign(lon: float) -> int:
+    """D60 Shashtiamsa — fine-grained overall life reading, karma carried
+    from past life. Sign split into sixty 0.5° parts, counted sequentially
+    from the sign itself (this is the simplified sign-only method used by
+    most software; the full classical version also names each of the 60
+    Shashtiamsa deities, which this app doesn't track)."""
+    sign, deg = _rashi_from_lon(lon)
+    idx = int(deg // 0.5)  # 0..59
+    return (sign + idx) % 12
+
+
 def _dignity(name: str, sign_idx: int, degree_in_sign: float, nav_sign: int) -> Dict:
     tags = []
     # Exalted / Debilitated (within ±1° of deepest = deep, else general)
@@ -1123,3 +1204,49 @@ def build_dasamsa(planets: List[Dict], ascendant_longitude: float) -> Dict:
         },
         "planets": d10_planets,
     }
+
+
+def build_varga(planets: List[Dict], ascendant_longitude: float, sign_fn) -> Dict:
+    """Generic divisional-chart builder — same output shape as build_navamsa
+    / build_dasamsa (so it reuses the same KundaliChart renderer), just
+    parameterized by whichever varga sign_fn (_hora_sign, _saptamsa_sign,
+    etc.) computes the division for that chart."""
+    d_asc_sign = sign_fn(ascendant_longitude)
+    d_planets = []
+    for p in planets:
+        d_sign = sign_fn(p["longitude"])
+        house = ((d_sign - d_asc_sign) % 12) + 1
+        d_planets.append({
+            "name": p["name"],
+            "symbol": p["symbol"],
+            "sign_idx": d_sign,
+            "sign": RASHIS[d_sign],
+            "sign_en": RASHI_EN[d_sign],
+            "degree_in_sign": p["degree_in_sign"],  # keep D1 degree for reference
+            "nakshatra": p.get("nakshatra", ""),
+            "house": house,
+            "retrograde": p.get("retrograde", False),
+            "dignity": [],
+            "navamsa_sign": "",
+        })
+    return {
+        "ascendant": {
+            "sign_idx": d_asc_sign,
+            "sign": RASHIS[d_asc_sign],
+            "sign_en": RASHI_EN[d_asc_sign],
+        },
+        "planets": d_planets,
+    }
+
+
+# Chart key -> (sign function, life-area label) used by server.py to attach
+# all seven new divisional charts to the /profile/chart response in one loop.
+EXTRA_VARGAS = {
+    "hora": (_hora_sign, "D2 · Wealth & resources"),
+    "chaturthamsa": (_chaturthamsa_sign, "D4 · Property & fixed assets"),
+    "shashthamsa": (_shashthamsa_sign, "D6 · Health & obstacles"),
+    "saptamsa": (_saptamsa_sign, "D7 · Children & progeny"),
+    "shodasamsa": (_shodasamsa_sign, "D16 · Vehicles & comforts"),
+    "chaturvimsamsa": (_chaturvimsamsa_sign, "D24 · Education & learning"),
+    "shashtiamsa": (_shashtiamsa_sign, "D60 · Fine-grained life reading"),
+}

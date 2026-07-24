@@ -24,6 +24,7 @@ from google.auth.transport import requests as google_requests
 from astrology import (
     compute_chart, current_transits, current_dasha, current_antardasha,
     compute_antardashas, build_navamsa, build_dasamsa,
+    build_varga, EXTRA_VARGAS,
 )
 from muhurta import find_best_windows, ACTIVITY_HOUSES, detect_activity_intent
 _KNOWLEDGE_SOURCE = os.environ.get('KNOWLEDGE_SOURCE', 'original')
@@ -629,6 +630,15 @@ async def get_chart(user: User = Depends(get_current_user)):
         chart['current_pratyantardasha'] = None
     chart['navamsa'] = build_navamsa(chart['planets'], chart['ascendant']['longitude'])
     chart['dasamsa'] = build_dasamsa(chart['planets'], chart['ascendant']['longitude'])
+    # D2/D4/D6/D7/D16/D24/D60 — Advanced-mode-only divisional charts. Built
+    # from the same natal planets, one per entry in EXTRA_VARGAS.
+    chart['extra_vargas'] = {
+        key: {
+            **build_varga(chart['planets'], chart['ascendant']['longitude'], sign_fn),
+            'label': label,
+        }
+        for key, (sign_fn, label) in EXTRA_VARGAS.items()
+    }
     chart['profile'] = {'name': doc['name'], 'dob': doc['dob'], 'tob': doc['tob'], 'place': doc['place']}
     return chart
 
