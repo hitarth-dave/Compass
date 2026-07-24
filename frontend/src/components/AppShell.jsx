@@ -52,7 +52,9 @@ export default function AppShell({ children }) {
     () => localStorage.getItem("jyotish_sidebar_collapsed") === "1"
   );
   const [threadsOpen, setThreadsOpen] = useState(true);
+  const [threadsExpanded, setThreadsExpanded] = useState(false);
   const [threads, setThreads] = useState([]);
+  const THREAD_PREVIEW_COUNT = 9;
   const [renameTarget, setRenameTarget] = useState(null);
   const [renameValue, setRenameValue] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -184,7 +186,7 @@ export default function AppShell({ children }) {
 
             {!collapsed && threadsOpen && (
               <div className="mt-1 ml-5 pl-3 border-l border-[color:var(--jai-border)] space-y-0.5" data-testid="threads-list">
-                {threads.map((t) => (
+                {(threadsExpanded ? threads : threads.slice(0, THREAD_PREVIEW_COUNT)).map((t) => (
                   <div
                     key={t.id}
                     className={`group flex items-center gap-1 pr-1 rounded-md text-sm ${
@@ -216,6 +218,19 @@ export default function AppShell({ children }) {
                     </DropdownMenu>
                   </div>
                 ))}
+                {/* Keep the visible list short (9 by default) so New chat,
+                    Library and Settings below stay on-screen without
+                    scrolling — "View more" reveals the rest inline. */}
+                {threads.length > THREAD_PREVIEW_COUNT && (
+                  <button
+                    onClick={() => setThreadsExpanded((v) => !v)}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-[color:var(--jai-text-muted)] hover:text-[color:var(--jai-gold-soft)]"
+                    data-testid="threads-view-more-btn"
+                  >
+                    <ChevronDown size={11} className={`transition-transform duration-200 ${threadsExpanded ? "rotate-180" : ""}`} />
+                    {threadsExpanded ? "Show fewer" : `View more (${threads.length - THREAD_PREVIEW_COUNT})`}
+                  </button>
+                )}
                 <button
                   onClick={createThread}
                   className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-[color:var(--jai-gold)] hover:text-[color:var(--jai-green-deep)]"
