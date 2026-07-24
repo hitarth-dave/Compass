@@ -14,33 +14,50 @@ export default function Home() {
 
   return (
     <PublicLayout>
-      {/* HERO */}
-      <section className="max-w-6xl mx-auto px-6 lg:px-12 pt-0 pb-6 grid lg:grid-cols-2 gap-8 items-start overflow-x-hidden">
-        <div className="fade-up">
-          <div className="overline mb-6">Sanatan · Jyotish · Personal Counsel</div>
-          <h1 className="font-serif-display text-5xl sm:text-6xl lg:text-7xl leading-[0.95] text-[color:var(--jai-parchment)]">
-            Your birth chart, <em className="text-[color:var(--jai-gold)]">read aloud</em> by the ancient shastras.
-          </h1>
-          <p className="mt-8 text-lg text-[color:var(--jai-text-muted)] max-w-xl leading-relaxed">
-            Compass Astro casts your Vedic Kundali, listens to today's planetary transits, and answers
-            your questions in plain everyday language — grounded in the classical texts. Career, love,
-            timing, direction. No jargon. Real depth on demand.
-          </p>
-          <div className="mt-12">
-            <AuthButtons label="See your chart — free to start" />
-            <p className="mt-4 text-xs text-[color:var(--jai-text-muted)] max-w-md">
-              Your chart, chats and uploaded books stay private to your account.
+      {/* HERO
+          The text stays inside the same centered max-w-6xl container the nav
+          uses, so it lines up with the logo above it at every screen width.
+          The image can't live in that same container and also reach the true
+          browser edge — max-w-6xl is centered, so on any screen wider than
+          ~1152px there's leftover margin outside it, and the image was
+          stopping at the container's edge, not the window's edge (that gap
+          is what looked like a hard line). So on desktop the image is taken
+          out of the grid and absolutely positioned against this full-width
+          section instead, anchored to the section's actual right edge. */}
+      <section className="relative pt-0 pb-6 lg:min-h-[30vw] overflow-x-hidden">
+        <div className="max-w-6xl mx-auto px-6 lg:px-12 grid lg:grid-cols-2 gap-8 items-start">
+          <div className="fade-up">
+            <div className="overline mb-6">Sanatan · Jyotish · Personal Counsel</div>
+            <h1 className="font-serif-display text-5xl sm:text-6xl lg:text-7xl leading-[0.95] text-[color:var(--jai-parchment)]">
+              Your birth chart, <em className="text-[color:var(--jai-gold)]">read aloud</em> by the ancient shastras.
+            </h1>
+            <p className="mt-8 text-lg text-[color:var(--jai-text-muted)] max-w-xl leading-relaxed">
+              Compass Astro casts your Vedic Kundali, listens to today's planetary transits, and answers
+              your questions in plain everyday language — grounded in the classical texts. Career, love,
+              timing, direction. No jargon. Real depth on demand.
             </p>
+            <div className="mt-12">
+              <AuthButtons label="See your chart — free to start" />
+              <p className="mt-4 text-xs text-[color:var(--jai-text-muted)] max-w-md">
+                Your chart, chats and uploaded books stay private to your account.
+              </p>
+            </div>
+          </div>
+
+          {/* Mobile/tablet: image stacks normally below the text. Hidden on
+              desktop, where the true edge-to-edge version below takes over. */}
+          <div className="fade-up delay-1 lg:hidden">
+            <img
+              src="/compass-hero-tight.png"
+              alt="A compass marking Growth, Success, Love, Wisdom, Marriage, Happiness, Health and Money, set against a starfield"
+              className="w-full h-auto object-contain"
+            />
           </div>
         </div>
 
-        {/* Wide bleed like the original, no border/frame. compass-hero-tight.png
-            is cropped much closer to the compass itself (the source photo had
-            a lot of faint starfield padding on all sides, especially left/
-            right, which is what was reading as empty space) — so the same
-            bleed treatment now shows more compass and less blank margin,
-            without a big dead gap under it either. */}
-        <div className="fade-up delay-1 lg:w-[52vw] justify-self-start">
+        {/* Desktop: bleeds to the section's real right edge (the true browser
+            edge), not the max-w-6xl container's edge. */}
+        <div className="hidden lg:block absolute top-0 right-0 w-[52vw] fade-up delay-1">
           <img
             src="/compass-hero-tight.png"
             alt="A compass marking Growth, Success, Love, Wisdom, Marriage, Happiness, Health and Money, set against a starfield"
