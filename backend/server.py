@@ -1080,7 +1080,11 @@ async def geocode(q: str):
         return {"results": [], "error": str(e)}
 
 @api_router.get("/muhurta/today")
-async def muhurta_today(user: User = Depends(get_current_user)):
+async def muhurta_today(offset_days: int = 0, user: User = Depends(get_current_user)):
+    """offset_days: 0 = today, 1 = tomorrow. Capped to [0, 1] — this is an
+    Advanced-mode "peek at tomorrow" feature, not a general calendar
+    browser, so the range intentionally stays tight."""
+    offset_days = max(0, min(1, offset_days))
     doc = await db.profiles.find_one({"user_id": user.user_id}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Set up your birth details first")
@@ -1097,7 +1101,8 @@ async def muhurta_today(user: User = Depends(get_current_user)):
     # endpoint needs to get right).
     tz_offset = current_utc_offset_hours(lat, lon)
 
-    local_today = (datetime.now(timezone.utc) + timedelta(hours=tz_offset)).date().isoformat()
+    local_date = (datetime.now(timezone.utc) + timedelta(hours=tz_offset) + timedelta(days=offset_days)).date().isoformat()
+    local_today = local_date
     rs = sun_rise_set(local_today, tz_offset, lat, lon)
     weekday_idx = datetime.fromisoformat(local_today).weekday()
 
