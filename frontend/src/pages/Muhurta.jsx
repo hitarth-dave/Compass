@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import {
   Briefcase, Rocket, Plane, Heart, GraduationCap, TrendingUp, HeartPulse,
-  Loader2, CalendarClock, ChevronLeft,
+  Loader2, CalendarClock, ChevronLeft, Sparkles, AlertTriangle,
 } from "lucide-react";
 import { useDisplayMode } from "@/context/DisplayModeContext";
 
@@ -27,11 +27,63 @@ function scoreLabel(score) {
   return { text: "Mixed", color: "#A0522D" };
 }
 
+const QUALITY_STYLE = {
+  good: { bg: "rgba(15,81,50,0.10)", text: "#0F5132", label: "Good" },
+  neutral: { bg: "rgba(184,134,11,0.10)", text: "#8B6914", label: "Neutral" },
+  bad: { bg: "rgba(160,82,45,0.12)", text: "#A0522D", label: "Avoid" },
+};
+
+function TimeChip({ label, start, end, tone }) {
+  return (
+    <div className="card-surface p-4" data-testid={`muhurta-chip-${label.toLowerCase().replace(/\s/g, "-")}`}>
+      <div className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">{label}</div>
+      <div className="font-serif-display text-lg mt-1" style={{ color: tone }}>{start} – {end}</div>
+    </div>
+  );
+}
+
+function ChoghadiyaRow({ segments }) {
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      {segments.map((s, i) => {
+        const st = QUALITY_STYLE[s.quality];
+        return (
+          <div key={i} className="rounded-lg px-3 py-2" style={{ background: st.bg }} data-testid={`choghadiya-${s.start}`}>
+            <div className="text-[9px] uppercase tracking-widest" style={{ color: st.text }}>{st.label}</div>
+            <div className="font-serif-display text-sm mt-0.5" style={{ color: st.text }}>{s.name}</div>
+            <div className="text-[10px] text-[color:var(--jai-text-muted)] mt-0.5">{s.start} – {s.end}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function Muhurta() {
   const { isAdvanced } = useDisplayMode();
+
+  // Today's Panchang / daily muhurta
+  const [today, setToday] = useState(null);
+  const [todayLoading, setTodayLoading] = useState(true);
+
+  // Decision-timing scanner (secondary — for planning weeks/months ahead)
+  const [planOpen, setPlanOpen] = useState(false);
   const [activity, setActivity] = useState(null);
   const [loading, setLoading] = useState(false);
   const [windows, setWindows] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await axios.get(`${API}/muhurta/today`);
+        setToday(res.data);
+      } catch (e) {
+        toast.error(e.response?.data?.detail || "Could not load today's Panchang");
+      } finally {
+        setTodayLoading(false);
+      }
+    })();
+  }, []);
 
   const choose = async (key) => {
     setActivity(key);
@@ -48,7 +100,7 @@ export default function Muhurta() {
     }
   };
 
-  const back = () => {
+  const backToActivities = () => {
     setActivity(null);
     setWindows(null);
   };
@@ -58,114 +110,176 @@ export default function Muhurta() {
   return (
     <div className="max-w-5xl mx-auto px-6 lg:px-12 py-12" data-testid="muhurta-page">
       <div className="mb-10 fade-up">
-        <div className="overline mb-3">Muhurta</div>
+        <div className="overline mb-3">Panchang &amp; Muhurta</div>
         <h1 className="font-serif-display text-4xl sm:text-5xl leading-[0.95] text-[color:var(--jai-parchment)]">
-          When is a <em className="text-[color:var(--jai-gold)]">good time</em> to act?
+          Today's <em className="text-[color:var(--jai-gold)]">auspicious windows</em>.
         </h1>
-        <p className="mt-4 text-[color:var(--jai-text-muted)] max-w-2xl">
-          Pick what you're deciding on, and Compass Astro scans the next six months of your chart —
-          Dasha, transits{isAdvanced ? " and Panchang" : ""} — for the windows most supportive of it.
-        </p>
+        {today && (
+          <p className="mt-4 text-[color:var(--jai-text-muted)]">
+            {today.date} · {today.panchang.vara} · {today.panchang.tithi} ({today.panchang.paksha} Paksha)
+            {isAdvanced && <> · {today.panchang.karana} Karana · {today.panchang.yoga} Yoga</>}
+          </p>
+        )}
       </div>
 
-      {!activity && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 fade-up delay-1">
-          {ACTIVITIES.map(({ key, label, Icon }) => (
-            <button
-              key={key}
-              onClick={() => choose(key)}
-              className="card-surface p-6 text-left hover:border-[color:var(--jai-gold)] transition-colors"
-              data-testid={`muhurta-activity-${key}`}
-            >
-              <Icon size={20} className="text-[color:var(--jai-gold)] mb-4" />
-              <div className="font-serif-display text-lg text-[color:var(--jai-green-deep)]">{label}</div>
-            </button>
-          ))}
+      {todayLoading && (
+        <div className="flex items-center gap-2 text-[color:var(--jai-text-muted)] fade-up" data-testid="muhurta-today-loading">
+          <Loader2 size={16} className="animate-spin" /> Computing today's Panchang…
         </div>
       )}
 
-      {activity && (
-        <div className="fade-up delay-1">
-          <button
-            onClick={back}
-            className="mb-6 inline-flex items-center gap-1.5 text-xs uppercase tracking-widest text-[color:var(--jai-text-muted)] hover:text-[color:var(--jai-gold)]"
-            data-testid="muhurta-back-btn"
-          >
-            <ChevronLeft size={14} /> Choose a different decision
-          </button>
-
-          <div className="flex items-center gap-3 mb-8">
-            {activityMeta && <activityMeta.Icon size={22} className="text-[color:var(--jai-gold)]" />}
-            <div className="font-serif-display text-2xl text-[color:var(--jai-parchment)]">{activityMeta?.label}</div>
+      {today && (
+        <div className="fade-up delay-1 space-y-8">
+          {/* Sunrise / sunset + Abhijit */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <TimeChip label="Sunrise" start={today.sunrise} end="" tone="var(--jai-gold)" />
+            <TimeChip label="Abhijit Muhurta" start={today.abhijit_muhurta.start} end={today.abhijit_muhurta.end} tone="#0F5132" />
+            <TimeChip label="Rahu Kaal" start={today.rahu_kaal.start} end={today.rahu_kaal.end} tone="#A0522D" />
+            <TimeChip label="Sunset" start={today.sunset} end="" tone="var(--jai-gold)" />
           </div>
 
-          {loading && (
-            <div className="flex items-center gap-2 text-[color:var(--jai-text-muted)]" data-testid="muhurta-loading">
-              <Loader2 size={16} className="animate-spin" /> Scanning the next six months…
+          {isAdvanced && (
+            <div className="grid grid-cols-2 gap-4 max-w-md">
+              <TimeChip label="Yamaganda Kaal" start={today.yamaganda_kaal.start} end={today.yamaganda_kaal.end} tone="#A0522D" />
+              <TimeChip label="Gulika Kaal" start={today.gulika_kaal.start} end={today.gulika_kaal.end} tone="#A0522D" />
             </div>
           )}
 
-          {!loading && windows && windows.length === 0 && (
-            <div className="card-surface p-8 text-center" data-testid="muhurta-empty">
-              <CalendarClock size={22} className="text-[color:var(--jai-gold)] mx-auto mb-3" />
-              <p className="text-[color:var(--jai-text-muted)]">
-                No strongly favorable window in the next six months — timing here isn't clear-cut.
-                Ask Compass Astro directly in Chat for a more nuanced read.
-              </p>
-            </div>
-          )}
+          {/* Choghadiya timeline */}
+          <div>
+            <div className="overline mb-3">Choghadiya · Day</div>
+            <ChoghadiyaRow segments={today.choghadiya_day} />
+          </div>
+          <div>
+            <div className="overline mb-3">Choghadiya · Night</div>
+            <ChoghadiyaRow segments={today.choghadiya_night} />
+          </div>
 
-          {!loading && windows && windows.length > 0 && (
-            <div className="space-y-5" data-testid="muhurta-windows">
-              {windows.map((w, i) => {
-                const sl = scoreLabel(w.avg_score);
-                return (
-                  <div key={i} className="card-surface p-6 sm:p-8" data-testid={`muhurta-window-${i}`}>
-                    <div className="flex items-start justify-between flex-wrap gap-4">
-                      <div>
-                        <div className="overline mb-2">Window {i + 1}</div>
-                        <div className="font-serif-display text-2xl text-[color:var(--jai-parchment)]">
-                          {w.start_date} → {w.end_date}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">
-                          {isAdvanced ? "Score" : ""}
-                        </div>
-                        <div className="font-serif-display text-xl" style={{ color: sl.color }}>
-                          {sl.text}{isAdvanced ? ` · ${w.avg_score}/100` : ""}
-                        </div>
-                      </div>
-                    </div>
-
-                    {isAdvanced && (
-                      <>
-                        {w.panchang_at_start && (
-                          <div className="mt-5 text-xs text-[color:var(--jai-text-muted)] flex flex-wrap gap-x-4 gap-y-1">
-                            <span>Tithi: <span className="text-[color:var(--jai-green-deep)]">{w.panchang_at_start.tithi} ({w.panchang_at_start.paksha})</span></span>
-                            <span>Karana: <span className="text-[color:var(--jai-green-deep)]">{w.panchang_at_start.karana}</span></span>
-                            <span>Yoga: <span className="text-[color:var(--jai-green-deep)]">{w.panchang_at_start.yoga}</span></span>
-                            <span>Vara: <span className="text-[color:var(--jai-green-deep)]">{w.panchang_at_start.vara}</span></span>
-                          </div>
-                        )}
-                        {w.reasons?.length > 0 && (
-                          <ul className="mt-5 space-y-1.5">
-                            {w.reasons.map((r, j) => (
-                              <li key={j} className="text-sm text-[color:var(--jai-text-muted)] flex gap-2">
-                                <span className="text-[color:var(--jai-gold)]">·</span> {r}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </>
-                    )}
-                  </div>
-                );
-              })}
+          {today.panchang.cautions?.length > 0 && (
+            <div className="card-surface p-5 flex gap-3 items-start" data-testid="panchang-cautions">
+              <AlertTriangle size={16} className="text-[color:var(--jai-terracotta)] shrink-0 mt-0.5" />
+              <div className="text-sm text-[color:var(--jai-text-muted)] space-y-1">
+                {today.panchang.cautions.map((c, i) => <div key={i}>{c}</div>)}
+              </div>
             </div>
           )}
         </div>
       )}
+
+      {/* Secondary: plan a bigger decision weeks/months ahead */}
+      <div className="mt-16 pt-10 border-t border-[color:var(--jai-border)] fade-up delay-2">
+        <button
+          onClick={() => setPlanOpen((v) => !v)}
+          className="flex items-center gap-2 text-sm text-[color:var(--jai-text-muted)] hover:text-[color:var(--jai-gold)]"
+          data-testid="muhurta-plan-toggle"
+        >
+          <Sparkles size={14} className="text-[color:var(--jai-gold)]" />
+          Planning something bigger? Scan the next 6 months for the best window.
+        </button>
+
+        {planOpen && (
+          <div className="mt-6">
+            {!activity && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {ACTIVITIES.map(({ key, label, Icon }) => (
+                  <button
+                    key={key}
+                    onClick={() => choose(key)}
+                    className="card-surface p-6 text-left hover:border-[color:var(--jai-gold)] transition-colors"
+                    data-testid={`muhurta-activity-${key}`}
+                  >
+                    <Icon size={20} className="text-[color:var(--jai-gold)] mb-4" />
+                    <div className="font-serif-display text-lg text-[color:var(--jai-green-deep)]">{label}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {activity && (
+              <div>
+                <button
+                  onClick={backToActivities}
+                  className="mb-6 inline-flex items-center gap-1.5 text-xs uppercase tracking-widest text-[color:var(--jai-text-muted)] hover:text-[color:var(--jai-gold)]"
+                  data-testid="muhurta-back-btn"
+                >
+                  <ChevronLeft size={14} /> Choose a different decision
+                </button>
+
+                <div className="flex items-center gap-3 mb-8">
+                  {activityMeta && <activityMeta.Icon size={22} className="text-[color:var(--jai-gold)]" />}
+                  <div className="font-serif-display text-2xl text-[color:var(--jai-parchment)]">{activityMeta?.label}</div>
+                </div>
+
+                {loading && (
+                  <div className="flex items-center gap-2 text-[color:var(--jai-text-muted)]" data-testid="muhurta-loading">
+                    <Loader2 size={16} className="animate-spin" /> Scanning the next six months…
+                  </div>
+                )}
+
+                {!loading && windows && windows.length === 0 && (
+                  <div className="card-surface p-8 text-center" data-testid="muhurta-empty">
+                    <CalendarClock size={22} className="text-[color:var(--jai-gold)] mx-auto mb-3" />
+                    <p className="text-[color:var(--jai-text-muted)]">
+                      No strongly favorable window in the next six months — timing here isn't clear-cut.
+                      Ask Compass Astro directly in Chat for a more nuanced read.
+                    </p>
+                  </div>
+                )}
+
+                {!loading && windows && windows.length > 0 && (
+                  <div className="space-y-5" data-testid="muhurta-windows">
+                    {windows.map((w, i) => {
+                      const sl = scoreLabel(w.avg_score);
+                      return (
+                        <div key={i} className="card-surface p-6 sm:p-8" data-testid={`muhurta-window-${i}`}>
+                          <div className="flex items-start justify-between flex-wrap gap-4">
+                            <div>
+                              <div className="overline mb-2">Window {i + 1}</div>
+                              <div className="font-serif-display text-2xl text-[color:var(--jai-parchment)]">
+                                {w.start_date} → {w.end_date}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">
+                                {isAdvanced ? "Score" : ""}
+                              </div>
+                              <div className="font-serif-display text-xl" style={{ color: sl.color }}>
+                                {sl.text}{isAdvanced ? ` · ${w.avg_score}/100` : ""}
+                              </div>
+                            </div>
+                          </div>
+
+                          {isAdvanced && (
+                            <>
+                              {w.panchang_at_start && (
+                                <div className="mt-5 text-xs text-[color:var(--jai-text-muted)] flex flex-wrap gap-x-4 gap-y-1">
+                                  <span>Tithi: <span className="text-[color:var(--jai-green-deep)]">{w.panchang_at_start.tithi} ({w.panchang_at_start.paksha})</span></span>
+                                  <span>Karana: <span className="text-[color:var(--jai-green-deep)]">{w.panchang_at_start.karana}</span></span>
+                                  <span>Yoga: <span className="text-[color:var(--jai-green-deep)]">{w.panchang_at_start.yoga}</span></span>
+                                  <span>Vara: <span className="text-[color:var(--jai-green-deep)]">{w.panchang_at_start.vara}</span></span>
+                                </div>
+                              )}
+                              {w.reasons?.length > 0 && (
+                                <ul className="mt-5 space-y-1.5">
+                                  {w.reasons.map((r, j) => (
+                                    <li key={j} className="text-sm text-[color:var(--jai-text-muted)] flex gap-2">
+                                      <span className="text-[color:var(--jai-gold)]">·</span> {r}
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
