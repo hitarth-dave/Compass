@@ -238,6 +238,28 @@ export default function Dashboard() {
         </button>
       )}
 
+      {/* D2/D4/D6/D7/D16/D24/D60 — additional divisional (varga) charts for
+          astrologers. Hidden in Simple mode; D1/D9/D10 above already cover
+          what a general user needs. */}
+      {isAdvanced && chart.extra_vargas && (
+        <div className="mt-8 fade-up delay-2">
+          <div className="overline mb-4">Additional Divisional Charts</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {Object.entries(chart.extra_vargas).map(([key, v]) => (
+              <div key={key} className="card-surface p-6" data-testid={`varga-card-${key}`}>
+                <div className="mb-4">
+                  <div className="overline">{v.label}</div>
+                  <div className="font-serif-display text-lg mt-1 text-[color:var(--jai-parchment)]">
+                    Lagna: {v.ascendant.sign_en}
+                  </div>
+                </div>
+                <KundaliChart planets={v.planets} ascendantSign={v.ascendant.sign_idx} showNakshatra={false} testid={`kundali-chart-${key}`} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* House Lords + Yogas — technical detail meant for astrologers, not
           shown in Simple mode. */}
       {isAdvanced && (
