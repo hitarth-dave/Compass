@@ -321,6 +321,10 @@ class DashaSubdivideRequest(BaseModel):
     years: float
 
 
+class MuhurtaAskRequest(BaseModel):
+    message: str
+
+
 # ---------- Routes ----------
 @api_router.get("/")
 async def root():
@@ -1079,6 +1083,35 @@ async def geocode(q: str):
     except Exception as e:
         return {"results": [], "error": str(e)}
 
+def _muhurta_day_payload(lat: float, lon: float, offset_days: int) -> dict:
+    """Shared by /muhurta/today and /muhurta/ask so both draw from exactly
+    the same computation — the Q&A bot must never invent times that
+    disagree with what's shown on the page."""
+    offset_days = max(0, min(1, offset_days))
+    # Real current timezone at that location, right now — DST-aware, and
+    # correct even if the user has traveled since birth. NOT the birth
+    # timezone (that would be wrong the moment someone's actual location
+    # differs from where they were born, which is exactly the case this
+    # endpoint needs to get right).
+    tz_offset = current_utc_offset_hours(lat, lon)
+
+    local_date = (datetime.now(timezone.utc) + timedelta(hours=tz_offset) + timedelta(days=offset_days)).date().isoformat()
+    rs = sun_rise_set(local_date, tz_offset, lat, lon)
+    weekday_idx = datetime.fromisoformat(local_date).weekday()
+
+    # Day's Tithi/Yoga/Karana are read at sunrise, per classical convention
+    # (that's what "today's Panchang" refers to).
+    sun_lon, moon_lon = sun_moon_longitudes(rs["sunrise"], tz_offset)
+    panchang = compute_panchang(sun_lon, moon_lon, rs["sunrise"])
+    daily_muhurta = compute_daily_muhurta(rs["sunrise"], rs["sunset"], rs["next_sunrise"], weekday_idx)
+
+    return {
+        "date": local_date,
+        "panchang": panchang,
+        **daily_muhurta,
+    }
+
+
 @api_router.get("/muhurta/today")
 async def muhurta_today(offset_days: int = 0, user: User = Depends(get_current_user)):
     """offset_days: 0 = today, 1 = tomorrow. Capped to [0, 1] — this is an
@@ -1094,29 +1127,79 @@ async def muhurta_today(offset_days: int = 0, user: User = Depends(get_current_u
     # not where they were born. Falls back to birth place if not set.
     lat = user.current_lat if user.current_lat is not None else doc["lat"]
     lon = user.current_lon if user.current_lon is not None else doc["lon"]
-    # Real current timezone at that location, right now — DST-aware, and
-    # correct even if the user has traveled since birth. NOT the birth
-    # timezone (that would be wrong the moment someone's actual location
-    # differs from where they were born, which is exactly the case this
-    # endpoint needs to get right).
-    tz_offset = current_utc_offset_hours(lat, lon)
 
-    local_date = (datetime.now(timezone.utc) + timedelta(hours=tz_offset) + timedelta(days=offset_days)).date().isoformat()
-    local_today = local_date
-    rs = sun_rise_set(local_today, tz_offset, lat, lon)
-    weekday_idx = datetime.fromisoformat(local_today).weekday()
+    return _muhurta_day_payload(lat, lon, offset_days)
 
-    # Day's Tithi/Yoga/Karana are read at sunrise, per classical convention
-    # (that's what "today's Panchang" refers to).
-    sun_lon, moon_lon = sun_moon_longitudes(rs["sunrise"], tz_offset)
-    panchang = compute_panchang(sun_lon, moon_lon, rs["sunrise"])
-    daily_muhurta = compute_daily_muhurta(rs["sunrise"], rs["sunset"], rs["next_sunrise"], weekday_idx)
 
-    return {
-        "date": local_today,
-        "panchang": panchang,
-        **daily_muhurta,
-    }
+MUHURTA_QA_SYSTEM_PROMPT = """You are the quick-question assistant on Compass Astro's Muhurta (auspicious timing) page — NOT the main chart chat.
+
+SCOPE — you may ONLY answer questions about today's or tomorrow's timing:
+- Panchang (Tithi, Nakshatra/Yoga, Karana), sunrise/sunset
+- Rahu Kaal, Yamaganda Kaal, Gulika Kaal, Abhijit Muhurta
+- Choghadiya periods and whether a given time is good/neutral/bad today or tomorrow
+- "Best" or "worst" time today/tomorrow for a short, concrete activity (e.g. "good time to leave for a drive today", "best window tomorrow morning for a call")
+
+OUT OF SCOPE — anything about the user's birth chart, natal planets, houses, dashas, yogas, predictions, remedies, relationships, career trajectory, or timing more than 1 day out. If asked, do NOT attempt an answer. Reply with EXACTLY this sentence and nothing else: "That's a chart or prediction question — head over to the Conversation section for that one, I'm just here for today's and tomorrow's timing."
+
+HARD RULES for in-scope answers:
+1. Maximum 50 words. Exactly one short paragraph — no headers, no bullets, no lists, no line breaks.
+2. Use ONLY the exact times given to you in TODAY'S/TOMORROW'S DATA below — never calculate or invent your own.
+3. Plain, direct language. Skip preamble like "Great question!" — answer immediately.
+4. If the data below doesn't cover what's asked (e.g. they ask about a date beyond tomorrow), say so briefly rather than guessing."""
+
+
+def _format_muhurta_day_for_prompt(label: str, d: dict) -> str:
+    p = d["panchang"]
+    chogh_day = "; ".join(f"{c['start']}-{c['end']} {c['name']} ({c['quality']})" for c in d.get("choghadiya_day", []))
+    chogh_night = "; ".join(f"{c['start']}-{c['end']} {c['name']} ({c['quality']})" for c in d.get("choghadiya_night", []))
+    return (
+        f"{label} ({d['date']}):\n"
+        f"  Sunrise {d['sunrise']}, Sunset {d['sunset']}\n"
+        f"  Tithi {p.get('tithi')} ({p.get('paksha')}), Yoga {p.get('yoga')}, Karana {p.get('karana')}, Vara {p.get('vara')}\n"
+        f"  Rahu Kaal {d['rahu_kaal']['start']}-{d['rahu_kaal']['end']}\n"
+        f"  Yamaganda Kaal {d['yamaganda_kaal']['start']}-{d['yamaganda_kaal']['end']}\n"
+        f"  Gulika Kaal {d['gulika_kaal']['start']}-{d['gulika_kaal']['end']}\n"
+        f"  Abhijit Muhurta {d['abhijit_muhurta']['start']}-{d['abhijit_muhurta']['end']}\n"
+        f"  Choghadiya day segments: {chogh_day}\n"
+        f"  Choghadiya night segments: {chogh_night}\n"
+    )
+
+
+@api_router.post("/muhurta/ask")
+async def muhurta_ask(payload: MuhurtaAskRequest, user: User = Depends(get_current_user)):
+    """Small, scope-limited Q&A for the Muhurta page — today/tomorrow timing
+    only. Deliberately non-streaming and single-turn (no thread/memory):
+    this is meant for quick one-off questions, not a conversation."""
+    doc = await db.profiles.find_one({"user_id": user.user_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Set up your birth details first")
+
+    lat = user.current_lat if user.current_lat is not None else doc["lat"]
+    lon = user.current_lon if user.current_lon is not None else doc["lon"]
+
+    today = _muhurta_day_payload(lat, lon, 0)
+    tomorrow = _muhurta_day_payload(lat, lon, 1)
+    context = (
+        "TODAY'S DATA\n" + _format_muhurta_day_for_prompt("TODAY", today) +
+        "\nTOMORROW'S DATA\n" + _format_muhurta_day_for_prompt("TOMORROW", tomorrow)
+    )
+    system_message = MUHURTA_QA_SYSTEM_PROMPT + "\n\n" + context
+
+    answer = ""
+    try:
+        async with anthropic_client.messages.stream(
+            model=CLAUDE_MODEL,
+            max_tokens=200,
+            system=system_message,
+            messages=[{"role": "user", "content": payload.message.strip()[:500]}],
+        ) as stream:
+            async for text_delta in stream.text_stream:
+                answer += text_delta
+    except Exception as e:
+        logging.exception("muhurta ask failed: %s", e)
+        raise HTTPException(500, "Could not get an answer right now — please try again.")
+
+    return {"answer": answer.strip()}
 
 
 @api_router.get("/decision-timing/{activity}")
