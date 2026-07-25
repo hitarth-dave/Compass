@@ -1,53 +1,75 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "sonner";
-import { useEffect } from "react";
+import { Suspense, lazy } from "react";
 import axios from "axios";
+import { Loader2 } from "lucide-react";
 import "@/App.css";
 
 import { AuthProvider } from "@/context/AuthContext";
 import { ThemeProvider, useTheme } from "@/context/ThemeContext";
 import { DisplayModeProvider } from "@/context/DisplayModeContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import AppShell from "@/components/AppShell";
+
+// Public marketing pages load eagerly — they're small and are the pages
+// that actually need to convert a first-time visitor, so there's no
+// benefit to lazy-loading them.
 import Home from "@/pages/Home";
 import Astrology from "@/pages/Astrology";
 import Pricing from "@/pages/Pricing";
 import Contact from "@/pages/Contact";
-import Onboarding from "@/pages/Onboarding";
-import Dashboard from "@/pages/Dashboard";
-import Muhurta from "@/pages/Muhurta";
-import Chat from "@/pages/Chat";
-import Library from "@/pages/Library";
-import Settings from "@/pages/Settings";
+import Privacy from "@/pages/Privacy";
+import Terms from "@/pages/Terms";
+import NotFound from "@/pages/NotFound";
+
+// Signed-in routes are the heaviest part of the bundle (chart renderer,
+// chat UI, markdown pipeline, date library) and a visitor who lands on the
+// homepage and bounces was downloading all of it anyway. Route-level
+// React.lazy means that code only loads once someone actually signs in.
+const Onboarding = lazy(() => import("@/pages/Onboarding"));
+const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const Muhurta = lazy(() => import("@/pages/Muhurta"));
+const Chat = lazy(() => import("@/pages/Chat"));
+const Library = lazy(() => import("@/pages/Library"));
+const Settings = lazy(() => import("@/pages/Settings"));
 
 axios.defaults.withCredentials = true;
 
-function AppRouter() {
-  // Keep the browser tab title as Compass Astro even if platform scripts override it.
-  useEffect(() => {
-    const setTitle = () => { document.title = "Compass Astro"; };
-    setTitle();
-    const obs = new MutationObserver(setTitle);
-    const t = document.querySelector("title");
-    if (t) obs.observe(t, { childList: true });
-    return () => obs.disconnect();
-  }, []);
+function RouteFallback() {
   return (
-    <Routes>
-      {/* Public marketing site */}
-      <Route path="/" element={<Home />} />
-      <Route path="/astrology" element={<Astrology />} />
-      <Route path="/pricing" element={<Pricing />} />
-      <Route path="/contact" element={<Contact />} />
+    <div className="min-h-screen flex items-center justify-center">
+      <Loader2 className="animate-spin text-[color:var(--jai-gold)]" size={28} />
+    </div>
+  );
+}
 
-      {/* App (protected) */}
-      <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
-      <Route path="/dashboard" element={<ProtectedRoute><AppShell><Dashboard /></AppShell></ProtectedRoute>} />
-      <Route path="/muhurta" element={<ProtectedRoute><AppShell><Muhurta /></AppShell></ProtectedRoute>} />
-      <Route path="/chat" element={<ProtectedRoute><AppShell><Chat /></AppShell></ProtectedRoute>} />
-      <Route path="/library" element={<ProtectedRoute><AppShell><Library /></AppShell></ProtectedRoute>} />
-      <Route path="/settings" element={<ProtectedRoute><AppShell><Settings /></AppShell></ProtectedRoute>} />
-    </Routes>
+function AppRouter() {
+  return (
+    <Suspense fallback={<RouteFallback />}>
+      <Routes>
+        {/* Public marketing site */}
+        <Route path="/" element={<Home />} />
+        <Route path="/astrology" element={<Astrology />} />
+        <Route path="/pricing" element={<Pricing />} />
+        <Route path="/contact" element={<Contact />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
+
+        {/* App (protected) */}
+        <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
+        <Route path="/dashboard" element={<ProtectedRoute><AppShell><Dashboard /></AppShell></ProtectedRoute>} />
+        <Route path="/muhurta" element={<ProtectedRoute><AppShell><Muhurta /></AppShell></ProtectedRoute>} />
+        <Route path="/chat" element={<ProtectedRoute><AppShell><Chat /></AppShell></ProtectedRoute>} />
+        <Route path="/library" element={<ProtectedRoute><AppShell><Library /></AppShell></ProtectedRoute>} />
+        <Route path="/settings" element={<ProtectedRoute><AppShell><Settings /></AppShell></ProtectedRoute>} />
+
+        {/* Previously there was no catch-all at all — an unknown URL
+            rendered a totally blank page (and Vercel served it with HTTP
+            200, so search engines saw soft-404s everywhere). */}
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </Suspense>
   );
 }
 
@@ -59,16 +81,18 @@ function ThemedToaster() {
 function App() {
   return (
     <div className="App">
-      <BrowserRouter>
-        <ThemeProvider>
-          <AuthProvider>
-            <DisplayModeProvider>
-              <ThemedToaster />
-              <AppRouter />
-            </DisplayModeProvider>
-          </AuthProvider>
-        </ThemeProvider>
-      </BrowserRouter>
+      <ErrorBoundary>
+        <BrowserRouter>
+          <ThemeProvider>
+            <AuthProvider>
+              <DisplayModeProvider>
+                <ThemedToaster />
+                <AppRouter />
+              </DisplayModeProvider>
+            </AuthProvider>
+          </ThemeProvider>
+        </BrowserRouter>
+      </ErrorBoundary>
     </div>
   );
 }

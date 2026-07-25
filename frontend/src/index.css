@@ -14,7 +14,8 @@
     --jai-green-deep: #0A2E23;      /* deepest ink green */
     --jai-green-soft: #2E5D4A;      /* softer green */
     --jai-olive: #5C6A5A;           /* muted olive */
-    --jai-gold: #B8860B;            /* dark goldenrod accent */
+    --jai-gold: #7A5A07;            /* darkened from #B8860B — #B8860B was 2.89:1 on parchment, fails AA. This is 5.66:1. */
+    --jai-gold-display: #B8860B;    /* original lighter gold — safe ONLY for display type 24px+ (large-text AA is 3:1) */
     --jai-gold-soft: #DAA520;       /* lighter gold hover */
     --jai-terracotta: #A0522D;      /* warm accent */
     --jai-parchment-ink: #1F2A24;   /* near-black ink */
@@ -28,9 +29,23 @@
     /* Solid (not opacity-modifier) tint backgrounds for good/neutral/bad
        quality chips (Choghadiya, etc.) — baked-in alpha so they don't rely
        on Tailwind's color-mix opacity-modifier support on CSS vars. */
-    --jai-tint-good: rgba(15, 61, 46, 0.08);
-    --jai-tint-neutral: rgba(184, 134, 11, 0.10);
-    --jai-tint-bad: rgba(160, 82, 45, 0.10);
+    --jai-tint-good: rgba(15, 61, 46, 0.16);
+    --jai-tint-neutral: rgba(184, 134, 11, 0.18);
+    --jai-tint-bad: rgba(160, 82, 45, 0.20);
+    /* Dignity chip colors (Advanced planet table + legend). These were
+       hardcoded inline hex before, so they didn't adapt per theme — 4 of 5
+       were effectively invisible in dark mode, and Moolatrikona also failed
+       AA (2.74:1) in light mode. */
+    --jai-dignity-exalted-fg: #0F5132;
+    --jai-dignity-exalted-bg: rgba(15, 81, 50, 0.15);
+    --jai-dignity-debilitated-fg: #A0522D;
+    --jai-dignity-debilitated-bg: rgba(160, 82, 45, 0.15);
+    --jai-dignity-moolatrikona-fg: #7A5A07;
+    --jai-dignity-moolatrikona-bg: rgba(184, 134, 11, 0.15);
+    --jai-dignity-own-fg: #6B5010;
+    --jai-dignity-own-bg: rgba(218, 165, 32, 0.18);
+    --jai-dignity-vargottama-fg: #3B4C99;
+    --jai-dignity-vargottama-bg: rgba(59, 76, 153, 0.15);
 }
 
 .dark {
@@ -56,9 +71,19 @@
     --jai-border-gold: rgba(212, 167, 44, 0.35);
     /* Same idea as :root above, but tuned for the dark palette so the tint
        is actually visible against the deep indigo card background. */
-    --jai-tint-good: rgba(168, 216, 190, 0.14);
-    --jai-tint-neutral: rgba(212, 167, 44, 0.14);
-    --jai-tint-bad: rgba(210, 121, 90, 0.16);
+    --jai-tint-good: rgba(168, 216, 190, 0.22);
+    --jai-tint-neutral: rgba(212, 167, 44, 0.22);
+    --jai-tint-bad: rgba(210, 121, 90, 0.24);
+    --jai-dignity-exalted-fg: #8FE0B8;
+    --jai-dignity-exalted-bg: rgba(168, 216, 190, 0.18);
+    --jai-dignity-debilitated-fg: #E8916D;
+    --jai-dignity-debilitated-bg: rgba(210, 121, 90, 0.20);
+    --jai-dignity-moolatrikona-fg: #E8C158;
+    --jai-dignity-moolatrikona-bg: rgba(212, 167, 44, 0.20);
+    --jai-dignity-own-fg: #F0D080;
+    --jai-dignity-own-bg: rgba(232, 197, 88, 0.18);
+    --jai-dignity-vargottama-fg: #9DB4FF;
+    --jai-dignity-vargottama-bg: rgba(157, 180, 255, 0.18);
 }
 
 .dark {
@@ -112,6 +137,34 @@
     border-color: hsl(var(--border) / 0.18);
 }
 
+/* Global keyboard-focus ring. Several inputs use outline-none with no
+   replacement, which drops the focus indicator entirely for keyboard users.
+   :focus-visible only shows this for keyboard/programmatic focus, not mouse
+   clicks, so it doesn't add a ring to every button click. */
+:focus-visible {
+    outline: 2px solid var(--jai-gold);
+    outline-offset: 2px;
+    border-radius: 2px;
+}
+
+/* Respect the OS-level "reduce motion" setting. Every section currently
+   animates in with fade-up regardless of this preference. */
+@media (prefers-reduced-motion: reduce) {
+    .fade-up,
+    .fade-up.delay-1,
+    .fade-up.delay-2,
+    .fade-up.delay-3,
+    .glow-hover:hover {
+        animation: none !important;
+        opacity: 1 !important;
+        transform: none !important;
+    }
+    * {
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+    }
+}
+
 html, body {
     background: var(--jai-bg);
     color: var(--jai-text);
@@ -145,7 +198,11 @@ body::after {
 .font-serif-display {
     font-family: 'Cormorant Garamond', ui-serif, Georgia, serif;
     letter-spacing: -0.01em;
-    color: var(--jai-green-deep);
+    /* No color here on purpose — this used to hard-code jai-green-deep,
+       which silently beat text-[color:...] utilities on buttons like
+       "Choose Sadhaka" and "Send message" (1.2:1 contrast, effectively
+       invisible). Each element now sets its own color. If a heading looks
+       uncolored, give it text-[color:var(--jai-green-deep)] explicitly. */
 }
 
 .overline {
@@ -204,6 +261,24 @@ body::after {
 
 .parchment-tint {
     background: linear-gradient(180deg, rgba(247, 241, 225, 0.95), rgba(239, 230, 205, 0.85));
+}
+
+/* Fully opaque variant for anything that floats OVER page content rather
+   than sitting flat on the background — modals, dropdowns, popovers.
+   .card-surface is intentionally translucent (88% alpha) for cards on a
+   flat page, which is fine; over content it lets that content bleed
+   through, which isn't. */
+.modal-surface {
+    background: var(--jai-surface);
+    border: 1px solid var(--jai-border);
+    border-radius: 14px;
+    box-shadow: 0 1px 2px rgba(15, 61, 46, 0.04), 0 24px 60px rgba(15, 61, 46, 0.18);
+}
+
+.dark .modal-surface {
+    background: var(--jai-surface-2);
+    border: 1px solid rgba(212, 167, 44, 0.28);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
 }
 
 /* Night Sky card treatment — deep indigo panel, hairline gold edge, faint
