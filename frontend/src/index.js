@@ -13,21 +13,11 @@ const queryClient = new QueryClient({
   },
 });
 
-const container = document.getElementById("root");
-const tree = (
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <App />
     </QueryClientProvider>
-  </React.StrictMode>
+  </React.StrictMode>,
 );
-
-// react-snap prerenders the 4 public routes into static HTML at build time.
-// If that markup is already in the page (container has children), hydrate
-// it instead of wiping and re-rendering from scratch — createRoot() alone
-// discards react-snap's output rather than reusing it.
-if (container.hasChildNodes()) {
-  ReactDOM.hydrateRoot(container, tree);
-} else {
-  ReactDOM.createRoot(container).render(tree);
-}
