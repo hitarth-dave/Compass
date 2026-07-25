@@ -25,7 +25,7 @@ from astrology import (
     compute_chart, current_transits, current_dasha, current_antardasha,
     compute_antardashas, build_navamsa, build_dasamsa,
     build_varga, EXTRA_VARGAS, sun_rise_set, sun_moon_longitudes,
-    current_utc_offset_hours,
+    current_utc_offset_hours, estimate_tob_from_sunrise_period,
 )
 from muhurta import find_best_windows, ACTIVITY_HOUSES, detect_activity_intent
 from panchang import compute_panchang, compute_daily_muhurta
@@ -54,6 +54,8 @@ load_dotenv(ROOT_DIR / '.env')
 UPLOAD_DIR = Path(os.environ.get('UPLOAD_DIR', '/app/backend/uploads'))
 ATTACH_DIR = UPLOAD_DIR / 'attachments'
 ATTACH_DIR.mkdir(parents=True, exist_ok=True)
+
+FONTS_DIR = ROOT_DIR / 'assets' / 'fonts'
 
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
@@ -276,6 +278,72 @@ async def _send_contact_email(name: str, from_email: str, message: str) -> None:
         raise HTTPException(status_code=502, detail="Could not send your message. Please try again shortly.")
 
 
+def _share_card_font(size: int, bold: bool = False):
+    from PIL import ImageFont
+    name = f"PT_Serif-Web-{'Bold' if bold else 'Regular'}.ttf"
+    path = FONTS_DIR / name
+    if path.exists():
+        return ImageFont.truetype(str(path), size)
+    # Falls back to PIL's bitmap font if the TTF is ever missing on a
+    # deploy — ugly but never crashes the endpoint.
+    return ImageFont.load_default()
+
+
+def generate_share_card(name: str, lagna: str, moon_sign: str, nakshatra: str, mahadasha_lord: Optional[str]) -> bytes:
+    """Renders a shareable PNG summary of a chart — this is Compass Astro's
+    cheapest growth loop (people screenshot and send astrology readings
+    constantly; give them a real one instead of a browser-tab screenshot
+    with the sidebar in it)."""
+    from PIL import Image, ImageDraw
+    import io
+
+    W, H = 1080, 1350
+    BG = (247, 241, 225)
+    INK2 = (15, 61, 46)
+    GOLD = (122, 90, 7)
+    MUTED = (92, 106, 90)
+
+    img = Image.new("RGB", (W, H), BG)
+    d = ImageDraw.Draw(img)
+
+    def centered(text, y, font, fill):
+        bbox = d.textbbox((0, 0), text, font=font)
+        d.text(((W - (bbox[2] - bbox[0])) / 2, y), text, font=font, fill=fill)
+
+    margin = 48
+    d.rectangle([margin, margin, W - margin, H - margin], outline=INK2, width=2)
+
+    centered("C O M P A S S   A S T R O", 110, _share_card_font(28), GOLD)
+
+    cx, cy, r = W / 2, 330, 90
+    d.ellipse([cx - r, cy - r, cx + r, cy + r], outline=GOLD, width=2)
+    d.ellipse([cx - r + 18, cy - r + 18, cx + r - 18, cy + r - 18], outline=GOLD, width=1)
+    d.polygon([(cx, cy - r), (cx + r, cy), (cx, cy + r), (cx - r, cy)], outline=INK2, width=2)
+    tick_font = _share_card_font(30, bold=True)
+    for label, pos in [("N", (cx - 12, cy - r - 40)), ("S", (cx - 8, cy + r + 6)),
+                        ("E", (cx + r + 14, cy - 18)), ("W", (cx - r - 40, cy - 18))]:
+        d.text(pos, label, font=tick_font, fill=GOLD)
+
+    centered(name[:28], 480, _share_card_font(72, bold=True), INK2)
+    d.line([(W / 2 - 140, 580), (W / 2 + 140, 580)], fill=GOLD, width=2)
+
+    facts = [("LAGNA", lagna), ("MOON SIGN", moon_sign), ("NAKSHATRA", nakshatra)]
+    if mahadasha_lord:
+        facts.append(("CURRENT MAHADASHA", mahadasha_lord))
+    y = 640
+    for label, value in facts:
+        centered(label, y, _share_card_font(24), MUTED)
+        centered(value, y + 34, _share_card_font(36, bold=True), INK2)
+        y += 110
+
+    centered("Your birth chart, read from the classical shastras", H - 180, _share_card_font(22), MUTED)
+    centered("compass-vert-one.vercel.app", H - 140, _share_card_font(22, bold=True), GOLD)
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
 async def _find_or_create_user(email: str, name: str, picture: Optional[str] = None) -> str:
     """Find-or-create by email — the same identity rule the old Emergent flow
     used, so existing Google users are matched to their existing account with
@@ -323,11 +391,16 @@ async def _create_session(user_id: str, response: Response, remember_me: bool = 
 class BirthProfileCreate(BaseModel):
     name: str
     dob: str
-    tob: str
+    tob: Optional[str] = None
     tz_offset: float
     lat: float
     lon: float
     place: str
+    # If the user isn't sure of their exact birth time, tob is estimated
+    # server-side from the classical before/after-sunrise distinction
+    # instead — tob_period is required in that case.
+    tob_unknown: bool = False
+    tob_period: Optional[str] = None  # "before_sunrise" | "after_sunrise"
 
 
 class BirthProfile(BaseModel):
@@ -340,6 +413,8 @@ class BirthProfile(BaseModel):
     lat: float
     lon: float
     place: str
+    tob_unknown: bool = False
+    tob_period: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
@@ -644,15 +719,25 @@ async def get_profile(user: User = Depends(get_current_user)):
 
 @api_router.post("/profile", response_model=BirthProfile)
 async def upsert_profile(payload: BirthProfileCreate, user: User = Depends(get_current_user)):
+    data = payload.model_dump()
+    if data.get("tob_unknown"):
+        if data.get("tob_period") not in ("before_sunrise", "after_sunrise"):
+            raise HTTPException(400, "Choose whether you were born before or after sunrise.")
+        data["tob"] = estimate_tob_from_sunrise_period(
+            data["dob"], data["tz_offset"], data["lat"], data["lon"], data["tob_period"]
+        )
+    elif not data.get("tob"):
+        raise HTTPException(400, "Time of birth is required, or mark it as unknown.")
+
     existing = await db.profiles.find_one({"user_id": user.user_id}, {"_id": 0})
     if existing:
-        update = {**payload.model_dump()}
+        update = {**data}
         await db.profiles.update_one({"user_id": user.user_id}, {"$set": update})
         merged = {**existing, **update}
         if isinstance(merged.get('created_at'), str):
             merged['created_at'] = datetime.fromisoformat(merged['created_at'])
         return BirthProfile(**merged)
-    profile = BirthProfile(user_id=user.user_id, **payload.model_dump())
+    profile = BirthProfile(user_id=user.user_id, **data)
     doc = profile.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
     await db.profiles.insert_one({**doc})
@@ -687,8 +772,34 @@ async def get_chart(user: User = Depends(get_current_user)):
         }
         for key, (sign_fn, label) in EXTRA_VARGAS.items()
     }
-    chart['profile'] = {'name': doc['name'], 'dob': doc['dob'], 'tob': doc['tob'], 'place': doc['place']}
+    chart['profile'] = {
+        'name': doc['name'], 'dob': doc['dob'], 'tob': doc['tob'], 'place': doc['place'],
+        'tob_unknown': doc.get('tob_unknown', False), 'tob_period': doc.get('tob_period'),
+    }
     return chart
+
+
+@api_router.get("/profile/share-card")
+async def profile_share_card(user: User = Depends(get_current_user)):
+    """PNG summary card for sharing — see generate_share_card() above."""
+    doc = await db.profiles.find_one({"user_id": user.user_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Set up your birth details first")
+    chart = compute_chart(doc['dob'], doc['tob'], doc['tz_offset'], doc['lat'], doc['lon'])
+    moon = next((p for p in chart['planets'] if p['name'] == 'Moon'), None)
+    md = current_dasha(chart['dashas'])
+    png_bytes = generate_share_card(
+        name=doc['name'],
+        lagna=chart['ascendant']['sign_en'],
+        moon_sign=moon['sign_en'] if moon else "—",
+        nakshatra=moon['nakshatra'] if moon else "—",
+        mahadasha_lord=md['lord'] if md else None,
+    )
+    return Response(
+        content=png_bytes,
+        media_type="image/png",
+        headers={"Content-Disposition": f'attachment; filename="{doc["name"].replace(" ", "-")}-compass-astro-chart.png"'},
+    )
 
 
 @api_router.get("/transits")
@@ -781,6 +892,12 @@ SYSTEM_PROMPT = """You are Compass Astro — a warm, calm Vedic astrology guide.
 7. Never mention "as per BPHS [1]", "shastra", "citations", or reference numbers to the user. That reasoning lives ONLY in the LOGIC block below.
 8. If the context below includes a "CALCULATED MUHURTA WINDOWS" section, use those exact date ranges as your recommended timing — do not compute or invent different dates yourself. If that section is absent, answer timing questions from the chart context as you already do.
 
+## SAFETY RULES (apply regardless of what the chart shows or what the user asks)
+9. Compass, not a verdict — always. Never state or imply a specific illness, diagnosis, cause of death, or death timing for the user or anyone else, no matter what the placements suggest. Classical texts describe tendencies and phases, not medical or forensic facts, and you must not translate them into either. If a chart factor traditionally relates to health or longevity, speak only in terms of general themes to stay mindful of (e.g. "a period worth paying attention to your energy and rest") — never a named condition, a timeframe for death, or comparable absolute claims about illness, accident, or a person's fate.
+10. Never give medical, legal, or financial advice, or make investment/legal recommendations. If asked directly, say plainly that you can offer astrological perspective on timing and themes, not professional advice, and suggest they consult a qualified doctor, lawyer, or financial advisor for the actual decision.
+11. Reframe toward agency and timing rather than fatalism: prefer "this is a period that may call for care/patience/caution" over "X will happen." The user should leave with a sense of what to pay attention to and when, never a fixed prophecy.
+12. If a message expresses suicidal thoughts, self-harm, intent to harm someone else, or a mental health crisis, do NOT provide a chart reading in response. Respond with warmth, take it seriously, and point them to crisis support (e.g. in the US: 988 Suicide & Crisis Lifeline, call or text 988; outside the US: encourage contacting a local emergency number or crisis line). Do not attempt astrological analysis of the crisis itself.
+
 ## LOGIC BLOCK (technical — hidden from the user, always required)
 After your plain-language answer, output exactly this on a new line:
 
@@ -830,6 +947,7 @@ def _build_context(chart: dict, transits: dict, retrieved: List[dict], timing_wi
     ctx = f"""NATIVE'S BIRTH DETAILS
 Name: {p['name']}
 Date/Time: {p['dob']} {p['tob']} at {p['place']}
+{"NOTE: This time of birth is an ESTIMATE (the native was unsure of their exact birth time; this was inferred from being born " + ("before" if p.get('tob_period') == "before_sunrise" else "after") + " sunrise), not a precise clock reading. Lagna, house placements, and divisional charts below carry meaningfully more uncertainty as a result — hedge any claim that depends on exact house position or ascendant degree, and prefer grounding your answer in the Moon sign/nakshatra (Chandra Lagna) and dasha timing, which stay reliable without an exact birth time." if p.get('tob_unknown') else ""}
 
 LAGNA (Ascendant): {asc['sign_en']} {asc['degree_in_sign']}°   (Lagna lord: {asc.get('lord', '?')})
 
@@ -1255,7 +1373,8 @@ HARD RULES for in-scope answers:
 1. Maximum 50 words. Exactly one short paragraph — no headers, no bullets, no lists, no line breaks.
 2. Use ONLY the exact times given to you in TODAY'S/TOMORROW'S DATA below — never calculate or invent your own.
 3. Plain, direct language. Skip preamble like "Great question!" — answer immediately.
-4. If the data below doesn't cover what's asked (e.g. they ask about a date beyond tomorrow), say so briefly rather than guessing."""
+4. If the data below doesn't cover what's asked (e.g. they ask about a date beyond tomorrow), say so briefly rather than guessing.
+5. If a message expresses suicidal thoughts, self-harm, or a mental health crisis, do not apply the out-of-scope redirect above and do not answer with timing data. Respond briefly and warmly, and point them to crisis support (US: 988 Suicide & Crisis Lifeline, call or text 988; outside the US: a local emergency number or crisis line)."""
 
 
 def _format_muhurta_day_for_prompt(label: str, d: dict) -> str:

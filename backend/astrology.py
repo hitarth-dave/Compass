@@ -1321,3 +1321,33 @@ def current_utc_offset_hours(lat: float, lon: float) -> float:
         now_there = datetime.now(timezone.utc).astimezone(ZoneInfo(tzname))
         return now_there.utcoffset().total_seconds() / 3600
     return round(lon / 15, 2)
+
+
+def estimate_tob_from_sunrise_period(dob_iso: str, tz_offset_hours: float, lat: float, lon: float, period: str) -> str:
+    """Rough birth-time estimate for users who don't know their exact time,
+    using the classical before/after-sunrise distinction rather than a
+    guessed clock time. Returns 'HH:MM' local civil time on the birth date:
+    the midpoint between midnight and sunrise (if born before sunrise), or
+    between sunrise and the following midnight (if born after) — computed
+    from real sunrise for the actual birth date and place, not a fixed
+    clock-time assumption. This is a coarse estimate, not a substitute for
+    genuine rectification; callers should flag the resulting chart as
+    approximate."""
+    y, m, d = (int(x) for x in dob_iso.split("-"))
+    # Local midnight of the birth date, expressed in UTC, seeds the search —
+    # elapsed hours from this point to sunrise equals the local sunrise hour.
+    midnight_utc = datetime(y, m, d, 0, 0, 0, tzinfo=timezone.utc) - timedelta(hours=tz_offset_hours)
+    jd_midnight = _julday(midnight_utc)
+    geopos = (lon, lat, 0)
+    _, tr = swe.rise_trans(jd_midnight, swe.SUN, swe.CALC_RISE, geopos)
+    jd_sunrise = tr[0]
+    sunrise_local_hour = ((jd_sunrise - jd_midnight) * 24.0) % 24
+
+    if period == "before_sunrise":
+        est_hour = sunrise_local_hour / 2
+    else:  # "after_sunrise" (default if unspecified)
+        est_hour = sunrise_local_hour + (24 - sunrise_local_hour) / 2
+
+    hh = int(est_hour) % 24
+    mm = int(round((est_hour - int(est_hour)) * 60)) % 60
+    return f"{hh:02d}:{mm:02d}"
