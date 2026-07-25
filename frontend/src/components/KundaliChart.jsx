@@ -57,6 +57,20 @@ const HOUSES = {
   12: { planet: [405, 65],  num: [505, 20] },     // upper-right along top edge
 };
 
+const NAK_FULL = {
+  Ash: "Ashwini", Bha: "Bharani", Kri: "Krittika", Roh: "Rohini", Mri: "Mrigashira",
+  Ard: "Ardra", Pun: "Punarvasu", Pus: "Pushya", Asl: "Ashlesha", Mag: "Magha",
+  PPh: "Purva Phalguni", UPh: "Uttara Phalguni", Has: "Hasta", Chi: "Chitra",
+  Swa: "Swati", Vis: "Vishakha", Anu: "Anuradha", Jye: "Jyeshtha", Mul: "Mula",
+  PAs: "Purva Ashadha", UAs: "Uttara Ashadha", Shr: "Shravana", Dha: "Dhanishta",
+  Sha: "Shatabhisha", PBh: "Purva Bhadrapada", UBh: "Uttara Bhadrapada", Rev: "Revati",
+};
+
+const PLANET_FULL_NAME = {
+  Sun: "Sun", Moon: "Moon", Mars: "Mars", Mercury: "Mercury", Jupiter: "Jupiter",
+  Venus: "Venus", Saturn: "Saturn", Rahu: "Rahu", Ketu: "Ketu", As: "Ascendant",
+};
+
 export default function KundaliChart({ planets, ascendantSign, ascendant, showNakshatra = true, testid = "kundali-chart" }) {
   // Group planets by house
   const byHouse = {};
@@ -119,6 +133,9 @@ export default function KundaliChart({ planets, ascendantSign, ascendant, showNa
                 const color = p._color || PLANET_COLOR[p.name] || "#8B6F47";
                 const yy = startY + i * lineHeight;
                 const nak = showNakshatra && p.nakshatra ? (NAK_ABBR[p.nakshatra] || p.nakshatra.slice(0, 3)) : "";
+                const fullName = PLANET_FULL_NAME[p.name] || p.name;
+                const nakFull = p.nakshatra || (nak && NAK_FULL[nak]) || "";
+                const tooltip = `${fullName}${p.retrograde ? " (retrograde)" : ""} — ${fmtDegMin(p.degree_in_sign)} in the sign${nakFull ? `, ${nakFull} nakshatra` : ""}`;
                 return (
                   <text
                     key={p.name}
@@ -126,8 +143,12 @@ export default function KundaliChart({ planets, ascendantSign, ascendant, showNa
                     y={yy}
                     textAnchor="middle"
                     className="kundali-planet"
-                    style={{ fill: color }}
+                    style={{ fill: color, cursor: "default" }}
                   >
+                    {/* Native SVG tooltip on hover — abbreviations like
+                        "Su 14:19 Ard" otherwise go unexplained, which
+                        contradicts the "no jargon" promise on the homepage. */}
+                    <title>{tooltip}</title>
                     <tspan style={{ fontWeight: 700 }}>{initial}</tspan>
                     <tspan dx="4">{fmtDegMin(p.degree_in_sign)}</tspan>
                     {nak && <tspan dx="4" style={{ opacity: 0.85 }}>{nak}</tspan>}
@@ -138,6 +159,16 @@ export default function KundaliChart({ planets, ascendantSign, ascendant, showNa
           );
         })}
       </svg>
+      {/* Compact legend — the abbreviations above (Su/Mo/Ma.../R/nakshatra
+          codes) had no explanation anywhere on the page. Hover any planet
+          for its full name too. */}
+      <p
+        className="w-full max-w-2xl mx-auto -mt-1 text-center text-xs"
+        style={{ color: "var(--jai-text-muted)" }}
+        data-testid="kundali-legend"
+      >
+        Su/Mo/Ma/Me/Ju/Ve/Sa/Ra/Ke = planets · R = retrograde · degree:minutes in sign · 3-letter code = nakshatra (hover a planet for full names)
+      </p>
     </div>
   );
 }

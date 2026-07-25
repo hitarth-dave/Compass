@@ -1,4 +1,5 @@
-import { Sun, Moon } from "lucide-react";
+import { useState } from "react";
+import { Sun, Moon, Menu, X } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
@@ -15,9 +16,11 @@ export function PublicNav() {
   const location = useLocation();
   const { user, openAuthModal } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
   return (
     <header className="relative z-20 flex items-center justify-between max-w-6xl mx-auto px-6 lg:px-12 py-8 fade-up">
-      <Link to="/" className="flex items-center" data-testid="nav-brand">
+      <Link to="/" className="flex items-center" data-testid="nav-brand" onClick={() => setMobileOpen(false)}>
         {/* Navy recolored to match the heading green per-theme, so the mark
             reads correctly on both light and dark backgrounds without
             needing a fixed backing plate anymore. */}
@@ -64,7 +67,43 @@ export function PublicNav() {
         >
           {user ? "Open app" : "Sign in"}
         </button>
+        {/* Mobile-only hamburger — below 768px the nav above is hidden and,
+            until now, there was nothing to replace it with. Astrology,
+            Pricing and Contact were unreachable from the top of any page
+            on a phone. */}
+        <button
+          onClick={() => setMobileOpen((v) => !v)}
+          className="md:hidden w-11 h-11 rounded-full flex items-center justify-center border border-[color:var(--jai-border)] text-[color:var(--jai-green-deep)]"
+          aria-label={mobileOpen ? "Close menu" : "Open menu"}
+          aria-expanded={mobileOpen}
+          data-testid="mobile-menu-toggle"
+        >
+          {mobileOpen ? <X size={20} /> : <Menu size={20} />}
+        </button>
       </div>
+
+      {mobileOpen && (
+        <div className="md:hidden absolute top-full left-0 right-0 mt-2 mx-4 modal-surface p-4 z-30" data-testid="mobile-menu-panel">
+          <nav className="flex flex-col">
+            {NAV.map((item) => {
+              const active = location.pathname === item.to;
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  onClick={() => setMobileOpen(false)}
+                  className={`py-3 px-2 min-h-[44px] flex items-center text-base border-b border-[color:var(--jai-border)] last:border-b-0 ${
+                    active ? "text-[color:var(--jai-gold)]" : "text-[color:var(--jai-green-deep)]"
+                  }`}
+                  data-testid={`mobile-nav-${item.label.toLowerCase()}`}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+      )}
     </header>
   );
 }
@@ -82,20 +121,20 @@ export function PublicFooter() {
         </div>
         <div>
           <div className="overline mb-4">Explore</div>
-          <ul className="space-y-2 text-sm text-[color:var(--jai-text-muted)]">
+          <ul className="text-sm text-[color:var(--jai-text-muted)]">
             {NAV.map((i) => (
               <li key={i.to}>
-                <Link to={i.to} className="hover:text-[color:var(--jai-gold)]">{i.label}</Link>
+                <Link to={i.to} className="min-h-[44px] flex items-center hover:text-[color:var(--jai-gold)]">{i.label}</Link>
               </li>
             ))}
           </ul>
         </div>
         <div>
           <div className="overline mb-4">Legal</div>
-          <ul className="space-y-2 text-sm text-[color:var(--jai-text-muted)]">
-            <li><Link to="/contact" className="hover:text-[color:var(--jai-gold)]">Contact</Link></li>
-            <li><span className="opacity-70">Privacy</span></li>
-            <li><span className="opacity-70">Terms</span></li>
+          <ul className="text-sm text-[color:var(--jai-text-muted)]">
+            <li><Link to="/contact" className="min-h-[44px] flex items-center hover:text-[color:var(--jai-gold)]">Contact</Link></li>
+            <li><Link to="/privacy" className="min-h-[44px] flex items-center hover:text-[color:var(--jai-gold)]">Privacy</Link></li>
+            <li><Link to="/terms" className="min-h-[44px] flex items-center hover:text-[color:var(--jai-gold)]">Terms</Link></li>
           </ul>
         </div>
       </div>

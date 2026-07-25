@@ -17,6 +17,7 @@ import {
   Sun,
   Moon,
   CalendarClock,
+  X,
 } from "lucide-react";
 import { useTheme } from "@/context/ThemeContext";
 import { useDisplayMode } from "@/context/DisplayModeContext";
@@ -49,6 +50,13 @@ export default function AppShell({ children }) {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { mode, setMode } = useDisplayMode();
+  const [showAdvancedHint, setShowAdvancedHint] = useState(
+    () => localStorage.getItem("jyotish_seen_advanced_hint") !== "1"
+  );
+  const dismissAdvancedHint = () => {
+    setShowAdvancedHint(false);
+    localStorage.setItem("jyotish_seen_advanced_hint", "1");
+  };
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem("jyotish_sidebar_collapsed") === "1"
   );
@@ -80,6 +88,26 @@ export default function AppShell({ children }) {
 
   useEffect(() => {
     loadThreads();
+  }, []);
+
+  // Render's free/hobby backend cold-starts after idling — a request that's
+  // still pending 5s in is very likely a cold start, not a slow query.
+  // AuthContext's axios interceptor fires this event; dismiss it as soon as
+  // anything settles.
+  useEffect(() => {
+    let toastId;
+    const onSlow = () => {
+      toastId = toast.loading("Waking up the ephemeris engine… this can take up to a minute on a cold start.");
+    };
+    const onSettled = () => {
+      if (toastId) toast.dismiss(toastId);
+    };
+    window.addEventListener("compass:slow-request", onSlow);
+    window.addEventListener("compass:request-settled", onSettled);
+    return () => {
+      window.removeEventListener("compass:slow-request", onSlow);
+      window.removeEventListener("compass:request-settled", onSettled);
+    };
   }, []);
 
   const createThread = async () => {
@@ -277,12 +305,30 @@ export default function AppShell({ children }) {
           full technical readout: Shadbala, Ashtakavarga, dignity, yogas,
           the full Dasha tree, the "Why?" reasoning panel in Chat, and the
           tomorrow view in Muhurta). */}
-      <div
-        className="fixed top-4 right-16 z-20 flex items-center rounded-full border border-[color:var(--jai-border)] bg-[color:var(--jai-surface)] p-0.5 shadow-sm"
-        data-testid="display-mode-toggle"
-      >
+      <div className="fixed top-4 right-16 z-20" data-testid="display-mode-toggle-wrap">
+        {showAdvancedHint && (
+          <div
+            className="absolute top-full right-0 mt-2 w-56 modal-surface p-3 text-xs text-[color:var(--jai-green-deep)] fade-up"
+            role="status"
+            data-testid="advanced-mode-hint"
+          >
+            <button
+              onClick={dismissAdvancedHint}
+              className="absolute top-1.5 right-1.5 text-[color:var(--jai-text-muted)] hover:text-[color:var(--jai-gold)]"
+              aria-label="Dismiss"
+            >
+              <X size={12} />
+            </button>
+            <strong className="block mb-1">Try Advanced →</strong>
+            Unlocks Shadbala, Ashtakavarga, detected yogas, House Lords, and full divisional charts —
+            the deepest part of your reading.
+          </div>
+        )}
+        <div
+          className="flex items-center rounded-full border border-[color:var(--jai-border)] bg-[color:var(--jai-surface)] p-0.5 shadow-sm"
+        >
         <button
-          onClick={() => setMode("simple")}
+          onClick={() => { setMode("simple"); dismissAdvancedHint(); }}
           className={`px-3 py-1.5 rounded-full text-[11px] uppercase tracking-widest font-semibold transition-colors ${
             mode === "simple"
               ? "bg-[color:var(--jai-green)] text-[color:var(--jai-surface)]"
@@ -294,7 +340,7 @@ export default function AppShell({ children }) {
           Basic
         </button>
         <button
-          onClick={() => setMode("advanced")}
+          onClick={() => { setMode("advanced"); dismissAdvancedHint(); }}
           className={`px-3 py-1.5 rounded-full text-[11px] uppercase tracking-widest font-semibold transition-colors ${
             mode === "advanced"
               ? "bg-[color:var(--jai-gold)] text-[color:var(--jai-surface)]"
@@ -305,6 +351,7 @@ export default function AppShell({ children }) {
         >
           Advanced
         </button>
+        </div>
       </div>
 
       <button

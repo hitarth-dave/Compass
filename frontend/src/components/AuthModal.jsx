@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
 import { X, Loader2, Eye, EyeOff } from "lucide-react";
 import { useAuth, setStoredToken } from "@/context/AuthContext";
+import { REDIRECT_KEY } from "@/components/ProtectedRoute";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID;
@@ -25,12 +27,15 @@ const emptyForm = { name: "", email: "", password: "", newPassword: "", remember
 
 export default function AuthModal() {
   const { authModalOpen, authModalMode, closeAuthModal, setUser } = useAuth();
+  const navigate = useNavigate();
   const [mode, setMode] = useState("signin"); // "signin" | "signup"
   const [step, setStep] = useState("form"); // "form" | "verify" | "forgot" | "reset"
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const googleBtnRef = useRef(null);
+  const dialogRef = useRef(null);
+  const firstFieldRef = useRef(null);
   // Keeps the Google callback pointed at the latest handler without having
   // to re-run the (somewhat expensive) initialize/renderButton effect below
   // on every keystroke in the form.
@@ -50,7 +55,14 @@ export default function AuthModal() {
     if (data?.session_token) setStoredToken(data.session_token);
     setUser(data);
     closeAuthModal();
-    window.location.href = "/dashboard";
+    // Previously window.location.href — a full page reload that re-downloads
+    // and re-parses the entire bundle right after the highest-friction step
+    // a new user takes. navigate() is instant. If ProtectedRoute redirected
+    // them here from a gated page, send them back to it instead of always
+    // /dashboard.
+    const next = sessionStorage.getItem(REDIRECT_KEY);
+    sessionStorage.removeItem(REDIRECT_KEY);
+    navigate(next || "/dashboard");
   }
 
   async function handleGoogleCredential(credential) {
@@ -179,15 +191,37 @@ export default function AuthModal() {
     }
   }
 
+  // Custom modal (not a native <dialog>), so Escape-to-close and an initial
+  // focus target don't come for free — add both explicitly.
+  useEffect(() => {
+    if (!authModalOpen) return;
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") closeAuthModal();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    const focusTimer = setTimeout(() => firstFieldRef.current?.focus(), 50);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      clearTimeout(focusTimer);
+    };
+  }, [authModalOpen, step, closeAuthModal]);
+
   if (!authModalOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4" data-testid="auth-modal">
       <div className="absolute inset-0 bg-black/50" onClick={closeAuthModal} />
-      <div className="relative card-surface w-full max-w-md p-8 max-h-[90vh] overflow-y-auto">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="auth-modal-title"
+        className="relative modal-surface w-full max-w-md p-8 max-h-[90vh] overflow-y-auto"
+      >
         <button
           onClick={closeAuthModal}
           className="absolute top-4 right-4 text-[color:var(--jai-text-muted)] hover:text-[color:var(--jai-gold)]"
+          aria-label="Close sign-in dialog"
           data-testid="auth-modal-close"
         >
           <X size={18} />
@@ -195,7 +229,7 @@ export default function AuthModal() {
 
         {step === "form" && (
           <>
-            <h2 className="font-serif-display text-2xl text-[color:var(--jai-parchment)] mb-6">
+            <h2 id="auth-modal-title" className="font-serif-display text-2xl text-[color:var(--jai-green-deep)] mb-6">
               {mode === "signin" ? "Sign in" : "Create your account"}
             </h2>
 
@@ -203,10 +237,13 @@ export default function AuthModal() {
             <button
               disabled
               title="Apple sign-in is coming soon"
-              className="w-full mt-3 rounded-full px-6 py-3 font-serif-display inline-flex items-center justify-center gap-3 border border-[color:var(--jai-border)] text-[color:var(--jai-text-muted)] opacity-50 cursor-not-allowed"
+              className="w-full mt-3 rounded-full px-6 py-3 font-serif-display inline-flex items-center justify-center gap-2 border border-[color:var(--jai-border)] text-[color:var(--jai-text-muted)] opacity-70 cursor-not-allowed"
               data-testid="apple-signin-btn-disabled"
             >
               Continue with Apple
+              <span className="text-xs uppercase tracking-wide px-2 py-0.5 rounded-full border border-[color:var(--jai-border)]">
+                Coming soon
+              </span>
             </button>
 
             <div className="flex items-center gap-3 my-6">
@@ -217,29 +254,42 @@ export default function AuthModal() {
 
             <form onSubmit={mode === "signin" ? handleLogin : handleSignup} className="space-y-4">
               {mode === "signup" && (
-                <input
-                  type="text"
-                  placeholder="Name"
-                  required
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full px-4 py-3 rounded-lg bg-transparent border border-[color:var(--jai-border)] text-[color:var(--jai-parchment)] focus:outline-none focus:border-[color:var(--jai-gold)]"
-                  data-testid="auth-name-input"
-                />
+                <label className="block">
+                  <span className="sr-only">Name</span>
+                  <input
+                    ref={mode === "signup" ? firstFieldRef : undefined}
+                    type="text"
+                    placeholder="Name"
+                    autoComplete="name"
+                    required
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    className="w-full px-4 py-3 rounded-lg bg-transparent border border-[color:var(--jai-border)] text-[color:var(--jai-parchment)] focus:outline-none focus:border-[color:var(--jai-gold)]"
+                    data-testid="auth-name-input"
+                  />
+                </label>
               )}
-              <input
-                type="email"
-                placeholder="Email"
-                required
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                className="w-full px-4 py-3 rounded-lg bg-transparent border border-[color:var(--jai-border)] text-[color:var(--jai-parchment)] focus:outline-none focus:border-[color:var(--jai-gold)]"
-                data-testid="auth-email-input"
-              />
-              <div className="relative">
+              <label className="block">
+                <span className="sr-only">Email</span>
                 <input
+                  ref={mode === "signin" ? firstFieldRef : undefined}
+                  type="email"
+                  placeholder="Email"
+                  autoComplete="email"
+                  required
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  className="w-full px-4 py-3 rounded-lg bg-transparent border border-[color:var(--jai-border)] text-[color:var(--jai-parchment)] focus:outline-none focus:border-[color:var(--jai-gold)]"
+                  data-testid="auth-email-input"
+                />
+              </label>
+              <div className="relative">
+                <label className="sr-only" htmlFor="auth-password-field">Password</label>
+                <input
+                  id="auth-password-field"
                   type={showPassword ? "text" : "password"}
                   placeholder="Password"
+                  autoComplete={mode === "signup" ? "new-password" : "current-password"}
                   required
                   minLength={mode === "signup" ? 8 : undefined}
                   value={form.password}
@@ -357,6 +407,7 @@ export default function AuthModal() {
               <input
                 type="email"
                 placeholder="Email"
+                autoComplete="email"
                 required
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
@@ -407,6 +458,7 @@ export default function AuthModal() {
                 <input
                   type={showPassword ? "text" : "password"}
                   placeholder="New password"
+                  autoComplete="new-password"
                   required
                   minLength={8}
                   value={form.newPassword}
