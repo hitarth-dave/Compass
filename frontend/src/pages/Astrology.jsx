@@ -23,6 +23,11 @@ const TEXTS = [
 export default function Astrology() {
   return (
     <PublicLayout>
+      <title>Astrology — What Compass Astro reads</title>
+      <meta
+        name="description"
+        content="Kundali interpretation, transits, dashas, yogas, and remedies — read from Brihat Parashara Hora Shastra, Phaladeepika, and the classical Jyotish corpus."
+      />
       <section className="max-w-4xl mx-auto px-6 lg:px-12 pt-6 fade-up">
         <div className="overline mb-6">The practice</div>
         <h1 className="font-serif-display text-5xl sm:text-6xl leading-[0.98] text-[color:var(--jai-parchment)]">

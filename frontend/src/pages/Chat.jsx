@@ -21,12 +21,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import WhyPanel, { splitAnswerLogic, groupCitationsByBook } from "@/components/WhyPanel";
 import {
   Tooltip,
   TooltipContent,
@@ -42,31 +37,6 @@ const SUGGESTIONS = [
   "What should I focus on this year?",
   "Is a big change coming for me?",
 ];
-
-function splitAnswerLogic(text) {
-  if (!text) return { answer: "", logic: "" };
-  const idx = text.indexOf("<LOGIC>");
-  if (idx === -1) return { answer: text, logic: "" };
-  const answer = text.slice(0, idx).trim();
-  const rest = text.slice(idx + 7);
-  const end = rest.indexOf("</LOGIC>");
-  const logic = (end === -1 ? rest : rest.slice(0, end)).trim();
-  return { answer, logic };
-}
-
-/** Groups citations by book name so the same book never appears twice as a
- * separate pill/heading — each book appears once, with all its excerpts
- * (from possibly-different chapters) nested underneath. */
-function groupCitationsByBook(citations) {
-  const byBook = new Map();
-  for (const c of citations || []) {
-    if (!byBook.has(c.book)) {
-      byBook.set(c.book, { book: c.book, idx: c.idx, excerpts: [] });
-    }
-    byBook.get(c.book).excerpts.push({ idx: c.idx, chapter: c.chapter, text: c.text });
-  }
-  return Array.from(byBook.values());
-}
 
 export default function Chat() {
   const location = useLocation();
@@ -406,57 +376,13 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* Why panel */}
-      <Sheet open={logicOpen} onOpenChange={setLogicOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-lg bg-[color:var(--jai-surface)] border-[color:var(--jai-border)] overflow-y-auto" data-testid="logic-panel">
-          <SheetHeader>
-            <SheetTitle className="font-serif-display text-[color:var(--jai-green-deep)] flex items-center gap-2">
-              <Info size={16} className="text-[color:var(--jai-gold)]" /> The astrological logic
-            </SheetTitle>
-          </SheetHeader>
-          <div className="mt-6 space-y-6">
-            {activeLogic.locked ? (
-              <div className="text-center py-10" data-testid="why-upgrade-prompt">
-                <Info size={22} className="text-[color:var(--jai-gold)] mx-auto mb-3" />
-                <p className="text-sm text-[color:var(--jai-parchment)] font-serif-display text-base mb-2">
-                  Upgrade to Advanced or Astrologer mode
-                </p>
-                <p className="text-sm text-[color:var(--jai-text-muted)] max-w-xs mx-auto leading-relaxed">
-                  The full astrological reasoning — planets, houses, dashas, transits, and shastra citations behind
-                  this answer — is available in Advanced mode.
-                </p>
-              </div>
-            ) : activeLogic.logic ? (
-              <div className="md-body text-sm text-[color:var(--jai-parchment)]">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{activeLogic.logic}</ReactMarkdown>
-              </div>
-            ) : (
-              <p className="text-sm text-[color:var(--jai-text-muted)] italic">No logic recorded for this answer.</p>
-            )}
-
-            {!activeLogic.locked && activeLogic.citations?.length > 0 && (
-              <div>
-                <div className="overline mb-3">Shastra excerpts consulted</div>
-                <div className="space-y-4">
-                  {groupCitationsByBook(activeLogic.citations).map((grouped) => (
-                    <div key={grouped.book} className="border-l-2 border-[color:var(--jai-gold)] pl-3">
-                      <div className="text-[10px] uppercase tracking-widest text-[color:var(--jai-gold)]">{grouped.book}</div>
-                      <div className="mt-1 space-y-2">
-                        {grouped.excerpts.map((e) => (
-                          <div key={e.idx}>
-                            <div className="text-[9px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">[{e.idx}] {e.chapter}</div>
-                            <div className="mt-0.5 italic font-serif-display text-sm leading-relaxed text-[color:var(--jai-parchment)]">"{e.text}"</div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
+      <WhyPanel
+        open={logicOpen}
+        onOpenChange={setLogicOpen}
+        logic={activeLogic.logic}
+        citations={activeLogic.citations}
+        locked={activeLogic.locked}
+      />
     </div>
   );
 }
@@ -470,7 +396,7 @@ function MessageBubble({ msg, idx, onWhy, advanced }) {
             <img key={i} src={`${process.env.REACT_APP_BACKEND_URL}${u}`} alt="attachment" className="max-h-40 rounded-lg border border-[color:var(--jai-border)]" />
           ))}
           {msg.content && (
-            <div className="rounded-2xl px-5 py-3 bg-[color:var(--jai-green)] text-[color:var(--jai-surface)] shadow-sm" data-testid="user-message">
+            <div className="rounded-2xl px-5 py-3 bg-[color:var(--jai-green)] text-[color:var(--jai-surface)] shadow-sm" data-testid="user-message" data-ph-mask>
               {msg.content}
             </div>
           )}
@@ -490,7 +416,7 @@ function MessageBubble({ msg, idx, onWhy, advanced }) {
       </div>
       <div className="max-w-[85%] flex-1">
         <div className="card-surface px-6 py-5 border-l-2 border-l-[color:var(--jai-gold)]">
-          <div className="md-body text-[color:var(--jai-parchment)] leading-relaxed" data-testid={`assistant-answer-${idx}`}>
+          <div className="md-body text-[color:var(--jai-parchment)] leading-relaxed" data-testid={`assistant-answer-${idx}`} data-ph-mask>
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {answer || (msg.content ? "…" : "")}
             </ReactMarkdown>

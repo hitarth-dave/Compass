@@ -1,6 +1,7 @@
+import { useEffect } from "react";
 import { Sparkles, BookOpen, MessageCircle, Compass as CompassIcon } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { Navigate, Link } from "react-router-dom";
+import { Navigate, Link, useSearchParams } from "react-router-dom";
 import PublicLayout from "@/components/PublicLayout";
 import AuthButtons from "@/components/AuthButtons";
 import CredibilityBar from "@/components/CredibilityBar";
@@ -8,12 +9,38 @@ import HowItWorks from "@/components/HowItWorks";
 import ProductPreview from "@/components/ProductPreview";
 
 export default function Home() {
-  const { user, loading } = useAuth();
+  const { user, loading, openAuthModal } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Landing here via ?signin=1 means ProtectedRoute redirected a signed-out
+  // visitor away from a gated page (e.g. /dashboard). Open the sign-in modal
+  // automatically instead of leaving them to notice the "Sign in" button
+  // themselves — AuthModal's afterLogin sends them on to where they were
+  // headed once they've signed in.
+  useEffect(() => {
+    if (searchParams.get("signin") === "1") {
+      openAuthModal("signin");
+      searchParams.delete("signin");
+      setSearchParams(searchParams, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   if (loading) return null;
   if (user) return <Navigate to="/dashboard" replace />;
 
   return (
     <PublicLayout>
+      <title>Compass Astro — Your birth chart, read from the classical shastras</title>
+      <meta
+        name="description"
+        content="Ask your Vedic astrology questions and get answers grounded in classical texts like Brihat Parashara Hora Shastra — with citations you can trace, not generic horoscope content."
+      />
+      <meta property="og:title" content="Compass Astro" />
+      <meta property="og:description" content="Your birth chart, read aloud by the ancient shastras — with citations you can trace." />
+      <meta property="og:image" content="/compass-hero-tight.png" />
+      <meta property="og:type" content="website" />
+      <meta name="twitter:card" content="summary_large_image" />
       {/* HERO
           The text stays inside the same centered max-w-6xl container the nav
           uses, so it lines up with the logo above it at every screen width.

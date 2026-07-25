@@ -4,9 +4,10 @@ import { toast } from "sonner";
 import {
   Briefcase, Rocket, Plane, Heart, GraduationCap, TrendingUp, HeartPulse,
   Loader2, CalendarClock, ChevronLeft, ChevronRight, Sparkles, AlertTriangle,
-  MessageCircleQuestion, Send,
+  MessageCircleQuestion, Send, Info, CheckCircle2, XCircle, Circle,
 } from "lucide-react";
 import { useDisplayMode } from "@/context/DisplayModeContext";
+import WhyPanel from "@/components/WhyPanel";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -36,9 +37,9 @@ function scoreLabel(score) {
 }
 
 const QUALITY_STYLE = {
-  good: { bgVar: "var(--jai-tint-good)", textClass: "text-[color:var(--jai-green-deep)]", label: "Good" },
-  neutral: { bgVar: "var(--jai-tint-neutral)", textClass: "text-[color:var(--jai-gold)]", label: "Neutral" },
-  bad: { bgVar: "var(--jai-tint-bad)", textClass: "text-[color:var(--jai-terracotta)]", label: "Avoid" },
+  good: { bgVar: "var(--jai-tint-good)", textClass: "text-[color:var(--jai-green-deep)]", label: "Good", Icon: CheckCircle2 },
+  neutral: { bgVar: "var(--jai-tint-neutral)", textClass: "text-[color:var(--jai-gold)]", label: "Neutral", Icon: Circle },
+  bad: { bgVar: "var(--jai-tint-bad)", textClass: "text-[color:var(--jai-terracotta)]", label: "Avoid", Icon: XCircle },
 };
 
 /** "HH:MM" -> minutes since midnight. */
@@ -90,7 +91,9 @@ function ChoghadiyaRow({ segments, nowMin }) {
                 Now
               </span>
             )}
-            <div className={`text-[9px] uppercase tracking-widest ${st.textClass}`}>{st.label}</div>
+            <div className={`flex items-center gap-1 text-[9px] uppercase tracking-widest ${st.textClass}`}>
+              <st.Icon size={10} /> {st.label}
+            </div>
             <div className={`font-serif-display text-sm mt-0.5 ${st.textClass}`}>{s.name}</div>
             <div className="text-[10px] text-[color:var(--jai-text-muted)] mt-0.5">{s.start} – {s.end}</div>
           </div>
@@ -107,7 +110,9 @@ function ChoghadiyaRow({ segments, nowMin }) {
 function MuhurtaQuickAsk() {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
+  const [citations, setCitations] = useState([]);
   const [asking, setAsking] = useState(false);
+  const [whyOpen, setWhyOpen] = useState(false);
 
   const ask = async (e) => {
     e.preventDefault();
@@ -115,9 +120,11 @@ function MuhurtaQuickAsk() {
     if (!q || asking) return;
     setAsking(true);
     setAnswer("");
+    setCitations([]);
     try {
       const res = await axios.post(`${API}/muhurta/ask`, { message: q });
       setAnswer(res.data.answer);
+      setCitations(res.data.citations || []);
     } catch (err) {
       toast.error(err.response?.data?.detail || "Could not get an answer right now");
     } finally {
@@ -158,12 +165,39 @@ function MuhurtaQuickAsk() {
         <div
           className="mt-4 p-4 rounded-lg border border-[color:var(--jai-border)] text-sm text-[color:var(--jai-parchment)] leading-relaxed"
           data-testid="muhurta-quick-ask-answer"
+          data-ph-mask
         >
           {answer}
+          {citations.length > 0 && (
+            <button
+              onClick={() => setWhyOpen(true)}
+              className="mt-3 inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border border-[color:var(--jai-gold)] text-[color:var(--jai-gold)] hover:bg-[color:var(--jai-gold)] hover:text-[color:var(--jai-surface)] transition-colors"
+              data-testid="muhurta-quick-ask-why-btn"
+            >
+              <Info size={11} /> Why?
+            </button>
+          )}
         </div>
       )}
+      <WhyPanel
+        open={whyOpen}
+        onOpenChange={setWhyOpen}
+        logic={null}
+        citations={citations}
+        emptyLabel="No source passage found for this answer."
+      />
     </div>
   );
+}
+
+/** Formats a numeric UTC offset (e.g. 5.5) as "UTC+5:30". */
+function fmtUtcOffset(hours) {
+  if (hours == null) return "";
+  const sign = hours >= 0 ? "+" : "-";
+  const abs = Math.abs(hours);
+  const h = Math.floor(abs);
+  const m = Math.round((abs - h) * 60);
+  return `UTC${sign}${h}${m ? `:${String(m).padStart(2, "0")}` : ""}`;
 }
 
 export default function Muhurta() {
@@ -281,6 +315,11 @@ export default function Muhurta() {
           <p className="mt-4 text-[color:var(--jai-text-muted)]">
             {today.date} · {today.panchang.vara} · {today.panchang.tithi} ({today.panchang.paksha} Paksha)
             {isAdvanced && <> · {today.panchang.karana} Karana · {today.panchang.yoga} Yoga</>}
+            {today.tz_offset != null && (
+              <span className="ml-1 text-xs opacity-80" data-testid="muhurta-timezone-label">
+                · times shown in {fmtUtcOffset(today.tz_offset)} (your current location)
+              </span>
+            )}
           </p>
         )}
       </div>

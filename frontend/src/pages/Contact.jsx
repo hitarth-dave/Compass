@@ -1,40 +1,51 @@
 import { useState } from "react";
+import axios from "axios";
 import { Mail, MessageSquare, Send } from "lucide-react";
 import { toast } from "sonner";
 import PublicLayout from "@/components/PublicLayout";
 
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+
 export default function Contact() {
   const [form, setForm] = useState({ name: "", email: "", message: "" });
   const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
 
   const update = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const submit = async (e) => {
     e.preventDefault();
+    // Clear any stale error from a previous failed submit before validating
+    // again — this used to stay visible even after a later success.
+    setError("");
     if (!form.name || !form.email || !form.message) {
-      toast.error("Please fill in every field.");
+      setError("Please fill in every field.");
       return;
     }
     setSending(true);
-    // NOTE: no contact endpoint exists yet on the backend. This opens the
-    // user's mail client as a dependable fallback. Wire to POST /api/contact
-    // later if you add one.
-    const subject = encodeURIComponent(`Compass Astro — message from ${form.name}`);
-    const body = encodeURIComponent(`${form.message}\n\n— ${form.name} (${form.email})`);
-    window.location.href = `mailto:hello@compass-astro.app?subject=${subject}&body=${body}`;
-    setTimeout(() => {
+    try {
+      await axios.post(`${API}/contact`, form);
+      toast.success("Message sent — we'll get back to you soon.");
+      setForm({ name: "", email: "", message: "" });
+    } catch (err) {
+      const msg = err.response?.data?.detail || "Could not send your message. Please try again.";
+      setError(msg);
+      toast.error(msg);
+    } finally {
       setSending(false);
-      toast.success("Opening your mail app…");
-    }, 400);
+    }
   };
 
   return (
     <PublicLayout>
+      <title>Contact — Compass Astro</title>
+      <meta name="description" content="Questions, feedback, or a chart that puzzles you? Send us a note." />
+
       <section className="max-w-5xl mx-auto px-6 lg:px-12 pt-6 grid lg:grid-cols-2 gap-14 items-start">
         <div className="fade-up">
           <div className="overline mb-6">Contact</div>
           <h1 className="font-serif-display text-5xl sm:text-6xl leading-[0.98] text-[color:var(--jai-parchment)]">
-            Questions, feedback, or <em className="text-[color:var(--jai-gold)]">a chart that puzzles you?</em>
+            Questions, feedback, or <em className="text-[color:var(--jai-gold-display)]">a chart that puzzles you?</em>
           </h1>
           <p className="mt-8 text-lg text-[color:var(--jai-text-muted)] leading-relaxed">
             We read everything. Whether it's a bug, a billing question, or a point of Jyotish you'd
@@ -43,21 +54,27 @@ export default function Contact() {
 
           <div className="mt-10 space-y-4">
             <div className="flex items-center gap-3 text-[color:var(--jai-green-deep)]">
-              <Mail size={18} className="text-[color:var(--jai-gold)]" />
-              <span className="text-sm">hello@compass-astro.app</span>
+              <Mail size={18} className="text-[color:var(--jai-gold-display)]" />
+              <span className="text-sm">daveastroanalyst@gmail.com</span>
             </div>
             <div className="flex items-center gap-3 text-[color:var(--jai-green-deep)]">
-              <MessageSquare size={18} className="text-[color:var(--jai-gold)]" />
+              <MessageSquare size={18} className="text-[color:var(--jai-gold-display)]" />
               <span className="text-sm">Replies usually within a day or two.</span>
             </div>
           </div>
         </div>
 
         <form onSubmit={submit} className="card-surface p-8 fade-up delay-1" data-testid="contact-form">
+          {error && (
+            <p className="mb-5 text-sm text-[color:var(--jai-terracotta)]" role="alert" data-testid="contact-error">
+              {error}
+            </p>
+          )}
           <label className="block mb-5">
             <span className="text-sm text-[color:var(--jai-green-deep)]">Your name</span>
             <input
               value={form.name} onChange={update("name")}
+              autoComplete="name"
               className="mt-2 w-full rounded-lg border border-[color:var(--jai-border)] bg-[color:var(--jai-surface)] px-4 py-3 text-[color:var(--jai-green-deep)] outline-none focus:border-[color:var(--jai-gold)]"
               placeholder="Arjun Sharma" data-testid="contact-name"
             />
@@ -66,6 +83,7 @@ export default function Contact() {
             <span className="text-sm text-[color:var(--jai-green-deep)]">Email</span>
             <input
               type="email" value={form.email} onChange={update("email")}
+              autoComplete="email"
               className="mt-2 w-full rounded-lg border border-[color:var(--jai-border)] bg-[color:var(--jai-surface)] px-4 py-3 text-[color:var(--jai-green-deep)] outline-none focus:border-[color:var(--jai-gold)]"
               placeholder="you@example.com" data-testid="contact-email"
             />

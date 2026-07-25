@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Loader2, MoveRight, ChevronDown } from "lucide-react";
+import { Loader2, MoveRight, ChevronDown, Info } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import KundaliChart from "@/components/KundaliChart";
 import DashaExplorer from "@/components/DashaExplorer";
+import WhyPanel from "@/components/WhyPanel";
 import { useDisplayMode } from "@/context/DisplayModeContext";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -84,6 +85,17 @@ export default function Dashboard() {
   // Additional Divisional Charts: collapsed shows only D10; expanded shows
   // D10 plus every other extra varga (D2/D4/D6/D7/D16/D24/D60).
   const [showAllVargas, setShowAllVargas] = useState(false);
+  const [yogaWhy, setYogaWhy] = useState(null); // { name, detail, citations, loading }
+
+  const openYogaWhy = async (y) => {
+    setYogaWhy({ name: y.name, detail: y.detail, citations: [], loading: true });
+    try {
+      const res = await axios.get(`${API}/yogas/citations`, { params: { name: y.name } });
+      setYogaWhy({ name: y.name, detail: y.detail, citations: res.data.citations || [], loading: false });
+    } catch {
+      setYogaWhy({ name: y.name, detail: y.detail, citations: [], loading: false });
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -355,11 +367,11 @@ export default function Dashboard() {
             <div className="overline">Natal Planets · Sidereal</div>
             {isAdvanced && (
             <div className="flex flex-wrap gap-2 text-[10px] font-semibold" data-testid="dignity-legend">
-              <span className="px-2 py-0.5 rounded-full" style={{ background: "rgba(15,81,50,0.12)", color: "#0F5132" }}>↑ Exalted</span>
-              <span className="px-2 py-0.5 rounded-full" style={{ background: "rgba(160,82,45,0.15)", color: "#A0522D" }}>↓ Debilitated</span>
-              <span className="px-2 py-0.5 rounded-full" style={{ background: "rgba(184,134,11,0.15)", color: "#B8860B" }}>MT Moolatrikona</span>
-              <span className="px-2 py-0.5 rounded-full" style={{ background: "rgba(218,165,32,0.18)", color: "#8B6914" }}>OWN Own</span>
-              <span className="px-2 py-0.5 rounded-full" style={{ background: "rgba(59,76,153,0.15)", color: "#3B4C99" }}>VG Vargottama</span>
+              <span className="px-2 py-0.5 rounded-full" style={{ background: "var(--jai-dignity-exalted-bg)", color: "var(--jai-dignity-exalted-fg)" }}>↑ Exalted</span>
+              <span className="px-2 py-0.5 rounded-full" style={{ background: "var(--jai-dignity-debilitated-bg)", color: "var(--jai-dignity-debilitated-fg)" }}>↓ Debilitated</span>
+              <span className="px-2 py-0.5 rounded-full" style={{ background: "var(--jai-dignity-moolatrikona-bg)", color: "var(--jai-dignity-moolatrikona-fg)" }}>MT Moolatrikona</span>
+              <span className="px-2 py-0.5 rounded-full" style={{ background: "var(--jai-dignity-own-bg)", color: "var(--jai-dignity-own-fg)" }}>OWN — own sign</span>
+              <span className="px-2 py-0.5 rounded-full" style={{ background: "var(--jai-dignity-vargottama-bg)", color: "var(--jai-dignity-vargottama-fg)" }}>VG Vargottama</span>
             </div>
             )}
           </div>
@@ -382,17 +394,17 @@ export default function Dashboard() {
                         className="text-[9px] font-semibold px-1.5 py-0.5 rounded"
                         style={{
                           background:
-                            d === "Exalted" ? "rgba(15,81,50,0.15)" :
-                            d === "Debilitated" ? "rgba(160,82,45,0.15)" :
-                            d === "Moolatrikona" ? "rgba(184,134,11,0.15)" :
-                            d === "Own Sign" ? "rgba(218,165,32,0.18)" :
-                            "rgba(59,76,153,0.15)",
+                            d === "Exalted" ? "var(--jai-dignity-exalted-bg)" :
+                            d === "Debilitated" ? "var(--jai-dignity-debilitated-bg)" :
+                            d === "Moolatrikona" ? "var(--jai-dignity-moolatrikona-bg)" :
+                            d === "Own Sign" ? "var(--jai-dignity-own-bg)" :
+                            "var(--jai-dignity-vargottama-bg)",
                           color:
-                            d === "Exalted" ? "#0F5132" :
-                            d === "Debilitated" ? "#A0522D" :
-                            d === "Moolatrikona" ? "#B8860B" :
-                            d === "Own Sign" ? "#8B6914" :
-                            "#3B4C99",
+                            d === "Exalted" ? "var(--jai-dignity-exalted-fg)" :
+                            d === "Debilitated" ? "var(--jai-dignity-debilitated-fg)" :
+                            d === "Moolatrikona" ? "var(--jai-dignity-moolatrikona-fg)" :
+                            d === "Own Sign" ? "var(--jai-dignity-own-fg)" :
+                            "var(--jai-dignity-vargottama-fg)",
                         }}
                       >
                         {d === "Exalted" ? "↑ EX" : d === "Debilitated" ? "↓ DB" : d === "Moolatrikona" ? "MT" : d === "Own Sign" ? "OWN" : "VG"}
@@ -522,13 +534,30 @@ export default function Dashboard() {
           <div className="space-y-4">
             {yogas.map((y) => (
               <div key={y.name} className="border-l-2 border-[color:var(--jai-gold)] pl-3">
-                <div className="font-serif-display text-lg text-[color:var(--jai-green-deep)]">{y.name}</div>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-serif-display text-lg text-[color:var(--jai-green-deep)]">{y.name}</div>
+                  <button
+                    onClick={() => openYogaWhy(y)}
+                    className="shrink-0 inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border border-[color:var(--jai-gold)] text-[color:var(--jai-gold)] hover:bg-[color:var(--jai-gold)] hover:text-[color:var(--jai-surface)] transition-colors"
+                    data-testid={`yoga-why-btn-${y.name.replace(/\s+/g, "-")}`}
+                  >
+                    <Info size={10} /> Why?
+                  </button>
+                </div>
                 <div className="mt-1 text-xs leading-relaxed text-[color:var(--jai-text-muted)]">{y.detail}</div>
               </div>
             ))}
           </div>
         </div>
       </div>
+
+      <WhyPanel
+        open={!!yogaWhy}
+        onOpenChange={(v) => !v && setYogaWhy(null)}
+        logic={yogaWhy?.detail}
+        citations={yogaWhy?.citations}
+        emptyLabel={yogaWhy?.loading ? "Looking up the classical source…" : "No matching passage found in the corpus for this yoga yet."}
+      />
       )}
     </div>
   );
