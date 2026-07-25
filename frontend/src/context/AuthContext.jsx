@@ -2,6 +2,26 @@ import { useState, useEffect, createContext, useContext, useCallback } from "rea
 import axios from "axios";
 
 axios.defaults.withCredentials = true;
+// No timeout previously existed anywhere on axios, on a Render backend that
+// cold-starts after idling — a first visitor could sit on a spinner for
+// 30-60s with nothing telling them why. 25s gives a cold start room to
+// finish while still eventually failing instead of hanging forever.
+axios.defaults.timeout = 25000;
+
+// Fires a "compass:slow-request" window event ~5s into any request that's
+// still pending, so the UI can show "waking up the ephemeris engine…"
+// instead of a bare spinner. Listen for it wherever a cold start is most
+// likely to be felt (e.g. AppShell, right after sign-in).
+axios.interceptors.request.use((config) => {
+  config.metadata = { slowTimer: setTimeout(() => {
+    window.dispatchEvent(new CustomEvent("compass:slow-request"));
+  }, 5000) };
+  return config;
+});
+axios.interceptors.response.use(
+  (res) => { clearTimeout(res.config?.metadata?.slowTimer); window.dispatchEvent(new CustomEvent("compass:request-settled")); return res; },
+  (err) => { clearTimeout(err.config?.metadata?.slowTimer); window.dispatchEvent(new CustomEvent("compass:request-settled")); return Promise.reject(err); },
+);
 
 // Fallback for browsers that block cross-site cookies (Safari ITP, strict
 // tracking-prevention modes, some mobile browsers): store the session token
