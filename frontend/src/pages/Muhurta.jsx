@@ -261,11 +261,11 @@ export default function Muhurta() {
           {/* Choghadiya timeline */}
           <div>
             <div className="overline mb-3">Choghadiya · Day</div>
-            <ChoghadiyaRow segments={today.choghadiya_day} nowMin={dayOffset === 0 ? nowMin : -1} />
+            <ChoghadiyaRow segments={today.choghadiya_day} nowMin={dayOffset === 0 ? nowMin : null} />
           </div>
           <div>
             <div className="overline mb-3">Choghadiya · Night</div>
-            <ChoghadiyaRow segments={today.choghadiya_night} nowMin={dayOffset === 0 ? nowMin : -1} />
+            <ChoghadiyaRow segments={today.choghadiya_night} nowMin={dayOffset === 0 ? nowMin : null} />
           </div>
 
           {today.panchang.cautions?.length > 0 && (
