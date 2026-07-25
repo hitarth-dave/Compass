@@ -550,6 +550,7 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+      )}
 
       <WhyPanel
         open={!!yogaWhy}
@@ -558,7 +559,6 @@ export default function Dashboard() {
         citations={yogaWhy?.citations}
         emptyLabel={yogaWhy?.loading ? "Looking up the classical source…" : "No matching passage found in the corpus for this yoga yet."}
       />
-      )}
     </div>
   );
 }
