@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Loader2, MoveRight, ChevronDown, Info } from "lucide-react";
+import { Loader2, MoveRight, ChevronDown, Info, Download } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import KundaliChart from "@/components/KundaliChart";
 import DashaExplorer from "@/components/DashaExplorer";
@@ -85,15 +85,38 @@ export default function Dashboard() {
   // Additional Divisional Charts: collapsed shows only D10; expanded shows
   // D10 plus every other extra varga (D2/D4/D6/D7/D16/D24/D60).
   const [showAllVargas, setShowAllVargas] = useState(false);
-  const [yogaWhy, setYogaWhy] = useState(null); // { name, detail, citations, loading }
+  const [yogaWhy, setYogaWhy] = useState(null); // { name, detail, citations, loading, error }
+  const [downloadingCard, setDownloadingCard] = useState(false);
+
+  const downloadShareCard = async () => {
+    setDownloadingCard(true);
+    try {
+      const res = await axios.get(`${API}/profile/share-card`, { responseType: "blob" });
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: "image/png" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${(chart?.profile?.name || "compass-astro").replace(/\s+/g, "-")}-compass-astro-chart.png`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Could not generate your share card — try again in a moment.");
+    } finally {
+      setDownloadingCard(false);
+    }
+  };
 
   const openYogaWhy = async (y) => {
-    setYogaWhy({ name: y.name, detail: y.detail, citations: [], loading: true });
+    setYogaWhy({ name: y.name, detail: y.detail, citations: [], loading: true, error: false });
     try {
       const res = await axios.get(`${API}/yogas/citations`, { params: { name: y.name } });
-      setYogaWhy({ name: y.name, detail: y.detail, citations: res.data.citations || [], loading: false });
+      setYogaWhy({ name: y.name, detail: y.detail, citations: res.data.citations || [], loading: false, error: false });
     } catch {
-      setYogaWhy({ name: y.name, detail: y.detail, citations: [], loading: false });
+      // Distinct from a genuine empty result — a failed request (network,
+      // 404, backend down) should never read as "we checked and found
+      // nothing," or a future outage quietly looks like missing scholarship.
+      setYogaWhy({ name: y.name, detail: y.detail, citations: [], loading: false, error: true });
     }
   };
 
@@ -119,11 +142,7 @@ export default function Dashboard() {
   }, [navigate]);
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="animate-spin text-[color:var(--jai-gold)]" size={32} />
-      </div>
-    );
+    return <ChartLoadingState />;
   }
 
   if (!chart) return null;
@@ -147,17 +166,40 @@ export default function Dashboard() {
             {chart.profile.name}<span className="text-[color:var(--jai-gold)]">.</span>
           </h1>
           <div className="mt-3 text-[color:var(--jai-text-muted)] text-sm tracking-wide">
-            {chart.profile.dob} · {chart.profile.tob} · {chart.profile.place} · Lagna lord: <span className="text-[color:var(--jai-green-deep)] font-semibold">{asc.lord}</span>
+            {chart.profile.dob} · {chart.profile.tob}{chart.profile.tob_unknown ? " (approx.)" : ""} · {chart.profile.place} · Lagna lord: <span className="text-[color:var(--jai-green-deep)] font-semibold">{asc.lord}</span>
           </div>
         </div>
-        <Link
-          to="/chat"
-          className="gold-btn rounded-full px-6 py-3 font-serif-display text-lg inline-flex items-center gap-2 glow-hover"
-          data-testid="cta-open-chat"
-        >
-          Ask the Shastras <MoveRight size={16} />
-        </Link>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={downloadShareCard}
+            disabled={downloadingCard}
+            className="rounded-full px-5 py-3 font-serif-display text-base border border-[color:var(--jai-border)] text-[color:var(--jai-green-deep)] inline-flex items-center gap-2 hover:border-[color:var(--jai-gold)] hover:text-[color:var(--jai-gold)] transition-colors disabled:opacity-60"
+            data-testid="download-share-card-btn"
+            title="Download a shareable image of your chart"
+          >
+            {downloadingCard ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+            Share my chart
+          </button>
+          <Link
+            to="/chat"
+            className="gold-btn rounded-full px-6 py-3 font-serif-display text-lg inline-flex items-center gap-2 glow-hover"
+            data-testid="cta-open-chat"
+          >
+            Ask the Shastras <MoveRight size={16} />
+          </Link>
+        </div>
       </div>
+
+      {chart.profile.tob_unknown && (
+        <div className="mb-8 card-surface px-6 py-4 border-l-4 border-[color:var(--jai-gold)] fade-up" data-testid="tob-approximate-banner">
+          <p className="text-sm text-[color:var(--jai-green-deep)] leading-relaxed">
+            <strong>Your birth time is approximate</strong> — estimated from {chart.profile.tob_period === "before_sunrise" ? "before" : "after"} sunrise,
+            not an exact clock time. House placements and divisional charts below carry more uncertainty as a
+            result. For reliability, lean on your <strong>Chandra Kundali (Moon chart)</strong> further down this
+            page — the classical fallback for exactly this situation.
+          </p>
+        </div>
+      )}
 
       {dasha && (
         <div className="card-surface px-8 py-4 fade-up flex items-center justify-between flex-wrap gap-4" data-testid="current-dasha">
@@ -557,8 +599,56 @@ export default function Dashboard() {
         onOpenChange={(v) => !v && setYogaWhy(null)}
         logic={yogaWhy?.detail}
         citations={yogaWhy?.citations}
-        emptyLabel={yogaWhy?.loading ? "Looking up the classical source…" : "No matching passage found in the corpus for this yoga yet."}
+        emptyLabel={
+          yogaWhy?.loading
+            ? "Looking up the classical source…"
+            : yogaWhy?.error
+            ? "Couldn't reach the source lookup just now — this isn't the same as no citation existing. Try again in a moment."
+            : "No matching passage found in the corpus for this yoga yet."
+        }
       />
+    </div>
+  );
+}
+
+const LOADING_STEPS = [
+  "Casting your chart…",
+  "Reading the transits…",
+  "Consulting the shastras…",
+  "Weighing the dashas…",
+];
+
+// Render's free tier spins down when idle, so a first visitor can sit on
+// this for 30-60s. A cycling message makes that wait feel active instead
+// of stuck — same duration, different feeling. (The "waking up the
+// ephemeris engine" toast from AppShell can also appear alongside this on
+// a genuine cold start; this component covers the plain first-load case.)
+function ChartLoadingState() {
+  const [step, setStep] = useState(0);
+  const [showColdStartNote, setShowColdStartNote] = useState(false);
+
+  useEffect(() => {
+    const stepTimer = setInterval(() => {
+      setStep((s) => (s + 1) % LOADING_STEPS.length);
+    }, 2800);
+    const coldTimer = setTimeout(() => setShowColdStartNote(true), 8000);
+    return () => {
+      clearInterval(stepTimer);
+      clearTimeout(coldTimer);
+    };
+  }, []);
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-6 text-center">
+      <Loader2 className="animate-spin text-[color:var(--jai-gold)]" size={32} />
+      <p className="font-serif-display text-lg text-[color:var(--jai-green-deep)]" data-testid="chart-loading-step">
+        {LOADING_STEPS[step]}
+      </p>
+      {showColdStartNote && (
+        <p className="text-xs text-[color:var(--jai-text-muted)] max-w-xs" data-testid="chart-loading-cold-note">
+          Taking longer than usual — if the server was asleep, this can take up to a minute.
+        </p>
+      )}
     </div>
   );
 }

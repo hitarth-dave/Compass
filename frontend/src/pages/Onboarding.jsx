@@ -32,6 +32,8 @@ export default function Onboarding() {
   const [name, setName] = useState(user?.name || "");
   const [dob, setDob] = useState(null);
   const [tob, setTob] = useState("");
+  const [tobUnknown, setTobUnknown] = useState(false);
+  const [tobPeriod, setTobPeriod] = useState(null); // "before_sunrise" | "after_sunrise"
   const [tz, setTz] = useState(5.5);
   const [place, setPlace] = useState("");
   const [lat, setLat] = useState(null);
@@ -70,19 +72,29 @@ export default function Onboarding() {
   };
 
   const submit = async () => {
-    if (!name.trim() || !dob || !tob || !lat || !lon) {
+    if (!name.trim() || !dob || !lat || !lon) {
+      toast.error("Please fill all fields and confirm the birth place");
+      return;
+    }
+    if (tobUnknown) {
+      if (!tobPeriod) {
+        toast.error("Choose whether you were born before or after sunrise");
+        return;
+      }
+    } else if (!tob) {
       toast.error("Please fill all fields and confirm the birth place");
       return;
     }
     setSubmitting(true);
     try {
       const res = await axios.post(`${API}/profile`, {
-        name, dob: format(dob, "yyyy-MM-dd"), tob, tz_offset: tz, lat, lon, place,
+        name, dob: format(dob, "yyyy-MM-dd"), tz_offset: tz, lat, lon, place,
+        ...(tobUnknown ? { tob_unknown: true, tob_period: tobPeriod } : { tob }),
       });
       toast.success("Chart cast. Welcome, " + res.data.name);
       navigate("/dashboard");
     } catch (e) {
-      toast.error("Could not save your chart");
+      toast.error(e.response?.data?.detail || "Could not save your chart");
     } finally {
       setSubmitting(false);
     }
@@ -161,11 +173,62 @@ export default function Onboarding() {
                 type="time"
                 value={tob}
                 onChange={(e) => setTob(e.target.value)}
-                className="mt-3 bg-transparent border-0 border-b border-[color:var(--jai-border)] rounded-none px-0 text-lg font-serif-display placeholder:text-[color:var(--jai-text-muted)]/60 focus-visible:border-[color:var(--jai-gold)] focus-visible:ring-0"
+                disabled={tobUnknown}
+                className="mt-3 bg-transparent border-0 border-b border-[color:var(--jai-border)] rounded-none px-0 text-lg font-serif-display placeholder:text-[color:var(--jai-text-muted)]/60 focus-visible:border-[color:var(--jai-gold)] focus-visible:ring-0 disabled:opacity-40"
                 data-testid="onboarding-tob"
               />
             </div>
           </div>
+
+          <label className="flex items-start gap-2.5 text-sm text-[color:var(--jai-text-muted)] cursor-pointer" data-testid="onboarding-tob-unknown-label">
+            <input
+              type="checkbox"
+              checked={tobUnknown}
+              onChange={(e) => { setTobUnknown(e.target.checked); if (!e.target.checked) setTobPeriod(null); }}
+              className="mt-0.5 accent-[var(--jai-gold)]"
+              data-testid="onboarding-tob-unknown-checkbox"
+            />
+            <span>I'm not sure of my exact birth time</span>
+          </label>
+
+          {tobUnknown && (
+            <div className="rounded-lg border border-[color:var(--jai-border)] p-4 space-y-3" data-testid="onboarding-sunrise-picker">
+              <p className="text-sm text-[color:var(--jai-green-deep)]">
+                No exact time is fine — classical Jyotish has an answer for this. Were you born before or after
+                sunrise on that day?
+              </p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setTobPeriod("before_sunrise")}
+                  className={`flex-1 rounded-full px-4 py-2.5 text-sm border transition-colors ${
+                    tobPeriod === "before_sunrise"
+                      ? "bg-[color:var(--jai-green)] text-[color:var(--jai-surface)] border-[color:var(--jai-green)]"
+                      : "border-[color:var(--jai-border)] text-[color:var(--jai-green-deep)]"
+                  }`}
+                  data-testid="onboarding-before-sunrise-btn"
+                >
+                  Before sunrise
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTobPeriod("after_sunrise")}
+                  className={`flex-1 rounded-full px-4 py-2.5 text-sm border transition-colors ${
+                    tobPeriod === "after_sunrise"
+                      ? "bg-[color:var(--jai-green)] text-[color:var(--jai-surface)] border-[color:var(--jai-green)]"
+                      : "border-[color:var(--jai-border)] text-[color:var(--jai-green-deep)]"
+                  }`}
+                  data-testid="onboarding-after-sunrise-btn"
+                >
+                  After sunrise
+                </button>
+              </div>
+              <p className="text-xs text-[color:var(--jai-text-muted)]">
+                We'll estimate a birth time from this and lean on your Moon chart (Chandra Kundali) for reliability —
+                the classical fallback for exactly this situation.
+              </p>
+            </div>
+          )}
 
           <div>
             <Label className="overline">Timezone at Birth</Label>
@@ -221,7 +284,7 @@ export default function Onboarding() {
             data-testid="onboarding-submit-btn"
           >
             {submitting ? <Loader2 size={16} className="mr-2 animate-spin" /> : null}
-            Cast my Kundali
+            {submitting ? <CastingLabel /> : "Cast my Kundali"}
           </Button>
         </div>
 
@@ -231,4 +294,17 @@ export default function Onboarding() {
       </div>
     </div>
   );
+}
+
+const CASTING_STEPS = ["Casting your chart…", "Reading the transits…", "Consulting the shastras…"];
+
+// Render's free tier cold-starts when idle — a first sign-up can sit here
+// 30-60s. A cycling label makes that wait feel active rather than stuck.
+function CastingLabel() {
+  const [step, setStep] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setStep((s) => (s + 1) % CASTING_STEPS.length), 2600);
+    return () => clearInterval(t);
+  }, []);
+  return <span>{CASTING_STEPS[step]}</span>;
 }

@@ -374,6 +374,9 @@ export default function Chat() {
             {streaming ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
           </Button>
         </div>
+        <p className="mt-2 text-center text-[10px] text-[color:var(--jai-text-muted)]/80" data-testid="chat-disclaimer">
+          Compass Astro offers astrological perspective, not medical, legal, or financial advice — for those decisions, please consult a qualified professional.
+        </p>
       </div>
 
       <WhyPanel
