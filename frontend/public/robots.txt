@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /chat
+Disallow: /muhurta
+Disallow: /library
+Disallow: /settings
+Disallow: /onboarding
+
+Sitemap: https://compass-vert-one.vercel.app/sitemap.xml

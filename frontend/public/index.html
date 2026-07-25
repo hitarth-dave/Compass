@@ -106,6 +106,18 @@
                 session_recording: {
                     recordCrossOriginIframes: true,
                     capturePerformance: false,
+                    // Masks the VALUE typed into every input/textarea in the
+                    // recording (birth date/time/place fields, chat question
+                    // box, contact form) while still recording layout and
+                    // interaction. Previously nothing was masked, so full
+                    // sessions — including questions about health, marriage,
+                    // and money — were captured verbatim with no disclosure.
+                    maskAllInputs: true,
+                    // Rendered chat messages (yours and the AI's) aren't
+                    // <input> elements, so maskAllInputs alone won't cover
+                    // them — add data-ph-mask to those message containers in
+                    // Chat.jsx / Dashboard.jsx to mask that text too.
+                    maskTextSelector: "[data-ph-mask]",
                 },
             });
         </script>
