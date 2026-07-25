@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import {
   Briefcase, Rocket, Plane, Heart, GraduationCap, TrendingUp, HeartPulse,
   Loader2, CalendarClock, ChevronLeft, ChevronRight, Sparkles, AlertTriangle,
+  MessageCircleQuestion, Send,
 } from "lucide-react";
 import { useDisplayMode } from "@/context/DisplayModeContext";
 
@@ -66,7 +67,7 @@ function TimeChip({ label, start, end, colorClass, active }) {
         </span>
       )}
       <div className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">{label}</div>
-      <div className={`font-serif-display text-lg mt-1 ${colorClass}`}>{start} – {end}</div>
+      <div className={`font-serif-display text-lg mt-1 ${colorClass}`}>{end ? `${start} – ${end}` : start}</div>
     </div>
   );
 }
@@ -95,6 +96,72 @@ function ChoghadiyaRow({ segments, nowMin }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// Small, scope-limited Q&A just for today/tomorrow timing questions —
+// deliberately separate from the main Chat/Conversation section, which
+// handles chart and prediction questions. Single-turn, no thread/memory:
+// this is for quick lookups ("is now good for X"), not a conversation.
+function MuhurtaQuickAsk() {
+  const [question, setQuestion] = useState("");
+  const [answer, setAnswer] = useState("");
+  const [asking, setAsking] = useState(false);
+
+  const ask = async (e) => {
+    e.preventDefault();
+    const q = question.trim();
+    if (!q || asking) return;
+    setAsking(true);
+    setAnswer("");
+    try {
+      const res = await axios.post(`${API}/muhurta/ask`, { message: q });
+      setAnswer(res.data.answer);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Could not get an answer right now");
+    } finally {
+      setAsking(false);
+    }
+  };
+
+  return (
+    <div className="card-surface p-6" data-testid="muhurta-quick-ask">
+      <div className="flex items-center gap-2 mb-1">
+        <MessageCircleQuestion size={16} className="text-[color:var(--jai-gold)]" />
+        <div className="overline">Quick Question · Timing Only</div>
+      </div>
+      <p className="text-xs text-[color:var(--jai-text-muted)] mb-4">
+        Ask about today's or tomorrow's Rahu Kaal, Choghadiya, or the best time for something quick.
+        For chart or prediction questions, use the Conversation section instead.
+      </p>
+      <form onSubmit={ask} className="flex gap-2 flex-wrap">
+        <input
+          type="text"
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          placeholder="e.g. Is now a good time to leave for a drive?"
+          className="flex-1 min-w-[220px] bg-transparent border border-[color:var(--jai-border)] rounded-full px-4 py-2 text-sm text-[color:var(--jai-parchment)] placeholder:text-[color:var(--jai-text-muted)] focus:outline-none focus:border-[color:var(--jai-gold)]"
+          data-testid="muhurta-quick-ask-input"
+        />
+        <button
+          type="submit"
+          disabled={asking || !question.trim()}
+          className="gold-btn rounded-full px-5 py-2 text-sm inline-flex items-center gap-2 disabled:opacity-40 disabled:pointer-events-none"
+          data-testid="muhurta-quick-ask-submit"
+        >
+          {asking ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+          Ask
+        </button>
+      </form>
+      {answer && (
+        <div
+          className="mt-4 p-4 rounded-lg border border-[color:var(--jai-border)] text-sm text-[color:var(--jai-parchment)] leading-relaxed"
+          data-testid="muhurta-quick-ask-answer"
+        >
+          {answer}
+        </div>
+      )}
     </div>
   );
 }
@@ -277,6 +344,8 @@ export default function Muhurta() {
               </div>
             </div>
           )}
+
+          <MuhurtaQuickAsk />
         </div>
       )}
 
