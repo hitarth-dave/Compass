@@ -66,6 +66,9 @@ anthropic_client = AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
 GOOGLE_CLIENT_ID = os.environ['GOOGLE_CLIENT_ID']
 RESEND_API_KEY = os.environ.get('RESEND_API_KEY')
 RESEND_FROM_EMAIL = os.environ.get('RESEND_FROM_EMAIL', 'Compass Astro <onboarding@resend.dev>')
+# Where contact-form submissions land. Set CONTACT_TO_EMAIL in Render's env
+# vars once you have a domain email — no code change needed to update it.
+CONTACT_TO_EMAIL = os.environ.get('CONTACT_TO_EMAIL', 'daveastroanalyst@gmail.com')
 
 app = FastAPI(title="Compass Astro")
 api_router = APIRouter(prefix="/api")
@@ -128,6 +131,17 @@ class ResetPasswordRequest(BaseModel):
     email: str
     code: str
     new_password: str
+
+
+class ContactRequest(BaseModel):
+    name: str
+    email: str
+    message: str
+
+
+class WaitlistRequest(BaseModel):
+    email: str
+    tier: str
 
 
 # ---------- Dependency: current user ----------
@@ -232,6 +246,34 @@ async def _send_password_reset_email(to_email: str, code: str, name: str = "", h
     if r.status_code >= 400:
         logging.error("Resend send failed (%s): %s", r.status_code, r.text)
         raise HTTPException(status_code=502, detail="Could not send the password reset email. Please try again.")
+
+
+async def _send_contact_email(name: str, from_email: str, message: str) -> None:
+    """Send a contact-form submission to CONTACT_TO_EMAIL via Resend, with
+    reply-to set to the submitter so a reply goes straight to them. Falls
+    back to logging (not failing) if RESEND_API_KEY isn't set, matching the
+    pattern used for verification/reset emails."""
+    if not RESEND_API_KEY:
+        logging.warning("RESEND_API_KEY not set — contact message from %s (%s): %s", name, from_email, message)
+        return
+    async with httpx.AsyncClient(timeout=15) as h:
+        r = await h.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {RESEND_API_KEY}"},
+            json={
+                "from": RESEND_FROM_EMAIL,
+                "to": [CONTACT_TO_EMAIL],
+                "reply_to": from_email,
+                "subject": f"Compass Astro contact — {name}",
+                "html": (
+                    f"<p><strong>From:</strong> {name} ({from_email})</p>"
+                    f"<p>{message}</p>"
+                ),
+            },
+        )
+    if r.status_code >= 400:
+        logging.error("Resend send failed (%s): %s", r.status_code, r.text)
+        raise HTTPException(status_code=502, detail="Could not send your message. Please try again shortly.")
 
 
 async def _find_or_create_user(email: str, name: str, picture: Optional[str] = None) -> str:
@@ -711,6 +753,21 @@ async def search_books(q: str, k: int = 5, user: User = Depends(get_current_user
     return {"results": results}
 
 
+@api_router.get("/yogas/citations")
+async def yoga_citations(name: str, user: User = Depends(get_current_user)):
+    """Yogas are detected algorithmically (see astrology.py) with no source
+    field attached — the Yogas panel showed a name and a plain-language
+    explanation with nothing behind it. This looks the yoga name up against
+    the same classical-text search the chat's Why panel already uses, so
+    the frontend can show the same citation UI here too."""
+    results = await search_for_user(db, user.user_id, name, k=3)
+    citations = [
+        {"idx": i + 1, "book": r["book"], "chapter": r.get("chapter", ""), "text": r["text"]}
+        for i, r in enumerate(results)
+    ]
+    return {"citations": citations}
+
+
 # ---------- Chat (with per-message book scoping, auto-name, memory) ----------
 SYSTEM_PROMPT = """You are Compass Astro — a warm, calm Vedic astrology guide. You speak like a wise friend, not a scholar.
 
@@ -1062,17 +1119,43 @@ async def upload_attachment(file: UploadFile = File(...), user: User = Depends(g
 
 
 @api_router.get("/attachments/{fname}")
-async def serve_attachment(fname: str):
+async def serve_attachment(fname: str, user: User = Depends(get_current_user)):
     from fastapi.responses import FileResponse
+    # Filenames are "{user_id}_{uuid4hex}{ext}" (see upload_attachment above),
+    # so ownership is just a prefix check — this was previously the only
+    # route besides signup/login/geocode with no security scheme at all,
+    # meaning anyone who guessed or intercepted a filename could fetch it.
+    if not fname.startswith(f"{user.user_id}_"):
+        raise HTTPException(status_code=404, detail="Not found")
     fp = ATTACH_DIR / fname
-    if not fp.exists():
+    if not fp.exists() or not fp.is_file() or fp.parent != ATTACH_DIR:
         raise HTTPException(404, "Not found")
     return FileResponse(str(fp))
 
 
 # ---------- Geocoding (public) ----------
+# Simple in-memory sliding-window rate limit — this was an unauthenticated
+# proxy to Nominatim with zero throttling, and Nominatim's own usage policy
+# requires callers to rate-limit themselves anyway. In-memory is fine for a
+# single Render instance; move to Redis if you ever scale to multiple.
+_geocode_hits: dict[str, list[float]] = {}
+_GEOCODE_LIMIT = 20
+_GEOCODE_WINDOW_SECONDS = 60
+
+
+def _geocode_rate_limited(client_ip: str) -> bool:
+    now = datetime.now(timezone.utc).timestamp()
+    hits = [t for t in _geocode_hits.get(client_ip, []) if now - t < _GEOCODE_WINDOW_SECONDS]
+    hits.append(now)
+    _geocode_hits[client_ip] = hits
+    return len(hits) > _GEOCODE_LIMIT
+
+
 @api_router.get("/geocode")
-async def geocode(q: str):
+async def geocode(q: str, request: Request):
+    client_ip = request.client.host if request.client else "unknown"
+    if _geocode_rate_limited(client_ip):
+        raise HTTPException(status_code=429, detail="Too many location searches — please wait a moment and try again.")
     from geopy.geocoders import Nominatim
     geolocator = Nominatim(user_agent="compass-astro")
     try:
@@ -1082,6 +1165,32 @@ async def geocode(q: str):
         return {"results": [{"place": loc.address, "lat": loc.latitude, "lon": loc.longitude}]}
     except Exception as e:
         return {"results": [], "error": str(e)}
+
+
+# ---------- Contact form (public) ----------
+@api_router.post("/contact")
+async def submit_contact(payload: ContactRequest):
+    if not payload.name.strip() or not payload.email.strip() or not payload.message.strip():
+        raise HTTPException(status_code=400, detail="Please fill in every field.")
+    await db.contact_messages.insert_one({
+        "name": payload.name,
+        "email": payload.email,
+        "message": payload.message,
+        "created_at": datetime.now(timezone.utc),
+    })
+    await _send_contact_email(payload.name, payload.email, payload.message)
+    return {"ok": True}
+
+
+# ---------- Waitlist (public) ----------
+@api_router.post("/waitlist")
+async def join_waitlist(payload: WaitlistRequest):
+    await db.waitlist.update_one(
+        {"email": payload.email.lower().strip(), "tier": payload.tier},
+        {"$setOnInsert": {"created_at": datetime.now(timezone.utc)}},
+        upsert=True,
+    )
+    return {"ok": True}
 
 def _muhurta_day_payload(lat: float, lon: float, offset_days: int) -> dict:
     """Shared by /muhurta/today and /muhurta/ask so both draw from exactly
@@ -1107,6 +1216,7 @@ def _muhurta_day_payload(lat: float, lon: float, offset_days: int) -> dict:
 
     return {
         "date": local_date,
+        "tz_offset": tz_offset,
         "panchang": panchang,
         **daily_muhurta,
     }
@@ -1199,7 +1309,19 @@ async def muhurta_ask(payload: MuhurtaAskRequest, user: User = Depends(get_curre
         logging.exception("muhurta ask failed: %s", e)
         raise HTTPException(500, "Could not get an answer right now — please try again.")
 
-    return {"answer": answer.strip()}
+    # Previously returned bare text with nothing behind it, unlike the main
+    # chat's Why panel. Search the same classical corpus for passages
+    # relevant to the question so the frontend can show its source too.
+    try:
+        citation_chunks = await search_for_user(db, user.user_id, payload.message.strip()[:200], k=3)
+    except Exception:
+        citation_chunks = []
+    citations = [
+        {"idx": i + 1, "book": c["book"], "chapter": c.get("chapter", ""), "text": c["text"]}
+        for i, c in enumerate(citation_chunks)
+    ]
+
+    return {"answer": answer.strip(), "citations": citations}
 
 
 @api_router.get("/decision-timing/{activity}")
