@@ -345,7 +345,7 @@ export default function Muhurta() {
             </div>
           )}
 
-          <MuhurtaQuickAsk />
+          {isAdvanced && <MuhurtaQuickAsk />}
         </div>
       )}
 

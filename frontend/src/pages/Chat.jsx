@@ -283,10 +283,18 @@ export default function Chat() {
   }, [input, attachments, streaming, sessionId]);
 
   const openLogic = (m) => {
+    // Basic mode gets the Why button too, but tapping it doesn't reveal
+    // the real reasoning — that stays an Advanced/Astrologer-mode feature.
+    if (!isAdvanced) {
+      setActiveLogic({ logic: "", citations: [], locked: true });
+      setLogicOpen(true);
+      return;
+    }
     const parsed = splitAnswerLogic(m.content || "");
     setActiveLogic({
       logic: m.logic || parsed.logic,
       citations: m.citations || [],
+      locked: false,
     });
     setLogicOpen(true);
   };
@@ -307,9 +315,7 @@ export default function Chat() {
           <div className="mt-8 space-y-8 fade-up">
             <p className="text-[color:var(--jai-text-muted)] max-w-xl">
               Ask anything — career, love, timing, life direction. Answers come in plain language.
-              {isAdvanced && (
-                <> Curious about the reasoning? Tap <span className="text-[color:var(--jai-gold)]">Why?</span> on any reply.</>
-              )}
+              {" "}Curious about the reasoning? Tap <span className="text-[color:var(--jai-gold)]">Why?</span> on any reply.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl">
               {SUGGESTIONS.map((s) => (
@@ -409,7 +415,18 @@ export default function Chat() {
             </SheetTitle>
           </SheetHeader>
           <div className="mt-6 space-y-6">
-            {activeLogic.logic ? (
+            {activeLogic.locked ? (
+              <div className="text-center py-10" data-testid="why-upgrade-prompt">
+                <Info size={22} className="text-[color:var(--jai-gold)] mx-auto mb-3" />
+                <p className="text-sm text-[color:var(--jai-parchment)] font-serif-display text-base mb-2">
+                  Upgrade to Advanced or Astrologer mode
+                </p>
+                <p className="text-sm text-[color:var(--jai-text-muted)] max-w-xs mx-auto leading-relaxed">
+                  The full astrological reasoning — planets, houses, dashas, transits, and shastra citations behind
+                  this answer — is available in Advanced mode.
+                </p>
+              </div>
+            ) : activeLogic.logic ? (
               <div className="md-body text-sm text-[color:var(--jai-parchment)]">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{activeLogic.logic}</ReactMarkdown>
               </div>
@@ -417,7 +434,7 @@ export default function Chat() {
               <p className="text-sm text-[color:var(--jai-text-muted)] italic">No logic recorded for this answer.</p>
             )}
 
-            {activeLogic.citations?.length > 0 && (
+            {!activeLogic.locked && activeLogic.citations?.length > 0 && (
               <div>
                 <div className="overline mb-3">Shastra excerpts consulted</div>
                 <div className="space-y-4">
@@ -479,7 +496,7 @@ function MessageBubble({ msg, idx, onWhy, advanced }) {
             </ReactMarkdown>
           </div>
         </div>
-        {advanced && (hasLogic || (msg.citations?.length ?? 0) > 0) && (
+        {(hasLogic || (msg.citations?.length ?? 0) > 0) && (
           <div className="mt-3 flex items-center gap-2 flex-wrap">
             <button
               onClick={() => onWhy(msg)}
@@ -488,7 +505,7 @@ function MessageBubble({ msg, idx, onWhy, advanced }) {
             >
               <Info size={11} /> Why?
             </button>
-            {groupCitationsByBook(msg.citations).slice(0, 3).map((grouped) => (
+            {advanced && groupCitationsByBook(msg.citations).slice(0, 3).map((grouped) => (
               <TooltipProvider key={grouped.book} delayDuration={100}>
                 <Tooltip>
                   <TooltipTrigger asChild>
