@@ -162,13 +162,6 @@ export default function KundaliChart({ planets, ascendantSign, ascendant, showNa
       {/* Compact legend — the abbreviations above (Su/Mo/Ma.../R/nakshatra
           codes) had no explanation anywhere on the page. Hover any planet
           for its full name too. */}
-      <p
-        className="w-full max-w-2xl mx-auto mt-2 text-center text-xs"
-        style={{ color: "var(--jai-text-muted)" }}
-        data-testid="kundali-legend"
-      >
-        Su/Mo/Ma/Me/Ju/Ve/Sa/Ra/Ke = planets · R = retrograde · degree:minutes in sign · 3-letter code = nakshatra (hover a planet for full names)
-      </p>
     </div>
   );
 }
