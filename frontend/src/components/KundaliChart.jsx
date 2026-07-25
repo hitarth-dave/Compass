@@ -99,7 +99,7 @@ export default function KundaliChart({ planets, ascendantSign, ascendant, showNa
   const lineHeight = 18;
 
   return (
-    <div className="w-full flex justify-center py-2">
+    <div className="w-full flex flex-col items-center py-2">
       <svg viewBox={`0 0 ${S} ${S}`} className="w-full max-w-2xl" data-testid={testid}>
         {/* Outer square */}
         <rect x="0" y="0" width={S} height={S} className="kundali-cell" strokeWidth="1.75" />
@@ -163,7 +163,7 @@ export default function KundaliChart({ planets, ascendantSign, ascendant, showNa
           codes) had no explanation anywhere on the page. Hover any planet
           for its full name too. */}
       <p
-        className="w-full max-w-2xl mx-auto -mt-1 text-center text-xs"
+        className="w-full max-w-2xl mx-auto mt-2 text-center text-xs"
         style={{ color: "var(--jai-text-muted)" }}
         data-testid="kundali-legend"
       >
