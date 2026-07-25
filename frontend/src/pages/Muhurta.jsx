@@ -48,6 +48,7 @@ function toMinutes(hhmm) {
 
 /** Handles ranges that cross midnight (night Choghadiya segments do). */
 function isNow(nowMin, start, end) {
+  if (nowMin == null || nowMin < 0) return false;
   const s = toMinutes(start);
   const e = toMinutes(end);
   return e > s ? nowMin >= s && nowMin < e : nowMin >= s || nowMin < e;

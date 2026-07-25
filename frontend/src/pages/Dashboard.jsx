@@ -34,6 +34,40 @@ function todaysTransitNote(transits) {
   return MOON_TRANSIT_NOTE[moon.house_from_lagna] || null;
 }
 
+// Chandra Kundali (Moon chart) — same natal planets, houses recomputed
+// with the Moon's sign as the 1st house instead of the Lagna's. Purely
+// derived from data already on the page, no extra API call needed.
+function buildMoonChart(planets) {
+  const moon = planets.find((p) => p.name === "Moon");
+  if (!moon) return null;
+  return {
+    ascendant: { sign_idx: moon.sign_idx, sign_en: moon.sign_en },
+    planets: planets.map((p) => ({
+      ...p,
+      house: ((p.sign_idx - moon.sign_idx + 12) % 12) + 1,
+    })),
+  };
+}
+
+// Benefic/malefic badge — reused on the Natal Planets card. Uses the same
+// tint variables Muhurta uses (baked-in alpha, dark-mode safe) rather than
+// fixed hex, so this doesn't reintroduce the dark-mode legibility bug.
+function NatureBadge({ label, nature, title }) {
+  const isBenefic = nature === "benefic";
+  return (
+    <span
+      className="text-[9px] font-bold px-1 rounded leading-none py-0.5"
+      style={{
+        color: isBenefic ? "var(--jai-green-deep)" : "var(--jai-terracotta)",
+        background: isBenefic ? "var(--jai-tint-good)" : "var(--jai-tint-bad)",
+      }}
+      title={title}
+    >
+      {label}
+    </span>
+  );
+}
+
 // Antardasha/Pratyantardasha now carry full "YYYY-MM-DD HH:MM:SS" timestamps
 // (needed for Sookshma/Prana precision elsewhere); this strip only needs the date.
 const dateOnly = (str) => (str ? str.split(" ")[0] : str);
@@ -44,9 +78,12 @@ export default function Dashboard() {
   const [chart, setChart] = useState(null);
   const [transits, setTransits] = useState(null);
   const [loading, setLoading] = useState(true);
-  // Controls whether Transit / D9 / D10 charts are shown alongside D1,
+  // Controls whether Transit / Moon / D9 charts are shown alongside D1,
   // or collapsed so D1 can take the spotlight.
   const [showAll, setShowAll] = useState(true);
+  // Additional Divisional Charts: collapsed shows only D10; expanded shows
+  // D10 plus every other extra varga (D2/D4/D6/D7/D16/D24/D60).
+  const [showAllVargas, setShowAllVargas] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -87,6 +124,7 @@ export default function Dashboard() {
   const dasamsa = chart.dasamsa;
   const houseLords = chart.house_lords || [];
   const yogas = chart.yogas || [];
+  const moonChart = buildMoonChart(chart.planets);
 
   return (
     <div className="max-w-7xl mx-auto px-8 py-12" data-testid="dashboard-page">
@@ -198,6 +236,21 @@ export default function Dashboard() {
 
       {showAll ? (
         <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-6 fade-up delay-2">
+          {moonChart && (
+            <div className="lg:col-span-6 card-surface p-8" data-testid="moon-chart-card">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <div className="overline">Chandra Kundali · Moon Chart</div>
+                  <div className="font-serif-display text-2xl mt-1 text-[color:var(--jai-parchment)]">Moon Lagna: {moonChart.ascendant.sign_en}</div>
+                </div>
+                <div className="text-right text-[10px] text-[color:var(--jai-text-muted)] max-w-[140px]">
+                  Mind, emotions &amp; day-to-day life
+                </div>
+              </div>
+              <KundaliChart planets={moonChart.planets} ascendantSign={moonChart.ascendant.sign_idx} showNakshatra={false} testid="kundali-chart-moon" />
+            </div>
+          )}
+
           <div className="lg:col-span-6 card-surface p-8" data-testid="navamsa-card">
             <div className="flex items-center justify-between mb-6">
               <div>
@@ -210,21 +263,6 @@ export default function Dashboard() {
             </div>
             <KundaliChart planets={navamsa.planets} ascendantSign={navamsa.ascendant.sign_idx} showNakshatra={false} testid="kundali-chart-d9" />
           </div>
-
-          {dasamsa && (
-            <div className="lg:col-span-6 card-surface p-8" data-testid="dasamsa-card">
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <div className="overline">Dasamsa · D10</div>
-                  <div className="font-serif-display text-2xl mt-1 text-[color:var(--jai-parchment)]">D10 Lagna: {dasamsa.ascendant.sign_en}</div>
-                </div>
-                <div className="text-right text-[10px] text-[color:var(--jai-text-muted)] max-w-[140px]">
-                  Career &amp; professional status
-                </div>
-              </div>
-              <KundaliChart planets={dasamsa.planets} ascendantSign={dasamsa.ascendant.sign_idx} showNakshatra={false} testid="kundali-chart-d10" />
-            </div>
-          )}
         </div>
       ) : (
         <button
@@ -234,18 +272,45 @@ export default function Dashboard() {
           data-testid="expand-extra-charts"
         >
           <ChevronDown size={12} className="rotate-180" />
-          Transit · D9 · D10 — click to expand
+          Transit · Moon Chart · D9 — click to expand
         </button>
       )}
 
-      {/* D2/D4/D6/D7/D16/D24/D60 — additional divisional (varga) charts for
-          astrologers. Hidden in Simple mode; D1/D9/D10 above already cover
-          what a general user needs. */}
-      {isAdvanced && chart.extra_vargas && (
+      {/* D10 + D2/D4/D6/D7/D16/D24/D60 — additional divisional (varga)
+          charts for astrologers. Hidden in Simple mode. D10 (career) is
+          always shown first; the rest collapse behind a toggle. */}
+      {isAdvanced && (dasamsa || chart.extra_vargas) && (
         <div className="mt-8 fade-up delay-2">
-          <div className="overline mb-4">Additional Divisional Charts</div>
+          <div className="flex items-center justify-between mb-4">
+            <div className="overline">Additional Divisional Charts</div>
+            {chart.extra_vargas && (
+              <button
+                type="button"
+                onClick={() => setShowAllVargas((v) => !v)}
+                className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)] hover:text-[color:var(--jai-gold)] transition-colors"
+                data-testid="toggle-extra-vargas"
+              >
+                <ChevronDown
+                  size={12}
+                  className={`transition-transform duration-300 ${showAllVargas ? "rotate-180" : ""}`}
+                />
+                {showAllVargas ? "Show D10 only" : "Show all divisional charts"}
+              </button>
+            )}
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {Object.entries(chart.extra_vargas).map(([key, v]) => (
+            {dasamsa && (
+              <div className="card-surface p-6" data-testid="dasamsa-card">
+                <div className="mb-4">
+                  <div className="overline">Dasamsa · D10</div>
+                  <div className="font-serif-display text-lg mt-1 text-[color:var(--jai-parchment)]">
+                    Lagna: {dasamsa.ascendant.sign_en}
+                  </div>
+                </div>
+                <KundaliChart planets={dasamsa.planets} ascendantSign={dasamsa.ascendant.sign_idx} showNakshatra={false} testid="kundali-chart-d10" />
+              </div>
+            )}
+            {showAllVargas && chart.extra_vargas && Object.entries(chart.extra_vargas).map(([key, v]) => (
               <div key={key} className="card-surface p-6" data-testid={`varga-card-${key}`}>
                 <div className="mb-4">
                   <div className="overline">{v.label}</div>
@@ -259,6 +324,107 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      <div className="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-6 fade-up delay-3">
+        <div className={`lg:col-span-7 card-surface ${isAdvanced ? "p-8" : "p-5"}`}>
+          <div className={`flex items-center justify-between flex-wrap gap-3 ${isAdvanced ? "mb-5" : "mb-3"}`}>
+            <div className="overline">Natal Planets · Sidereal</div>
+            {isAdvanced && (
+            <div className="flex flex-wrap gap-2 text-[10px] font-semibold" data-testid="dignity-legend">
+              <span className="px-2 py-0.5 rounded-full" style={{ background: "rgba(15,81,50,0.12)", color: "#0F5132" }}>↑ Exalted</span>
+              <span className="px-2 py-0.5 rounded-full" style={{ background: "rgba(160,82,45,0.15)", color: "#A0522D" }}>↓ Debilitated</span>
+              <span className="px-2 py-0.5 rounded-full" style={{ background: "rgba(184,134,11,0.15)", color: "#B8860B" }}>MT Moolatrikona</span>
+              <span className="px-2 py-0.5 rounded-full" style={{ background: "rgba(218,165,32,0.18)", color: "#8B6914" }}>OWN Own</span>
+              <span className="px-2 py-0.5 rounded-full" style={{ background: "rgba(59,76,153,0.15)", color: "#3B4C99" }}>VG Vargottama</span>
+            </div>
+            )}
+          </div>
+          <div className={`grid ${isAdvanced ? "grid-cols-2 gap-x-8 gap-y-3" : "grid-cols-1 gap-y-1"}`}>
+            {chart.planets.map((p) => {
+              const nature = chart.planet_nature?.[p.name];
+              return (
+              <div key={p.name} className={`flex items-baseline justify-between border-b border-[color:var(--jai-border)]/50 ${isAdvanced ? "py-2" : "py-1"}`}>
+                <div>
+                  <div className={`font-serif-display ${isAdvanced ? "text-lg" : "text-sm"} text-[color:var(--jai-parchment)] flex items-center gap-2`}>
+                    {p.name}{p.retrograde ? " ℞" : ""}
+                    {isAdvanced && p.dignity && p.dignity.map((d) => (
+                      <span
+                        key={d}
+                        className="text-[9px] font-semibold px-1.5 py-0.5 rounded"
+                        style={{
+                          background:
+                            d === "Exalted" ? "rgba(15,81,50,0.15)" :
+                            d === "Debilitated" ? "rgba(160,82,45,0.15)" :
+                            d === "Moolatrikona" ? "rgba(184,134,11,0.15)" :
+                            d === "Own Sign" ? "rgba(218,165,32,0.18)" :
+                            "rgba(59,76,153,0.15)",
+                          color:
+                            d === "Exalted" ? "#0F5132" :
+                            d === "Debilitated" ? "#A0522D" :
+                            d === "Moolatrikona" ? "#B8860B" :
+                            d === "Own Sign" ? "#8B6914" :
+                            "#3B4C99",
+                        }}
+                      >
+                        {d === "Exalted" ? "↑ EX" : d === "Debilitated" ? "↓ DB" : d === "Moolatrikona" ? "MT" : d === "Own Sign" ? "OWN" : "VG"}
+                      </span>
+                    ))}
+                  </div>
+                  {isAdvanced && (
+                    <div className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">
+                      {p.nakshatra} · pada {p.pada} · D9 {p.navamsa_sign}
+                    </div>
+                  )}
+                  {isAdvanced && nature && (nature.natural || nature.functional) && (
+                    <div className="flex items-center gap-1 mt-1">
+                      {nature.natural && (
+                        <NatureBadge
+                          label={nature.natural === "benefic" ? "B" : "M"}
+                          nature={nature.natural}
+                          title={`Natural nature: ${nature.natural === "benefic" ? "Benefic" : "Malefic"}`}
+                        />
+                      )}
+                      {nature.functional && (
+                        <NatureBadge
+                          label={nature.functional === "benefic" ? "FB" : "FM"}
+                          nature={nature.functional}
+                          title={`Functional nature for this Lagna: ${nature.functional === "benefic" ? "Benefic" : "Malefic"}`}
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className="text-right">
+                  <div className={`${isAdvanced ? "text-sm" : "text-xs"} text-[color:var(--jai-gold)]`}>{p.sign_en} {p.degree_in_sign}°</div>
+                  {isAdvanced && <div className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">house {p.house}</div>}
+                  {isAdvanced && chart.shadbala && chart.shadbala[p.name] && (
+                    <div
+                      className="text-[10px] mt-0.5"
+                      style={{ color: "var(--jai-gold-soft)" }}
+                      title="Shadbala — relative planetary strength within this chart (partial classical implementation)"
+                    >
+                      Shadbala {chart.shadbala[p.name].total_rupas}
+                    </div>
+                  )}
+                </div>
+              </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {isAdvanced ? (
+        <div className="lg:col-span-5 card-surface p-8" data-testid="dasha-timeline">
+          <div className="overline mb-5">Vimshottari Dasha · 120-Year Cycle</div>
+          <DashaExplorer mahadashas={chart.dashas} currentMahadasha={dasha} />
+        </div>
+        ) : (
+        <div className="lg:col-span-5 card-surface p-5" data-testid="dasha-simple-card">
+          <div className="overline mb-3">Vimshottari Dasha</div>
+          <DashaExplorer mahadashas={chart.dashas} currentMahadasha={dasha} maxDepth={1} compact />
+        </div>
+        )}
+      </div>
 
       {/* House Lords + Yogas — technical detail meant for astrologers, not
           shown in Simple mode. */}
@@ -279,32 +445,6 @@ export default function Dashboard() {
                 </div>
                 <div className="flex items-baseline gap-2">
                   <span className="text-[color:var(--jai-green-deep)] font-semibold">{h.lord}</span>
-                  <span className="flex items-center gap-1">
-                    {h.lord_natural_nature && (
-                      <span
-                        className="text-[9px] font-bold px-1 rounded leading-none py-0.5"
-                        style={{
-                          color: h.lord_natural_nature === "benefic" ? "#0F5132" : "#A0522D",
-                          background: h.lord_natural_nature === "benefic" ? "rgba(15,81,50,0.12)" : "rgba(160,82,45,0.12)",
-                        }}
-                        title={`Natural nature: ${h.lord_natural_nature === "benefic" ? "Benefic" : "Malefic"}`}
-                      >
-                        {h.lord_natural_nature === "benefic" ? "B" : "M"}
-                      </span>
-                    )}
-                    {h.lord_functional_nature && (
-                      <span
-                        className="text-[9px] font-bold px-1 rounded leading-none py-0.5"
-                        style={{
-                          color: h.lord_functional_nature === "benefic" ? "#0F5132" : "#A0522D",
-                          background: h.lord_functional_nature === "benefic" ? "rgba(15,81,50,0.12)" : "rgba(160,82,45,0.12)",
-                        }}
-                        title={`Functional nature for this Lagna: ${h.lord_functional_nature === "benefic" ? "Benefic" : "Malefic"}`}
-                      >
-                        {h.lord_functional_nature === "benefic" ? "FB" : "FM"}
-                      </span>
-                    )}
-                  </span>
                   {h.lord_sits_in_house && (
                     <span className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">
                       H{h.lord_sits_in_house} · {h.lord_sits_in_sign_en}
@@ -361,86 +501,6 @@ export default function Dashboard() {
         </div>
       </div>
       )}
-
-      <div className="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-6 fade-up delay-3">
-        <div className={`lg:col-span-7 card-surface ${isAdvanced ? "p-8" : "p-5"}`}>
-          <div className={`flex items-center justify-between flex-wrap gap-3 ${isAdvanced ? "mb-5" : "mb-3"}`}>
-            <div className="overline">Natal Planets · Sidereal</div>
-            {isAdvanced && (
-            <div className="flex flex-wrap gap-2 text-[10px] font-semibold" data-testid="dignity-legend">
-              <span className="px-2 py-0.5 rounded-full" style={{ background: "rgba(15,81,50,0.12)", color: "#0F5132" }}>↑ Exalted</span>
-              <span className="px-2 py-0.5 rounded-full" style={{ background: "rgba(160,82,45,0.15)", color: "#A0522D" }}>↓ Debilitated</span>
-              <span className="px-2 py-0.5 rounded-full" style={{ background: "rgba(184,134,11,0.15)", color: "#B8860B" }}>MT Moolatrikona</span>
-              <span className="px-2 py-0.5 rounded-full" style={{ background: "rgba(218,165,32,0.18)", color: "#8B6914" }}>OWN Own</span>
-              <span className="px-2 py-0.5 rounded-full" style={{ background: "rgba(59,76,153,0.15)", color: "#3B4C99" }}>VG Vargottama</span>
-            </div>
-            )}
-          </div>
-          <div className={`grid ${isAdvanced ? "grid-cols-2 gap-x-8 gap-y-3" : "grid-cols-1 gap-y-1"}`}>
-            {chart.planets.map((p) => (
-              <div key={p.name} className={`flex items-baseline justify-between border-b border-[color:var(--jai-border)]/50 ${isAdvanced ? "py-2" : "py-1"}`}>
-                <div>
-                  <div className={`font-serif-display ${isAdvanced ? "text-lg" : "text-sm"} text-[color:var(--jai-parchment)] flex items-center gap-2`}>
-                    {p.name}{p.retrograde ? " ℞" : ""}
-                    {isAdvanced && p.dignity && p.dignity.map((d) => (
-                      <span
-                        key={d}
-                        className="text-[9px] font-semibold px-1.5 py-0.5 rounded"
-                        style={{
-                          background:
-                            d === "Exalted" ? "rgba(15,81,50,0.15)" :
-                            d === "Debilitated" ? "rgba(160,82,45,0.15)" :
-                            d === "Moolatrikona" ? "rgba(184,134,11,0.15)" :
-                            d === "Own Sign" ? "rgba(218,165,32,0.18)" :
-                            "rgba(59,76,153,0.15)",
-                          color:
-                            d === "Exalted" ? "#0F5132" :
-                            d === "Debilitated" ? "#A0522D" :
-                            d === "Moolatrikona" ? "#B8860B" :
-                            d === "Own Sign" ? "#8B6914" :
-                            "#3B4C99",
-                        }}
-                      >
-                        {d === "Exalted" ? "↑ EX" : d === "Debilitated" ? "↓ DB" : d === "Moolatrikona" ? "MT" : d === "Own Sign" ? "OWN" : "VG"}
-                      </span>
-                    ))}
-                  </div>
-                  {isAdvanced && (
-                    <div className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">
-                      {p.nakshatra} · pada {p.pada} · D9 {p.navamsa_sign}
-                    </div>
-                  )}
-                </div>
-                <div className="text-right">
-                  <div className={`${isAdvanced ? "text-sm" : "text-xs"} text-[color:var(--jai-gold)]`}>{p.sign_en} {p.degree_in_sign}°</div>
-                  {isAdvanced && <div className="text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">house {p.house}</div>}
-                  {isAdvanced && chart.shadbala && chart.shadbala[p.name] && (
-                    <div
-                      className="text-[10px] mt-0.5"
-                      style={{ color: "var(--jai-gold-soft)" }}
-                      title="Shadbala — relative planetary strength within this chart (partial classical implementation)"
-                    >
-                      Shadbala {chart.shadbala[p.name].total_rupas}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {isAdvanced ? (
-        <div className="lg:col-span-5 card-surface p-8" data-testid="dasha-timeline">
-          <div className="overline mb-5">Vimshottari Dasha · 120-Year Cycle</div>
-          <DashaExplorer mahadashas={chart.dashas} currentMahadasha={dasha} />
-        </div>
-        ) : (
-        <div className="lg:col-span-5 card-surface p-5" data-testid="dasha-simple-card">
-          <div className="overline mb-3">Vimshottari Dasha</div>
-          <DashaExplorer mahadashas={chart.dashas} currentMahadasha={dasha} maxDepth={1} compact />
-        </div>
-        )}
-      </div>
     </div>
   );
 }
