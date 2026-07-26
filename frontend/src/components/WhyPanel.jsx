@@ -28,6 +28,15 @@ export function groupCitationsByBook(citations) {
  * tag fragment, e.g. "<LOG", left dangling at the end of what's rendered
  * so far) leaking raw markup into the visible answer.
  */
+const LOGIC_WORD_CAP = 260; // hard ceiling — the system prompt asks for 150-220
+// words, but prompt instructions alone aren't a guarantee (observed the model
+// produce ~2300 words despite the instruction), so this enforces it in code.
+function capWords(text, maxWords) {
+  const words = text.split(/\s+/);
+  if (words.length <= maxWords) return text;
+  return words.slice(0, maxWords).join(" ") + "…";
+}
+
 export function splitAnswerLogic(text) {
   if (!text) return { answer: "", logic: "" };
   const idx = text.indexOf("<LOGIC>");
@@ -39,7 +48,7 @@ export function splitAnswerLogic(text) {
   const rest = text.slice(idx + 7);
   const end = rest.indexOf("</LOGIC>");
   const logic = (end === -1 ? rest : rest.slice(0, end)).trim();
-  return { answer, logic };
+  return { answer, logic: capWords(logic, LOGIC_WORD_CAP) };
 }
 
 /**
