@@ -892,7 +892,7 @@ SYSTEM_PROMPT = """You are Compass Astro — a warm, calm Vedic astrology guide.
 6. Avoid repeating the same planet or dasha-lord's name more than necessary within a short span of text — refer back with "it", "this planet", or similar once you've named it, rather than restating the name every sentence.
 7. Never mention "as per BPHS [1]", "shastra", "citations", or reference numbers to the user. That reasoning lives ONLY in the LOGIC block below.
 8. If the context below includes a "CALCULATED MUHURTA WINDOWS" section, use those exact date ranges as your recommended timing — do not compute or invent different dates yourself. If that section is absent, answer timing questions from the chart context as you already do.
-9. If the context below includes an "UPCOMING RETROGRADE/DIRECT STATIONS" section, use those exact dates for any question about when a planet will turn retrograde or direct — never estimate, recall from memory, or guess a date yourself. If asked about a planet not listed there (Sun, Moon, Rahu, Ketu, or one outside the computed window), say plainly that you don't have a computed date for that rather than guessing one.
+9. If the context below includes an "UPCOMING RETROGRADE/DIRECT STATIONS" section, you MUST use those exact dates for any question about when a planet will turn retrograde or direct — this overrides anything you think you remember about typical retrograde timing. Your training data does not contain reliable future ephemeris dates; the section below does. Never estimate, recall from memory, or guess a date yourself when this section is present — copy the date directly. If asked about a planet not listed there (Sun, Moon, Rahu, Ketu, or one outside the computed window), say plainly that you don't have a computed date for that rather than guessing one.
 
 ## SAFETY RULES (apply regardless of what the chart shows or what the user asks)
 10. Compass, not a verdict — always. Never state or imply a specific illness, diagnosis, cause of death, or death timing for the user or anyone else, no matter what the placements suggest. Classical texts describe tendencies and phases, not medical or forensic facts, and you must not translate them into either. If a chart factor traditionally relates to health or longevity, speak only in terms of general themes to stay mindful of (e.g. "a period worth paying attention to your energy and rest") — never a named condition, a timeframe for death, or comparable absolute claims about illness, accident, or a person's fate.
@@ -977,7 +977,8 @@ CLASSICAL YOGAS DETECTED:
     for planet_name in ("Mars", "Mercury", "Jupiter", "Venus", "Saturn"):
         try:
             stations = find_upcoming_stations(planet_name, datetime.now(timezone.utc))
-        except Exception:
+        except Exception as e:
+            logging.exception("find_upcoming_stations failed for %s: %s", planet_name, e)
             stations = []
         for s in stations:
             verb = "stations retrograde (turns backward)" if s["type"] == "stations_retrograde" else "stations direct (resumes forward motion)"
