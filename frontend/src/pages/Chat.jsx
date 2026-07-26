@@ -52,6 +52,8 @@ export default function Chat() {
   const [listening, setListening] = useState(false);
   const [sessionId, setSessionId] = useState(null);
   const endRef = useRef(null);
+  const scrollContainerRef = useRef(null);
+  const userScrolledUpRef = useRef(false);
   const fileRef = useRef(null);
   const recognitionRef = useRef(null);
 
@@ -96,9 +98,22 @@ export default function Chat() {
       .catch(() => {});
   }, [sessionId]);
 
+  // Previously this ran scrollIntoView on every streamed chunk unconditionally,
+  // which meant scrolling up during an answer was immediately overridden —
+  // the page only "let go" once streaming finished. Now it only auto-scrolls
+  // if the user hasn't deliberately scrolled away from the bottom, matching
+  // how most chat UIs (including this one's own inspiration) behave.
   useEffect(() => {
+    if (userScrolledUpRef.current) return;
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streaming]);
+
+  const handleMessagesScroll = () => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    userScrolledUpRef.current = distanceFromBottom > 120; // small threshold so landing near the bottom still counts as "at bottom"
+  };
 
   // ---- Voice input (Web Speech API) ----
   const startListening = () => {
@@ -164,6 +179,7 @@ export default function Chat() {
     const question = (text ?? input).trim();
     if ((!question && attachments.length === 0) || streaming || !sessionId) return;
 
+    userScrolledUpRef.current = false;
     setInput("");
     const attach = attachments.slice();
     setAttachments([]);
@@ -280,7 +296,12 @@ export default function Chat() {
         </h1>
       </div>
 
-      <div className="flex-1 overflow-y-auto py-8 space-y-8" data-testid="chat-messages">
+      <div
+        ref={scrollContainerRef}
+        onScroll={handleMessagesScroll}
+        className="flex-1 overflow-y-auto py-8 space-y-8"
+        data-testid="chat-messages"
+      >
         {!hasMessages && (
           <div className="mt-8 space-y-8 fade-up">
             <p className="text-[color:var(--jai-text-muted)] max-w-xl">
