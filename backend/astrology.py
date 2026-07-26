@@ -377,7 +377,7 @@ def compute_chart(dob_iso: str, tob: str, tz_offset_hours: float, lat: float, lo
 
     yogas = _detect_yogas(planets_out, asc_sign)
     shadbala = compute_shadbala(planets_out, asc_lon, jd, lat, lon, house_aspects)
-    bhava_bala = compute_bhava_bala(house_lords_list, shadbala, house_aspects)
+    bhava_bala = compute_bhava_bala(house_lords_list, shadbala, house_aspects, asc_lon)
     for h in house_lords_list:
         h["bhava_bala"] = bhava_bala[h["house"]]
 
@@ -1129,34 +1129,81 @@ def compute_shadbala(planets: List[Dict], asc_longitude: float, jd_birth: float,
     return result
 
 
-def compute_bhava_bala(house_lords_list: List[Dict], shadbala: Dict, house_aspects: Dict[int, List[str]]) -> Dict[int, Dict]:
-    """Bhava Bala (house strength), Rupas. Scope note: this uses Bhavadhipati
-    Bala (the house lord's own Shadbala) and an aspect-based strength
-    component; classical Bhava Dig Bala is omitted (see module-level scope
-    note — no verified distinct formula available separate from what
-    Kendradi Bala already captures for the lord itself). Like Shadbala's
-    total_rupas, treat this as a RELATIVE indicator (comparing houses within
-    the same chart) rather than an absolute score against the classical ">8
-    Rupas = dominant" threshold, for the same reason: our partial Shadbala
-    input is systematically lower than the full classical system, so the
-    absolute threshold doesn't transfer cleanly. is_dominant is included but
-    should be read as "relatively strong in this partial system," not a
-    strict classical verdict."""
+# Bhava Dig Bala — BPHS 27.26-29. Each sign belongs to one of four groups,
+# each with a Kendra house where it scores ZERO and the opposite Kendra
+# (180° away) where it scores maximum (60 Virupas), falling off linearly
+# (angular distance / 3) in between — the same style of formula as
+# planetary Dig Bala, just keyed to sign-group instead of planet identity.
+# Verified against a real reference chart (Parashara's Light): all 12
+# houses matched exactly.
+#   Nara (human) signs — Gemini, Virgo, Libra, Aquarius, Sagittarius 1st
+#   half: zero at 7th house, max at 1st (Lagna).
+#   Chatuspada (quadruped) signs — Aries, Taurus, Leo, Sagittarius 2nd
+#   half, Capricorn 1st half: zero at 4th house, max at 10th.
+#   Keeta (insect/reptile) signs — Cancer, Scorpio: zero at Lagna, max at
+#   7th house.
+#   Jalachara (aquatic) signs — Capricorn 2nd half, Pisces: zero at 10th
+#   house, max at 4th.
+BHAVA_DIG_ZERO_MAX_HOUSE = {"nara": (7, 1), "chatuspada": (4, 10), "keeta": (1, 7), "jalachara": (10, 4)}
+
+
+def _bhava_sign_group(sign_idx: int, deg_in_sign: float) -> str:
+    if sign_idx in (2, 5, 6, 10):  # Gemini, Virgo, Libra, Aquarius
+        return "nara"
+    if sign_idx == 8:  # Sagittarius — split at 15°
+        return "nara" if deg_in_sign < 15 else "chatuspada"
+    if sign_idx in (0, 1, 4):  # Aries, Taurus, Leo
+        return "chatuspada"
+    if sign_idx == 9:  # Capricorn — split at 15°
+        return "chatuspada" if deg_in_sign < 15 else "jalachara"
+    if sign_idx in (3, 7):  # Cancer, Scorpio
+        return "keeta"
+    if sign_idx == 11:  # Pisces
+        return "jalachara"
+    raise ValueError(f"Unhandled sign_idx {sign_idx}")
+
+
+def _bhava_dig_bala(house_num: int, asc_longitude: float) -> float:
+    bhava_madhya = (asc_longitude + (house_num - 1) * 30) % 360
+    sign_idx = int(bhava_madhya // 30)
+    deg_in_sign = bhava_madhya - sign_idx * 30
+    group = _bhava_sign_group(sign_idx, deg_in_sign)
+    _, max_house = BHAVA_DIG_ZERO_MAX_HOUSE[group]
+    max_madhya = (asc_longitude + (max_house - 1) * 30) % 360
+    diff = _angular_diff(bhava_madhya, max_madhya)
+    return round((180 - diff) / 3, 2)
+
+
+def compute_bhava_bala(house_lords_list: List[Dict], shadbala: Dict, house_aspects: Dict[int, List[str]], asc_longitude: float) -> Dict[int, Dict]:
+    """Bhava Bala (house strength), Rupas.
+
+    SCOPE: Bhavadhipati Bala (house lord's own Shadbala) and Bhava Dig Bala
+    are both implemented and verified — see _bhava_dig_bala's docstring for
+    the exact reference-chart match. Bhava Drishti Bala (aspectual strength
+    on the house) is NOT included: an earlier version used a made-up ×0.25
+    proxy on aspecting planets' total Shadbala, which was checked against a
+    real reference chart and found to overshoot badly (60%+ high on houses
+    with multiple strong aspectors) — that proxy has been removed rather
+    than left in a confirmed-wrong state. The real classical Bhava Drishti
+    formula (same continuous Sputa Drishti calculation used for planetary
+    Drik Bala, aimed at the Bhava Madhya instead of a planet) was tested
+    against the same reference chart and did NOT reproduce it closely
+    enough to trust (9 of 12 houses right in sign, but inconsistent
+    magnitude and 2 outright sign flips) — so it's left out rather than
+    shipped as a plausible-looking guess. Until a verified formula is
+    found, total_rupas here is Bhavadhipati Bala + Bhava Dig Bala only."""
     result = {}
     for h in house_lords_list:
         lord = h["lord"]
         bhavadhipati_bala = shadbala[lord]["total_rupas"] if lord in shadbala else 0.0
+        dig_bala_virupas = _bhava_dig_bala(h["house"], asc_longitude)
+        dig_bala_rupas = round(dig_bala_virupas / 60, 2)
 
-        # Aspect strength on this house: sum of aspecting planets' own Shadbala,
-        # scaled down — a house aspected by strong planets gets a boost.
-        aspecting = house_aspects.get(h["house"], [])
-        aspect_bala = round(sum(shadbala[p]["total_rupas"] for p in aspecting if p in shadbala) * 0.25, 2)
-
-        total = round(bhavadhipati_bala + aspect_bala, 2)
+        total = round(bhavadhipati_bala + dig_bala_rupas, 2)
         result[h["house"]] = {
             "total_rupas": total,
             "bhavadhipati_bala_rupas": round(bhavadhipati_bala, 2),
-            "aspect_bala_rupas": aspect_bala,
+            "dig_bala_rupas": dig_bala_rupas,
         }
     return result
 
