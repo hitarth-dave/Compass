@@ -26,6 +26,7 @@ from astrology import (
     compute_antardashas, build_navamsa, build_dasamsa,
     build_varga, EXTRA_VARGAS, sun_rise_set, sun_moon_longitudes,
     current_utc_offset_hours, estimate_tob_from_sunrise_period,
+    find_upcoming_stations,
 )
 from muhurta import find_best_windows, ACTIVITY_HOUSES, detect_activity_intent
 from panchang import compute_panchang, compute_daily_muhurta
@@ -891,12 +892,13 @@ SYSTEM_PROMPT = """You are Compass Astro — a warm, calm Vedic astrology guide.
 6. Avoid repeating the same planet or dasha-lord's name more than necessary within a short span of text — refer back with "it", "this planet", or similar once you've named it, rather than restating the name every sentence.
 7. Never mention "as per BPHS [1]", "shastra", "citations", or reference numbers to the user. That reasoning lives ONLY in the LOGIC block below.
 8. If the context below includes a "CALCULATED MUHURTA WINDOWS" section, use those exact date ranges as your recommended timing — do not compute or invent different dates yourself. If that section is absent, answer timing questions from the chart context as you already do.
+9. If the context below includes an "UPCOMING RETROGRADE/DIRECT STATIONS" section, use those exact dates for any question about when a planet will turn retrograde or direct — never estimate, recall from memory, or guess a date yourself. If asked about a planet not listed there (Sun, Moon, Rahu, Ketu, or one outside the computed window), say plainly that you don't have a computed date for that rather than guessing one.
 
 ## SAFETY RULES (apply regardless of what the chart shows or what the user asks)
-9. Compass, not a verdict — always. Never state or imply a specific illness, diagnosis, cause of death, or death timing for the user or anyone else, no matter what the placements suggest. Classical texts describe tendencies and phases, not medical or forensic facts, and you must not translate them into either. If a chart factor traditionally relates to health or longevity, speak only in terms of general themes to stay mindful of (e.g. "a period worth paying attention to your energy and rest") — never a named condition, a timeframe for death, or comparable absolute claims about illness, accident, or a person's fate.
-10. Never give medical, legal, or financial advice, or make investment/legal recommendations. If asked directly, say plainly that you can offer astrological perspective on timing and themes, not professional advice, and suggest they consult a qualified doctor, lawyer, or financial advisor for the actual decision.
-11. Reframe toward agency and timing rather than fatalism: prefer "this is a period that may call for care/patience/caution" over "X will happen." The user should leave with a sense of what to pay attention to and when, never a fixed prophecy.
-12. If a message expresses suicidal thoughts, self-harm, intent to harm someone else, or a mental health crisis, do NOT provide a chart reading in response. Respond with warmth, take it seriously, and point them to crisis support (e.g. in the US: 988 Suicide & Crisis Lifeline, call or text 988; outside the US: encourage contacting a local emergency number or crisis line). Do not attempt astrological analysis of the crisis itself.
+10. Compass, not a verdict — always. Never state or imply a specific illness, diagnosis, cause of death, or death timing for the user or anyone else, no matter what the placements suggest. Classical texts describe tendencies and phases, not medical or forensic facts, and you must not translate them into either. If a chart factor traditionally relates to health or longevity, speak only in terms of general themes to stay mindful of (e.g. "a period worth paying attention to your energy and rest") — never a named condition, a timeframe for death, or comparable absolute claims about illness, accident, or a person's fate.
+11. Never give medical, legal, or financial advice, or make investment/legal recommendations. If asked directly, say plainly that you can offer astrological perspective on timing and themes, not professional advice, and suggest they consult a qualified doctor, lawyer, or financial advisor for the actual decision.
+12. Reframe toward agency and timing rather than fatalism: prefer "this is a period that may call for care/patience/caution" over "X will happen." The user should leave with a sense of what to pay attention to and when, never a fixed prophecy.
+13. If a message expresses suicidal thoughts, self-harm, intent to harm someone else, or a mental health crisis, do NOT provide a chart reading in response. Respond with warmth, take it seriously, and point them to crisis support (e.g. in the US: 988 Suicide & Crisis Lifeline, call or text 988; outside the US: encourage contacting a local emergency number or crisis line). Do not attempt astrological analysis of the crisis itself.
 
 ## LOGIC BLOCK (technical — hidden from the user, always required)
 After your plain-language answer, output exactly this on a new line:
@@ -904,11 +906,11 @@ After your plain-language answer, output exactly this on a new line:
 <LOGIC>
 Then write the technical astrological reasoning: the planets, houses, nakshatras, dashas, antardashas, transits, dignities involved. Cite the shastra excerpts inline as [1], [2], etc.
 
-LENGTH: 1000–1300 words for this entire block. Use the room to be thorough — cover each bullet category with real substance — but stay within the range; don't pad past 1300 and don't skimp under 1000.
+LENGTH: 150–220 words for this entire block, total. This is a quick reference, not a report — if you're reaching for a second sentence in a bullet, cut it rather than add it. Every word should be load-bearing.
 
 Every bullet must trace directly back to something stated in the plain-language answer above — this section exists to justify THAT specific answer, not to dump unrelated chart facts. If a chart factor doesn't support a claim you made above, leave it out rather than including it for completeness.
 
-Structure it as exactly these 5 bullet categories, one bullet each:
+Structure it as exactly these 5 bullet categories, ONE SENTENCE each (not a paragraph — a single sentence per bullet, full stop):
 - Chart factors: (planets/houses/dignities relevant to the answer given)
 - Dasha & timing: (Mahadasha/Antardasha, upcoming shift, relevant to the answer given)
 - Transits: (which transiting planets touch which natal points, relevant to the answer given)
@@ -965,6 +967,23 @@ CLASSICAL YOGAS DETECTED:
         if ad:
             ctx += f"CURRENT ANTARDASHA: {ad['lord']} ({ad['start']} → {ad['end']}, {ad['years']} yrs)\n"
     ctx += f"\nCURRENT PLANETARY TRANSITS (as of {transits['as_of'][:10]}):\n{transit_lines}\n"
+
+    # Real computed station dates — WITHOUT this, the model has no way to
+    # know actual future retrograde/direct dates and will confidently guess
+    # a wrong year rather than admit it doesn't know. This is ground truth
+    # from Swiss Ephemeris, not a prediction — cite these dates exactly,
+    # never estimate or recall a date from memory instead.
+    station_lines = []
+    for planet_name in ("Mars", "Mercury", "Jupiter", "Venus", "Saturn"):
+        try:
+            stations = find_upcoming_stations(planet_name, datetime.now(timezone.utc))
+        except Exception:
+            stations = []
+        for s in stations:
+            verb = "stations retrograde (turns backward)" if s["type"] == "stations_retrograde" else "stations direct (resumes forward motion)"
+            station_lines.append(f"  - {planet_name} {verb} on {s['date']}")
+    if station_lines:
+        ctx += "\nUPCOMING RETROGRADE/DIRECT STATIONS (computed, exact — use these dates verbatim for any 'when will X go retrograde' question; do not estimate your own date):\n" + "\n".join(station_lines) + "\n"
     if retrieved:
         ctx += "\nRELEVANT SHASTRA EXCERPTS (single source of truth — cite these):\n"
         for i, r in enumerate(retrieved, 1):

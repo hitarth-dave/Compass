@@ -1436,7 +1436,58 @@ def current_dasha(dashas: List[Dict]) -> Dict | None:
     return None
 
 
-def current_transits(natal_chart: Dict | None = None, at: datetime | None = None) -> Dict:
+STATION_PLANET_IDS = {"Mars": swe.MARS, "Mercury": swe.MERCURY, "Jupiter": swe.JUPITER, "Venus": swe.VENUS, "Saturn": swe.SATURN}
+# Sun, Moon never retrograde; Rahu/Ketu are always in retrograde-style motion
+# (they move backward through the zodiac by definition), so none of the
+# three have a meaningful "station" to report.
+
+
+def find_upcoming_stations(planet_name: str, from_dt: datetime, days_ahead: int = 450, max_stations: int = 2) -> List[Dict]:
+    """Scans forward from from_dt (using real Swiss Ephemeris speed, not a
+    guess) to find the next retrograde/direct station dates for a planet.
+    This exists because an LLM has no reliable way to know specific future
+    ephemeris dates from training data alone — asked "when will Saturn go
+    retrograde," it will confidently guess a wrong year rather than say it
+    doesn't know. Feeding real computed dates into the chat context (see
+    server.py's _build_context) closes that gap. Takes ~0.02s per planet, so
+    this runs fresh on every request rather than needing a cache."""
+    if planet_name not in STATION_PLANET_IDS:
+        return []
+    pid = STATION_PLANET_IDS[planet_name]
+    flags = swe.FLG_SWIEPH | swe.FLG_SIDEREAL | swe.FLG_SPEED
+
+    def speed_at(jd):
+        pos, _ = swe.calc_ut(jd, pid, flags)
+        return pos[3]
+
+    from_jd = _julday(from_dt.astimezone(timezone.utc).replace(tzinfo=None) if from_dt.tzinfo else from_dt)
+    stations = []
+    prev_jd = from_jd
+    prev_speed = speed_at(prev_jd)
+    jd = from_jd
+    step_days = 1.0
+    while jd < from_jd + days_ahead and len(stations) < max_stations:
+        jd += step_days
+        speed = speed_at(jd)
+        if (speed < 0) != (prev_speed < 0):
+            lo, hi = prev_jd, jd
+            for _ in range(40):  # bisect to the day
+                mid = (lo + hi) / 2
+                if (speed_at(mid) < 0) == (prev_speed < 0):
+                    lo = mid
+                else:
+                    hi = mid
+            station_jd = (lo + hi) / 2
+            y, m, d, _ = swe.revjul(station_jd)
+            stations.append({
+                "type": "stations_retrograde" if speed < 0 else "stations_direct",
+                "date": f"{y:04d}-{m:02d}-{d:02d}",
+            })
+        prev_jd, prev_speed = jd, speed
+    return stations
+
+
+
     """Compute current sidereal planetary positions.
     If natal_chart is given, also compute which house each transit falls in
     from natal Lagna and from natal Moon (Chandra Lagna)."""
