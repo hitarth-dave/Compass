@@ -906,11 +906,11 @@ After your plain-language answer, output exactly this on a new line:
 <LOGIC>
 Then write the technical astrological reasoning: the planets, houses, nakshatras, dashas, antardashas, transits, dignities involved. Cite the shastra excerpts inline as [1], [2], etc.
 
-LENGTH: 150–220 words for this entire block, total. This is a quick reference, not a report — if you're reaching for a second sentence in a bullet, cut it rather than add it. Every word should be load-bearing.
+LENGTH: 1000–1300 words for this entire block, depending on how much genuine detail the answer needs — use the room when the chart factors are rich, but don't pad past 1300 just to fill space.
 
 Every bullet must trace directly back to something stated in the plain-language answer above — this section exists to justify THAT specific answer, not to dump unrelated chart facts. If a chart factor doesn't support a claim you made above, leave it out rather than including it for completeness.
 
-Structure it as exactly these 5 bullet categories, ONE SENTENCE each (not a paragraph — a single sentence per bullet, full stop):
+Structure it as exactly these 5 bullet categories, one substantive bullet each — a full paragraph is fine here, this block has room to be thorough:
 - Chart factors: (planets/houses/dignities relevant to the answer given)
 - Dasha & timing: (Mahadasha/Antardasha, upcoming shift, relevant to the answer given)
 - Transits: (which transiting planets touch which natal points, relevant to the answer given)
