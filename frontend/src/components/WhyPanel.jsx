@@ -11,13 +11,25 @@ import {
 /** Groups citations by book name so the same book never appears twice as a
  * separate pill/heading — each book appears once, with all its excerpts
  * (from possibly-different chapters) nested underneath. */
+const MAX_CITATIONS = 5; // still bounded — a 1000-1300 word budget shouldn't mean unlimited full-page citations either
+const EXCERPT_WORD_CAP = 80; // a substantial supporting quote, not a page reproduction
+
+function cleanExcerptText(text) {
+  if (!text) return "";
+  // Retrieved passages sometimes carry OCR scan artifacts like
+  // "---------------- page 33 of 482 -----------------" baked into the
+  // text itself — strip those before showing anything to the user.
+  const cleaned = text.replace(/-{5,}\s*page\s+\d+\s+of\s+\d+\s*-{5,}/gi, " ").replace(/\s+/g, " ").trim();
+  return capWords(cleaned, EXCERPT_WORD_CAP);
+}
+
 export function groupCitationsByBook(citations) {
   const byBook = new Map();
-  for (const c of citations || []) {
+  for (const c of (citations || []).slice(0, MAX_CITATIONS)) {
     if (!byBook.has(c.book)) {
       byBook.set(c.book, { book: c.book, idx: c.idx, excerpts: [] });
     }
-    byBook.get(c.book).excerpts.push({ idx: c.idx, chapter: c.chapter, text: c.text });
+    byBook.get(c.book).excerpts.push({ idx: c.idx, chapter: c.chapter, text: cleanExcerptText(c.text) });
   }
   return Array.from(byBook.values());
 }
@@ -28,9 +40,8 @@ export function groupCitationsByBook(citations) {
  * tag fragment, e.g. "<LOG", left dangling at the end of what's rendered
  * so far) leaking raw markup into the visible answer.
  */
-const LOGIC_WORD_CAP = 260; // hard ceiling — the system prompt asks for 150-220
-// words, but prompt instructions alone aren't a guarantee (observed the model
-// produce ~2300 words despite the instruction), so this enforces it in code.
+const LOGIC_WORD_CAP = 1400; // safety ceiling, not a target — system prompt asks for
+// 1000-1300 words; this only kicks in if the model runs well past that.
 function capWords(text, maxWords) {
   const words = text.split(/\s+/);
   if (words.length <= maxWords) return text;
