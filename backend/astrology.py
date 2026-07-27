@@ -560,6 +560,20 @@ def compute_ashtakavarga(planet_signs: Dict[str, int], asc_sign: int) -> Dict:
     return {"bav": bav, "sav": sav}
 
 
+# Classical thresholds for judging a transit by the transiting planet's own
+# Bhinnashtakavarga bindu count in the sign it occupies (BPHS-style
+# convention, widely used): 0-3 = weak/troublesome, 4 = mixed, 5+ = strong.
+def ashtakavarga_transit_strength(planet_name: str, transit_sign_idx: int, natal_bav: Dict[str, List[int]]) -> Dict:
+    bindus = natal_bav.get(planet_name, [0] * 12)[transit_sign_idx]
+    if bindus <= 3:
+        label = "weak — this transit tends to underdeliver or bring friction"
+    elif bindus == 4:
+        label = "mixed — moderate, neither strongly favorable nor difficult"
+    else:
+        label = "strong — this transit tends to deliver its themes favorably"
+    return {"bindus": bindus, "label": label}
+
+
 # --- Shadbala (planetary strength) & Bhava Bala (house strength) ---
 #
 # SCOPE & VERIFICATION: Full classical Shadbala has six components. As of
@@ -1488,6 +1502,60 @@ def find_upcoming_stations(planet_name: str, from_dt: datetime, days_ahead: int 
 
 
 
+    """Compute current sidereal planetary positions.
+    If natal_chart is given, also compute which house each transit falls in
+    from natal Lagna and from natal Moon (Chandra Lagna)."""
+    now = at if at is not None else datetime.now(timezone.utc)
+    jd = _julday(now)
+    natal_asc_sign = natal_chart["ascendant"]["sign_idx"] if natal_chart else None
+    natal_moon_sign = None
+    if natal_chart:
+        natal_moon = next((p for p in natal_chart["planets"] if p["name"] == "Moon"), None)
+        natal_moon_sign = natal_moon["sign_idx"] if natal_moon else None
+
+    out = []
+    for name, pid in PLANETS:
+        p_lon, speed = _sidereal_lon(jd, pid)
+        sign, deg = _rashi_from_lon(p_lon)
+        nak_idx, pada = _nakshatra_from_lon(p_lon)
+        row = {
+            "name": name,
+            "sign": RASHIS[sign],
+            "sign_en": RASHI_EN[sign],
+            "sign_idx": sign,
+            "degree_in_sign": round(deg, 2),
+            "nakshatra": NAKSHATRAS[nak_idx],
+            "retrograde": speed < 0 and name not in ("Sun", "Moon", "Rahu"),
+        }
+        if natal_asc_sign is not None:
+            row["house_from_lagna"] = ((sign - natal_asc_sign) % 12) + 1
+        if natal_moon_sign is not None:
+            row["house_from_moon"] = ((sign - natal_moon_sign) % 12) + 1
+        out.append(row)
+    # Ketu
+    rahu = next(p for p in out if p["name"] == "Rahu")
+    rahu_lon_calc, _ = _sidereal_lon(jd, swe.MEAN_NODE)
+    ketu_lon = (rahu_lon_calc + 180) % 360
+    ketu_sign, ketu_deg = _rashi_from_lon(ketu_lon)
+    k_nak, _ = _nakshatra_from_lon(ketu_lon)
+    ketu_row = {
+        "name": "Ketu",
+        "sign": RASHIS[ketu_sign],
+        "sign_en": RASHI_EN[ketu_sign],
+        "sign_idx": ketu_sign,
+        "degree_in_sign": round(ketu_deg, 2),
+        "nakshatra": NAKSHATRAS[k_nak],
+        "retrograde": True,
+    }
+    if natal_asc_sign is not None:
+        ketu_row["house_from_lagna"] = ((ketu_sign - natal_asc_sign) % 12) + 1
+    if natal_moon_sign is not None:
+        ketu_row["house_from_moon"] = ((ketu_sign - natal_moon_sign) % 12) + 1
+    out.append(ketu_row)
+    return {"as_of": now.isoformat(), "planets": out}
+
+
+def current_transits(natal_chart: Dict | None = None, at: datetime | None = None) -> Dict:
     """Compute current sidereal planetary positions.
     If natal_chart is given, also compute which house each transit falls in
     from natal Lagna and from natal Moon (Chandra Lagna)."""

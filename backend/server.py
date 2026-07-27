@@ -939,11 +939,17 @@ def _build_context(chart: dict, transits: dict, retrieved: List[dict], timing_wi
         for h in chart.get('house_lords', [])
     )
     yogas_lines = ("\n".join(f"  - {y['name']}: {y['detail']}" for y in chart.get('yogas', [])) or "  (none of the tracked yogas detected)")
+    natal_bav = chart.get('ashtakavarga', {}).get('bav', {})
     transit_lines = "\n".join(
         f"  - {t['name']:<8} in {t['sign_en']:<12} {t['degree_in_sign']:.2f}°"
         + (f"  → H{t['house_from_lagna']} from Lagna" if 'house_from_lagna' in t else "")
         + (f", H{t['house_from_moon']} from Moon" if 'house_from_moon' in t else "")
         + (" [R]" if t.get('retrograde') else "")
+        + (
+            f"  [Ashtakavarga: {ashtakavarga_transit_strength(t['name'], t['sign_idx'], natal_bav)['bindus']} bindus — "
+            f"{ashtakavarga_transit_strength(t['name'], t['sign_idx'], natal_bav)['label']}]"
+            if t['name'] in natal_bav and 'sign_idx' in t else ""
+        )
         for t in transits['planets']
     )
     ctx = f"""NATIVE'S BIRTH DETAILS
