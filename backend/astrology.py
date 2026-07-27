@@ -1456,6 +1456,77 @@ STATION_PLANET_IDS = {"Mars": swe.MARS, "Mercury": swe.MERCURY, "Jupiter": swe.J
 # three have a meaningful "station" to report.
 
 
+TRANSIT_INGRESS_IDS = {
+    "Sun": swe.SUN, "Moon": swe.MOON, "Mars": swe.MARS, "Mercury": swe.MERCURY,
+    "Jupiter": swe.JUPITER, "Venus": swe.VENUS, "Saturn": swe.SATURN, "Rahu": swe.MEAN_NODE,
+}
+
+
+def find_sign_ingress(planet_name: str, current_sign_idx: int, from_dt: datetime, max_days: int = 800) -> Dict:
+    """When did this transiting planet enter its current sign (retrodiction —
+    always reliable, it already happened), and when is it projected to leave
+    (a forward projection along its CURRENT path). Ketu is handled as Rahu+180°.
+
+    CAVEAT baked into how this should be used: for a planet currently near a
+    retrograde station, this simple forward scan finds the next sign-boundary
+    crossing along the current path — but if that planet is about to
+    retrograde, it could dip back over a nearby boundary and re-cross forward
+    again later, meaning the true final exit could be later than this
+    projection. Saturn/Jupiter especially spend long stretches doing exactly
+    this near sign boundaries, so treat "projected_exit" as provisional, not
+    a guarantee."""
+    is_ketu = planet_name == "Ketu"
+    pid = TRANSIT_INGRESS_IDS["Rahu"] if is_ketu else TRANSIT_INGRESS_IDS.get(planet_name)
+    if pid is None:
+        return {}
+    flags = swe.FLG_SWIEPH | swe.FLG_SIDEREAL | swe.FLG_SPEED
+
+    def sign_at(jd):
+        pos, _ = swe.calc_ut(jd, pid, flags)
+        lon = (pos[0] + 180) % 360 if is_ketu else pos[0]
+        return int(lon // 30)
+
+    from_jd = _julday(from_dt.astimezone(timezone.utc).replace(tzinfo=None) if from_dt.tzinfo else from_dt)
+
+    entered_jd = None
+    jd = from_jd
+    for _ in range(max_days):
+        jd -= 1.0
+        if sign_at(jd) != current_sign_idx:
+            lo, hi = jd, jd + 1.0
+            for _ in range(40):
+                mid = (lo + hi) / 2
+                if sign_at(mid) == current_sign_idx:
+                    hi = mid
+                else:
+                    lo = mid
+            entered_jd = hi
+            break
+
+    leaves_jd = None
+    jd = from_jd
+    for _ in range(max_days):
+        jd += 1.0
+        if sign_at(jd) != current_sign_idx:
+            lo, hi = jd - 1.0, jd
+            for _ in range(40):
+                mid = (lo + hi) / 2
+                if sign_at(mid) == current_sign_idx:
+                    lo = mid
+                else:
+                    hi = mid
+            leaves_jd = lo
+            break
+
+    def _fmt(jd):
+        if jd is None:
+            return None
+        y, m, d, _ = swe.revjul(jd)
+        return f"{y:04d}-{m:02d}-{d:02d}"
+
+    return {"entered": _fmt(entered_jd), "projected_exit": _fmt(leaves_jd)}
+
+
 def find_upcoming_stations(planet_name: str, from_dt: datetime, days_ahead: int = 450, max_stations: int = 2) -> List[Dict]:
     """Scans forward from from_dt (using real Swiss Ephemeris speed, not a
     guess) to find the next retrograde/direct station dates for a planet.
@@ -1499,60 +1570,6 @@ def find_upcoming_stations(planet_name: str, from_dt: datetime, days_ahead: int 
             })
         prev_jd, prev_speed = jd, speed
     return stations
-
-
-
-    """Compute current sidereal planetary positions.
-    If natal_chart is given, also compute which house each transit falls in
-    from natal Lagna and from natal Moon (Chandra Lagna)."""
-    now = at if at is not None else datetime.now(timezone.utc)
-    jd = _julday(now)
-    natal_asc_sign = natal_chart["ascendant"]["sign_idx"] if natal_chart else None
-    natal_moon_sign = None
-    if natal_chart:
-        natal_moon = next((p for p in natal_chart["planets"] if p["name"] == "Moon"), None)
-        natal_moon_sign = natal_moon["sign_idx"] if natal_moon else None
-
-    out = []
-    for name, pid in PLANETS:
-        p_lon, speed = _sidereal_lon(jd, pid)
-        sign, deg = _rashi_from_lon(p_lon)
-        nak_idx, pada = _nakshatra_from_lon(p_lon)
-        row = {
-            "name": name,
-            "sign": RASHIS[sign],
-            "sign_en": RASHI_EN[sign],
-            "sign_idx": sign,
-            "degree_in_sign": round(deg, 2),
-            "nakshatra": NAKSHATRAS[nak_idx],
-            "retrograde": speed < 0 and name not in ("Sun", "Moon", "Rahu"),
-        }
-        if natal_asc_sign is not None:
-            row["house_from_lagna"] = ((sign - natal_asc_sign) % 12) + 1
-        if natal_moon_sign is not None:
-            row["house_from_moon"] = ((sign - natal_moon_sign) % 12) + 1
-        out.append(row)
-    # Ketu
-    rahu = next(p for p in out if p["name"] == "Rahu")
-    rahu_lon_calc, _ = _sidereal_lon(jd, swe.MEAN_NODE)
-    ketu_lon = (rahu_lon_calc + 180) % 360
-    ketu_sign, ketu_deg = _rashi_from_lon(ketu_lon)
-    k_nak, _ = _nakshatra_from_lon(ketu_lon)
-    ketu_row = {
-        "name": "Ketu",
-        "sign": RASHIS[ketu_sign],
-        "sign_en": RASHI_EN[ketu_sign],
-        "sign_idx": ketu_sign,
-        "degree_in_sign": round(ketu_deg, 2),
-        "nakshatra": NAKSHATRAS[k_nak],
-        "retrograde": True,
-    }
-    if natal_asc_sign is not None:
-        ketu_row["house_from_lagna"] = ((ketu_sign - natal_asc_sign) % 12) + 1
-    if natal_moon_sign is not None:
-        ketu_row["house_from_moon"] = ((ketu_sign - natal_moon_sign) % 12) + 1
-    out.append(ketu_row)
-    return {"as_of": now.isoformat(), "planets": out}
 
 
 def current_transits(natal_chart: Dict | None = None, at: datetime | None = None) -> Dict:

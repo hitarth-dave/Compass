@@ -26,7 +26,7 @@ from astrology import (
     compute_antardashas, build_navamsa, build_dasamsa,
     build_varga, EXTRA_VARGAS, sun_rise_set, sun_moon_longitudes,
     current_utc_offset_hours, estimate_tob_from_sunrise_period,
-    find_upcoming_stations,
+    find_upcoming_stations, ashtakavarga_transit_strength, find_sign_ingress,
 )
 from muhurta import find_best_windows, ACTIVITY_HOUSES, detect_activity_intent
 from panchang import compute_panchang, compute_daily_muhurta
@@ -940,18 +940,26 @@ def _build_context(chart: dict, transits: dict, retrieved: List[dict], timing_wi
     )
     yogas_lines = ("\n".join(f"  - {y['name']}: {y['detail']}" for y in chart.get('yogas', [])) or "  (none of the tracked yogas detected)")
     natal_bav = chart.get('ashtakavarga', {}).get('bav', {})
-    transit_lines = "\n".join(
-        f"  - {t['name']:<8} in {t['sign_en']:<12} {t['degree_in_sign']:.2f}°"
-        + (f"  → H{t['house_from_lagna']} from Lagna" if 'house_from_lagna' in t else "")
-        + (f", H{t['house_from_moon']} from Moon" if 'house_from_moon' in t else "")
-        + (" [R]" if t.get('retrograde') else "")
-        + (
-            f"  [Ashtakavarga: {ashtakavarga_transit_strength(t['name'], t['sign_idx'], natal_bav)['bindus']} bindus — "
-            f"{ashtakavarga_transit_strength(t['name'], t['sign_idx'], natal_bav)['label']}]"
-            if t['name'] in natal_bav and 'sign_idx' in t else ""
+    now_dt = datetime.now(timezone.utc)
+    transit_line_parts = []
+    for t in transits['planets']:
+        line = (
+            f"  - {t['name']:<8} in {t['sign_en']:<12} {t['degree_in_sign']:.2f}°"
+            + (f"  → H{t['house_from_lagna']} from Lagna" if 'house_from_lagna' in t else "")
+            + (f", H{t['house_from_moon']} from Moon" if 'house_from_moon' in t else "")
+            + (" [R]" if t.get('retrograde') else "")
         )
-        for t in transits['planets']
-    )
+        if t['name'] in natal_bav and 'sign_idx' in t:
+            strength = ashtakavarga_transit_strength(t['name'], t['sign_idx'], natal_bav)
+            line += f"  [Ashtakavarga: {strength['bindus']} bindus — {strength['label']}]"
+        ingress = find_sign_ingress(t['name'], t['sign_idx'], now_dt) if 'sign_idx' in t else {}
+        if ingress.get('entered'):
+            line += f"  [entered this sign {ingress['entered']}"
+            if ingress.get('projected_exit'):
+                line += f", projected to leave ~{ingress['projected_exit']} (provisional — could shift if a retrograde loop intervenes)"
+            line += "]"
+        transit_line_parts.append(line)
+    transit_lines = "\n".join(transit_line_parts)
     ctx = f"""NATIVE'S BIRTH DETAILS
 Name: {p['name']}
 Date/Time: {p['dob']} {p['tob']} at {p['place']}
@@ -971,7 +979,24 @@ CLASSICAL YOGAS DETECTED:
     if md:
         ctx += f"\nCURRENT MAHADASHA: {md['lord']} ({md['start']} → {md['end']}, {md['years']} yrs total)\n"
         if ad:
-            ctx += f"CURRENT ANTARDASHA: {ad['lord']} ({ad['start']} → {ad['end']}, {ad['years']} yrs)\n"
+            ctx += f"CURRENT ANTARDASHA: {ad['lord']} (running since {ad['start'][:10]}, ends {ad['end'][:10]}) — this start date is real and precise: when relevant, ground your answer in 'since around {ad['start'][:10]}' rather than a vague 'lately.'\n"
+            pad = chart.get('current_pratyantardasha')
+            if pad:
+                ctx += f"CURRENT PRATYANTARDASHA (finer sub-period within the Antardasha above): {pad['lord']} (since {pad['start'][:10]}, ends {pad['end'][:10]})\n"
+            all_ads = chart.get('all_antardashas') or []
+            today_iso = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+            upcoming = [a for a in all_ads if a['start'] > today_iso][:3]
+            if upcoming:
+                ctx += "UPCOMING ANTARDASHA SHIFTS (real computed dates — use these for 'when does this change' questions, don't invent your own timing):\n"
+                ctx += "\n".join(f"  - {a['lord']} begins {a['start'][:10]}, runs until {a['end'][:10]}" for a in upcoming) + "\n"
+    if chart.get('navamsa'):
+        d9 = chart['navamsa']
+        d9_lines = ", ".join(f"{p['name']}={p['sign_en']}(H{p['house']})" for p in d9['planets'])
+        ctx += f"\nD9 NAVAMSA (marriage, spouse, dharma, soul-level strength) — Lagna {d9['ascendant']['sign_en']}: {d9_lines}\n"
+    if chart.get('dasamsa'):
+        d10 = chart['dasamsa']
+        d10_lines = ", ".join(f"{p['name']}={p['sign_en']}(H{p['house']})" for p in d10['planets'])
+        ctx += f"D10 DASAMSA (career, profession, public status) — Lagna {d10['ascendant']['sign_en']}: {d10_lines}\n"
     ctx += f"\nCURRENT PLANETARY TRANSITS (as of {transits['as_of'][:10]}):\n{transit_lines}\n"
 
     # Real computed station dates — WITHOUT this, the model has no way to
@@ -1085,7 +1110,16 @@ async def chat_stream(req: ChatRequest, user: User = Depends(get_current_user)):
     chart['current_dasha'] = current_dasha(chart['dashas'])
     if chart['current_dasha']:
         chart['current_antardasha'] = current_antardasha(chart['current_dasha'])
+        chart['all_antardashas'] = compute_antardashas(chart['current_dasha'])
+        if chart['current_antardasha']:
+            # Pratyantardasha (3rd level) — compute_antardashas/current_antardasha
+            # are generic across levels (same subdivision math), so calling
+            # current_antardasha() again one level deeper gives the current
+            # Pratyantardasha for free.
+            chart['current_pratyantardasha'] = current_antardasha(chart['current_antardasha'])
     transits = current_transits(chart)
+    chart['navamsa'] = build_navamsa(chart['planets'], chart['ascendant']['longitude'])
+    chart['dasamsa'] = build_dasamsa(chart['planets'], chart['ascendant']['longitude'])
 
     activity_intent = detect_activity_intent(req.message)
     timing_windows = find_best_windows(chart, chart['dashas'], activity_intent) if activity_intent else None
