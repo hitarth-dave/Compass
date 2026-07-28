@@ -1298,14 +1298,15 @@ def compute_domain_verdict(domain: str, chart: Dict, transits: Dict) -> Dict | N
     signal_c = any(s >= 28 for s in house_sav) if house_sav else None
 
     # Signal D — dasha alignment (any of the 3 levels this app tracks)
-    dasha_lords = {
-        chart.get("current_dasha", {}).get("lord") if chart.get("current_dasha") else None,
-        chart.get("current_antardasha", {}).get("lord") if chart.get("current_antardasha") else None,
-        chart.get("current_pratyantardasha", {}).get("lord") if chart.get("current_pratyantardasha") else None,
+    dasha_levels = {
+        "Mahadasha": chart.get("current_dasha", {}).get("lord") if chart.get("current_dasha") else None,
+        "Antardasha": chart.get("current_antardasha", {}).get("lord") if chart.get("current_antardasha") else None,
+        "Pratyantardasha": chart.get("current_pratyantardasha", {}).get("lord") if chart.get("current_pratyantardasha") else None,
     }
-    dasha_lords.discard(None)
+    dasha_lords = {v for v in dasha_levels.values() if v}
     significators = set(relevant_lords) | set(karakas)
-    signal_d = bool(dasha_lords & significators) if dasha_lords else None
+    matching_dasha_levels = [f"{lord} ({level})" for level, lord in dasha_levels.items() if lord in significators]
+    signal_d = bool(matching_dasha_levels) if dasha_lords else None
 
     # Signal E — transit support
     natal_bav = chart.get("ashtakavarga", {}).get("bav", {})
@@ -1349,6 +1350,7 @@ def compute_domain_verdict(domain: str, chart: Dict, transits: Dict) -> Dict | N
         "karaka_checks": karaka_checks,
         "house_sav": house_sav,
         "dasha_lords_active": sorted(dasha_lords),
+        "matching_dasha_levels": matching_dasha_levels,
         "transiting_significators": transiting_significators,
     }
 
