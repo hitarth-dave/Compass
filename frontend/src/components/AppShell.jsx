@@ -100,9 +100,51 @@ export default function AppShell({ children }) {
     loadThreads();
   }, []);
 
+  const loadProjects = async () => {
+    try {
+      const res = await axios.get(`${API}/projects`);
+      setProjects(res.data.projects || []);
+    } catch (e) {
+      // silent
+    }
+  };
+
   useEffect(() => {
-    axios.get(`${API}/projects`).then((res) => setProjects(res.data.projects || [])).catch(() => {});
+    loadProjects();
   }, []);
+
+  const [addingProject, setAddingProject] = useState(false);
+  const [newProjectName, setNewProjectName] = useState("");
+  const [deleteProjectTarget, setDeleteProjectTarget] = useState(null);
+
+  const submitNewProject = async () => {
+    const name = newProjectName.trim();
+    if (!name) return;
+    try {
+      await axios.post(`${API}/projects`, { name });
+      setNewProjectName("");
+      setAddingProject(false);
+      setProjectsOpen(true);
+      await loadProjects();
+      toast.success("Project added");
+    } catch (e) {
+      toast.error("Could not add project");
+    }
+  };
+
+  const doDeleteProject = async () => {
+    if (!deleteProjectTarget) return;
+    try {
+      await axios.delete(`${API}/projects/${deleteProjectTarget.key}`);
+      setDeleteProjectTarget(null);
+      setProjectThreads((s) => { const next = { ...s }; delete next[deleteProjectTarget.key]; return next; });
+      await loadProjects();
+      loadThreads(); // its chats fall back into the general Conversation list
+      toast.success("Project deleted — its chats moved back to Conversation");
+    } catch (e) {
+      toast.error("Could not delete project");
+    }
+  };
 
   const loadProjectThreads = async (key) => {
     setProjectThreadsLoading((s) => ({ ...s, [key]: true }));
@@ -350,14 +392,28 @@ export default function AppShell({ children }) {
               <div className="mt-1 ml-5 pl-3 border-l border-[color:var(--jai-border)] space-y-0.5" data-testid="projects-list">
                 {projects.map((p) => (
                   <div key={p.key}>
-                    <button
-                      onClick={() => toggleProject(p.key)}
-                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-[color:var(--jai-text-muted)] hover:bg-[color:var(--jai-surface)]/60 hover:text-[color:var(--jai-text)]"
-                      data-testid={`project-toggle-${p.key}`}
-                    >
-                      {expandedProjects[p.key] ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                      <span className="flex-1 text-left truncate">{p.label}</span>
-                    </button>
+                    <div className="group flex items-center gap-1 pr-1 rounded-md">
+                      <button
+                        onClick={() => toggleProject(p.key)}
+                        className="flex-1 flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-[color:var(--jai-text-muted)] hover:bg-[color:var(--jai-surface)]/60 hover:text-[color:var(--jai-text)] min-w-0"
+                        data-testid={`project-toggle-${p.key}`}
+                      >
+                        {expandedProjects[p.key] ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                        <span className="flex-1 text-left truncate">{p.label}</span>
+                      </button>
+                      {p.custom && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-[color:var(--jai-surface-2)]" data-testid={`project-menu-${p.key}`}>
+                            <MoreHorizontal size={13} />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="bg-[color:var(--jai-surface)] border-[color:var(--jai-border)]">
+                            <DropdownMenuItem onClick={() => setDeleteProjectTarget(p)} className="text-red-700" data-testid={`project-delete-project-${p.key}`}>
+                              <Trash2 size={12} className="mr-2" /> Delete project
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </div>
 
                     {expandedProjects[p.key] && (
                       <div className="ml-4 pl-2 border-l border-[color:var(--jai-border)] space-y-0.5" data-testid={`project-threads-${p.key}`}>
@@ -410,6 +466,34 @@ export default function AppShell({ children }) {
                     )}
                   </div>
                 ))}
+
+                {addingProject ? (
+                  <div className="flex items-center gap-1 px-2 py-1" data-testid="new-project-input-row">
+                    <Input
+                      autoFocus
+                      value={newProjectName}
+                      onChange={(e) => setNewProjectName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") submitNewProject();
+                        if (e.key === "Escape") { setAddingProject(false); setNewProjectName(""); }
+                      }}
+                      placeholder="e.g. Health, Kids' education"
+                      className="h-7 text-xs bg-transparent border-0 border-b border-[color:var(--jai-border)] rounded-none px-0 focus-visible:ring-0 focus-visible:border-[color:var(--jai-gold)]"
+                      data-testid="new-project-input"
+                    />
+                    <button onClick={submitNewProject} className="p-1 text-[color:var(--jai-gold)] hover:text-[color:var(--jai-green-deep)]" data-testid="new-project-save-btn">
+                      <Plus size={12} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setAddingProject(true)}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-[color:var(--jai-gold)] hover:text-[color:var(--jai-green-deep)]"
+                    data-testid="add-project-btn"
+                  >
+                    <Plus size={12} /> Add your own project
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -533,6 +617,22 @@ export default function AppShell({ children }) {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={doDelete} className="bg-red-700 text-white" data-testid="delete-confirm">Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete project dialog */}
+      <AlertDialog open={!!deleteProjectTarget} onOpenChange={(v) => !v && setDeleteProjectTarget(null)}>
+        <AlertDialogContent className="bg-[color:var(--jai-surface)] border-[color:var(--jai-border)]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-serif-display text-[color:var(--jai-green-deep)]">Delete "{deleteProjectTarget?.label}"?</AlertDialogTitle>
+            <AlertDialogDescription className="text-[color:var(--jai-text-muted)]">
+              The project itself will be removed, but its chats aren't deleted — they'll move back to your general Conversation list.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={doDeleteProject} className="bg-red-700 text-white" data-testid="delete-project-confirm">Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
