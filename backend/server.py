@@ -895,12 +895,13 @@ SYSTEM_PROMPT = """You are Compass Astro — a warm, calm Vedic astrology guide.
 8. If the context below includes a "CALCULATED MUHURTA WINDOWS" section, use those exact date ranges as your recommended timing — do not compute or invent different dates yourself. If that section is absent, answer timing questions from the chart context as you already do.
 9. If the context below includes an "UPCOMING RETROGRADE/DIRECT STATIONS" section, you MUST use those exact dates for any question about when a planet will turn retrograde or direct — this overrides anything you think you remember about typical retrograde timing. Your training data does not contain reliable future ephemeris dates; the section below does. Never estimate, recall from memory, or guess a date yourself when this section is present — copy the date directly. If asked about a planet not listed there (Sun, Moon, Rahu, Ketu, or one outside the computed window), say plainly that you don't have a computed date for that rather than guessing one.
 10. If the context below includes a "COMPUTED [DOMAIN] ASSESSMENT" section, treat its verdict and five signals as the analysis to explain, not raw material to independently re-derive. Weave the strong/weak signals into your answer in plain language (e.g. a "strong convergence" with dasha alignment true becomes "this is a genuinely active period for this" — never say "convergence" or "signals" to the user). If your own reading of the chart disagrees with a specific signal, say so explicitly in the LOGIC block rather than silently contradicting it in the visible answer.
+11. If the context below includes "KNOWN ABOUT THIS PERSON" or "PAST PREDICTION OUTCOMES", weave these in naturally where relevant (e.g. "since you started that new role..." rather than re-asking what they already told you) — but don't force a reference to them into every answer, and never recite them back as a list. If a past prediction was confirmed wrong, don't repeat the same claim.
 
 ## SAFETY RULES (apply regardless of what the chart shows or what the user asks)
-11. Compass, not a verdict — always. Never state or imply a specific illness, diagnosis, cause of death, or death timing for the user or anyone else, no matter what the placements suggest. Classical texts describe tendencies and phases, not medical or forensic facts, and you must not translate them into either. If a chart factor traditionally relates to health or longevity, speak only in terms of general themes to stay mindful of (e.g. "a period worth paying attention to your energy and rest") — never a named condition, a timeframe for death, or comparable absolute claims about illness, accident, or a person's fate.
-12. Never give medical, legal, or financial advice, or make investment/legal recommendations. If asked directly, say plainly that you can offer astrological perspective on timing and themes, not professional advice, and suggest they consult a qualified doctor, lawyer, or financial advisor for the actual decision.
-13. Reframe toward agency and timing rather than fatalism: prefer "this is a period that may call for care/patience/caution" over "X will happen." The user should leave with a sense of what to pay attention to and when, never a fixed prophecy.
-14. If a message expresses suicidal thoughts, self-harm, intent to harm someone else, or a mental health crisis, do NOT provide a chart reading in response. Respond with warmth, take it seriously, and point them to crisis support (e.g. in the US: 988 Suicide & Crisis Lifeline, call or text 988; outside the US: encourage contacting a local emergency number or crisis line). Do not attempt astrological analysis of the crisis itself.
+12. Compass, not a verdict — always. Never state or imply a specific illness, diagnosis, cause of death, or death timing for the user or anyone else, no matter what the placements suggest. Classical texts describe tendencies and phases, not medical or forensic facts, and you must not translate them into either. If a chart factor traditionally relates to health or longevity, speak only in terms of general themes to stay mindful of (e.g. "a period worth paying attention to your energy and rest") — never a named condition, a timeframe for death, or comparable absolute claims about illness, accident, or a person's fate.
+13. Never give medical, legal, or financial advice, or make investment/legal recommendations. If asked directly, say plainly that you can offer astrological perspective on timing and themes, not professional advice, and suggest they consult a qualified doctor, lawyer, or financial advisor for the actual decision.
+14. Reframe toward agency and timing rather than fatalism: prefer "this is a period that may call for care/patience/caution" over "X will happen." The user should leave with a sense of what to pay attention to and when, never a fixed prophecy.
+15. If a message expresses suicidal thoughts, self-harm, intent to harm someone else, or a mental health crisis, do NOT provide a chart reading in response. Respond with warmth, take it seriously, and point them to crisis support (e.g. in the US: 988 Suicide & Crisis Lifeline, call or text 988; outside the US: encourage contacting a local emergency number or crisis line). Do not attempt astrological analysis of the crisis itself.
 
 ## LOGIC BLOCK (technical — hidden from the user, always required)
 After your plain-language answer, output exactly this on a new line:
@@ -923,7 +924,7 @@ Structure it as exactly these 5 bullet categories, one substantive bullet each �
 Do NOT deviate from this two-section format."""
 
 
-def _build_context(chart: dict, transits: dict, retrieved: List[dict], timing_windows: List[dict] | None = None, domain_verdict: dict | None = None) -> str:
+def _build_context(chart: dict, transits: dict, retrieved: List[dict], timing_windows: List[dict] | None = None, domain_verdict: dict | None = None, stored_facts: List[dict] | None = None) -> str:
     p = chart['profile']
     asc = chart['ascendant']
     md = chart.get('current_dasha')
@@ -962,6 +963,22 @@ def _build_context(chart: dict, transits: dict, retrieved: List[dict], timing_wi
             line += "]"
         transit_line_parts.append(line)
     transit_lines = "\n".join(transit_line_parts)
+
+    facts_block = ""
+    if stored_facts:
+        by_cat: Dict[str, List[str]] = {}
+        for f in stored_facts:
+            by_cat.setdefault(f["category"], []).append(f["fact_text"])
+        confirmations = by_cat.pop("prediction_confirmation", [])
+        if by_cat:
+            facts_block += "\nKNOWN ABOUT THIS PERSON (stated by them in past conversations — treat as settled fact, don't re-ask or contradict):\n"
+            for cat, texts in by_cat.items():
+                facts_block += f"  - {cat.replace('_', ' ')}: {'; '.join(texts[:3])}\n"
+        if confirmations:
+            facts_block += "\nPAST PREDICTION OUTCOMES (this person told you what actually happened — use this to calibrate how you phrase similar predictions going forward, and don't repeat a claim they've already told you was wrong):\n"
+            for c in confirmations[:5]:
+                facts_block += f"  - {c}\n"
+
     ctx = f"""NATIVE'S BIRTH DETAILS
 Name: {p['name']}
 Date/Time: {p['dob']} {p['tob']} at {p['place']}
@@ -999,6 +1016,10 @@ CLASSICAL YOGAS DETECTED:
         d10 = chart['dasamsa']
         d10_lines = ", ".join(f"{p['name']}={p['sign_en']}(H{p['house']})" for p in d10['planets'])
         ctx += f"D10 DASAMSA (career, profession, public status) — Lagna {d10['ascendant']['sign_en']}: {d10_lines}\n"
+    if chart.get('saptamsa'):
+        d7 = chart['saptamsa']
+        d7_lines = ", ".join(f"{p['name']}={p['sign_en']}(H{p['house']})" for p in d7['planets'])
+        ctx += f"D7 SAPTAMSA (children, progeny) — Lagna {d7['ascendant']['sign_en']}: {d7_lines}\n"
     ctx += f"\nCURRENT PLANETARY TRANSITS (as of {transits['as_of'][:10]}):\n{transit_lines}\n"
 
     # Real computed station dates — WITHOUT this, the model has no way to
@@ -1047,6 +1068,7 @@ CLASSICAL YOGAS DETECTED:
             f"{'matched: ' + ', '.join(dv['matching_dasha_levels']) if dv['matching_dasha_levels'] else 'none of the active dasha lords (' + ', '.join(dv['dasha_lords_active']) + ') are a significator for ' + dv['domain']}\n"
             f"  - Transit support: {dv['signals']['transit_supportive']} — {dv['transiting_significators']}\n"
         )
+    ctx += facts_block
     return ctx
 
 
@@ -1132,6 +1154,66 @@ async def _extract_search_query(raw_message: str) -> tuple[str, str]:
         return raw_message, "general"
 
 
+FACT_CATEGORIES = ("relationship_status", "career", "location", "major_life_event", "prediction_confirmation")
+
+
+async def _extract_durable_facts(raw_message: str) -> List[Dict]:
+    """Extracts 0-2 durable, low-sensitivity facts the user stated about
+    themselves in THIS message — e.g. "I got married in March", "I started
+    a new job", "you were right about that promotion." These get stored
+    (see /chat's use of db.user_facts) and fed back into future
+    conversations' context, so the assistant remembers what it's been told
+    rather than starting fresh every session — and prediction confirmations
+    specifically are the seed of an actual feedback/calibration loop.
+
+    Deliberately restricted to five categories, matching the same privacy
+    discipline any responsible memory system should use: relationship
+    status, career, location, major life events, and prediction
+    confirmations. Health, mental health, political/religious views,
+    specific financial details, and anything sensitive are explicitly out
+    of scope — the prompt tells the model to return nothing for those
+    rather than guess at a "safe-sounding" version. Falls back to an empty
+    list on any failure; this must never break the chat itself."""
+    try:
+        raw = ""
+        async with anthropic_client.messages.stream(
+            model=CLAUDE_TITLE_MODEL,
+            max_tokens=150,
+            system=(
+                "Extract at most 2 durable facts the user explicitly stated about themselves "
+                "in this message, ONLY if they clearly and factually said it (never infer or "
+                "guess). Valid categories, ONLY these five: relationship_status (e.g. got "
+                "married, started dating, divorced), career (new job, promotion, started a "
+                "business), location (moved to a new city), major_life_event (had a child, "
+                "graduated, retired), prediction_confirmation (user confirms something the "
+                "assistant said earlier did or didn't happen). "
+                "NEVER extract: health/mental health, political/religious views, specific "
+                "financial amounts, or anything else sensitive — for those, extract nothing. "
+                "If nothing qualifies, reply with exactly: NONE. "
+                "Otherwise reply with one fact per line, format: category|short factual "
+                "statement (under 15 words). No other text."
+            ),
+            messages=[{"role": "user", "content": raw_message.strip()[:800]}],
+        ) as stream:
+            async for text_delta in stream.text_stream:
+                raw += text_delta
+        raw = raw.strip()
+        if not raw or raw.upper() == "NONE":
+            return []
+        facts = []
+        for line in raw.split("\n")[:2]:
+            if "|" not in line:
+                continue
+            category, text = line.split("|", 1)
+            category = category.strip().lower()
+            if category in FACT_CATEGORIES and text.strip():
+                facts.append({"category": category, "fact_text": text.strip()[:150]})
+        return facts
+    except Exception as e:
+        logging.exception("durable fact extraction failed (non-fatal): %s", e)
+        return []
+
+
 async def _auto_name_thread(session_id: str, first_question: str):
     """Fire-and-forget: ask Claude to generate a 2-4 word title. Update thread name."""
     try:
@@ -1177,6 +1259,7 @@ async def chat_stream(req: ChatRequest, user: User = Depends(get_current_user)):
     transits = current_transits(chart)
     chart['navamsa'] = build_navamsa(chart['planets'], chart['ascendant']['longitude'])
     chart['dasamsa'] = build_dasamsa(chart['planets'], chart['ascendant']['longitude'])
+    chart['saptamsa'] = build_varga(chart['planets'], chart['ascendant']['longitude'], EXTRA_VARGAS['saptamsa'][0])
 
     activity_intent = detect_activity_intent(req.message)
     timing_windows = find_best_windows(chart, chart['dashas'], activity_intent) if activity_intent else None
@@ -1194,9 +1277,13 @@ async def chat_stream(req: ChatRequest, user: User = Depends(get_current_user)):
         # domain — classical texts are organized by configuration ("Venus in
         # the 8th"), not by question wording, so the topic query alone was
         # missing exactly the passages most relevant to THIS chart.
-        topic_results, chart_results = await asyncio.gather(
+        # New facts (from this message) and existing stored facts (from past
+        # sessions) run in the same gather — no added latency for either.
+        topic_results, chart_results, new_facts, stored_facts = await asyncio.gather(
             search_for_user(db, user.user_id, search_query, k=5, book_names=scoped),
             search_for_user(db, user.user_id, chart_driven_query, k=5, book_names=scoped),
+            _extract_durable_facts(req.message),
+            db.user_facts.find({"user_id": user.user_id}, {"_id": 0}).sort("created_at", -1).to_list(20),
         )
         seen = set()
         retrieved = []
@@ -1210,10 +1297,23 @@ async def chat_stream(req: ChatRequest, user: User = Depends(get_current_user)):
                 retrieved.append(r)
         retrieved = retrieved[:8]
     else:
-        retrieved = await search_for_user(db, user.user_id, search_query, k=8, book_names=scoped)
+        retrieved, new_facts, stored_facts = await asyncio.gather(
+            search_for_user(db, user.user_id, search_query, k=8, book_names=scoped),
+            _extract_durable_facts(req.message),
+            db.user_facts.find({"user_id": user.user_id}, {"_id": 0}).sort("created_at", -1).to_list(20),
+        )
+
+    if new_facts:
+        for f in new_facts:
+            await db.user_facts.insert_one({
+                "id": str(uuid.uuid4()), "user_id": user.user_id,
+                "category": f["category"], "fact_text": f["fact_text"],
+                "created_at": datetime.now(timezone.utc),
+            })
+        stored_facts = new_facts + stored_facts  # so THIS reply can already reflect what was just said
 
     domain_verdict = compute_domain_verdict(domain, chart, transits)
-    context_block = _build_context(chart, transits, retrieved, timing_windows, domain_verdict)
+    context_block = _build_context(chart, transits, retrieved, timing_windows, domain_verdict, stored_facts)
 
     # Load prior conversation for memory
     prior = await db.messages.find(
