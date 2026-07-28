@@ -18,6 +18,7 @@ import {
   Moon,
   CalendarClock,
   X,
+  FolderKanban,
 } from "lucide-react";
 import { useTheme } from "@/context/ThemeContext";
 import { useDisplayMode } from "@/context/DisplayModeContext";
@@ -68,6 +69,15 @@ export default function AppShell({ children }) {
   const [renameValue, setRenameValue] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
 
+  // Projects — fixed life-area scopes (Marriage, Career, ...), each holding
+  // its own set of chats. Lazily loads a project's threads the first time
+  // it's expanded rather than fetching all of them up front.
+  const [projects, setProjects] = useState([]);
+  const [projectsOpen, setProjectsOpen] = useState(false);
+  const [expandedProjects, setExpandedProjects] = useState({});
+  const [projectThreads, setProjectThreads] = useState({});
+  const [projectThreadsLoading, setProjectThreadsLoading] = useState({});
+
   const displayName = user?.name || "Seeker";
   const activeThread = new URLSearchParams(location.search).get("t");
 
@@ -89,6 +99,41 @@ export default function AppShell({ children }) {
   useEffect(() => {
     loadThreads();
   }, []);
+
+  useEffect(() => {
+    axios.get(`${API}/projects`).then((res) => setProjects(res.data.projects || [])).catch(() => {});
+  }, []);
+
+  const loadProjectThreads = async (key) => {
+    setProjectThreadsLoading((s) => ({ ...s, [key]: true }));
+    try {
+      const res = await axios.get(`${API}/threads`, { params: { project_key: key } });
+      setProjectThreads((s) => ({ ...s, [key]: res.data.threads || [] }));
+    } catch (e) {
+      // silent
+    } finally {
+      setProjectThreadsLoading((s) => ({ ...s, [key]: false }));
+    }
+  };
+
+  const toggleProject = (key) => {
+    setExpandedProjects((s) => {
+      const next = { ...s, [key]: !s[key] };
+      if (next[key] && !projectThreads[key]) loadProjectThreads(key);
+      return next;
+    });
+  };
+
+  const createProjectThread = async (key, label) => {
+    try {
+      const res = await axios.post(`${API}/threads`, { name: `${label} chat`, project_key: key });
+      await loadProjectThreads(key);
+      navigate(`/chat?t=${res.data.id}`);
+      toast.success("New chat started");
+    } catch (e) {
+      toast.error("Could not start a new chat");
+    }
+  };
 
   // Render's free/hobby backend cold-starts after idling — a request that's
   // still pending 5s in is very likely a cold start, not a slow query.
@@ -131,6 +176,7 @@ export default function AppShell({ children }) {
     await axios.patch(`${API}/threads/${renameTarget.id}`, { name: renameValue.trim() });
     setRenameTarget(null);
     loadThreads();
+    if (renameTarget.project_key) loadProjectThreads(renameTarget.project_key);
     toast.success("Renamed");
   };
 
@@ -140,6 +186,7 @@ export default function AppShell({ children }) {
     if (activeThread === deleteTarget.id) navigate(`/chat`);
     setDeleteTarget(null);
     loadThreads();
+    if (deleteTarget.project_key) loadProjectThreads(deleteTarget.project_key);
     toast.success("Chat deleted");
   };
 
@@ -267,6 +314,102 @@ export default function AppShell({ children }) {
                 >
                   <Plus size={12} /> New chat
                 </button>
+              </div>
+            )}
+          </div>
+
+          {/* Projects (expandable) — fixed life-area scopes, each with its
+              own chats. A project's thread list is fetched the first time
+              it's expanded, not up front. */}
+          <div>
+            <div
+              className={`flex items-center rounded-lg transition-colors text-[color:var(--jai-text-muted)] hover:text-[color:var(--jai-text)] hover:bg-[color:var(--jai-surface)]/60 ${
+                collapsed ? "px-2 py-3 justify-center" : "px-3 py-2.5"
+              }`}
+            >
+              <button
+                onClick={() => setProjectsOpen((v) => !v)}
+                className="flex-1 flex items-center gap-3 text-left"
+                data-testid="nav-projects"
+              >
+                <FolderKanban size={17} />
+                {!collapsed && <span className="font-medium tracking-wide flex-1">Projects</span>}
+              </button>
+              {!collapsed && (
+                <button
+                  onClick={() => setProjectsOpen((v) => !v)}
+                  className="p-1 hover:text-[color:var(--jai-green-deep)]"
+                  data-testid="projects-expand"
+                >
+                  {projectsOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                </button>
+              )}
+            </div>
+
+            {!collapsed && projectsOpen && (
+              <div className="mt-1 ml-5 pl-3 border-l border-[color:var(--jai-border)] space-y-0.5" data-testid="projects-list">
+                {projects.map((p) => (
+                  <div key={p.key}>
+                    <button
+                      onClick={() => toggleProject(p.key)}
+                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-[color:var(--jai-text-muted)] hover:bg-[color:var(--jai-surface)]/60 hover:text-[color:var(--jai-text)]"
+                      data-testid={`project-toggle-${p.key}`}
+                    >
+                      {expandedProjects[p.key] ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                      <span className="flex-1 text-left truncate">{p.label}</span>
+                    </button>
+
+                    {expandedProjects[p.key] && (
+                      <div className="ml-4 pl-2 border-l border-[color:var(--jai-border)] space-y-0.5" data-testid={`project-threads-${p.key}`}>
+                        {projectThreadsLoading[p.key] && (
+                          <div className="px-2 py-1.5 text-xs text-[color:var(--jai-text-muted)]">Loading…</div>
+                        )}
+                        {(projectThreads[p.key] || []).map((t) => (
+                          <div
+                            key={t.id}
+                            className={`group flex items-center gap-1 pr-1 rounded-md text-sm ${
+                              activeThread === t.id
+                                ? "bg-[color:var(--jai-surface-2)] text-[color:var(--jai-green-deep)]"
+                                : "hover:bg-[color:var(--jai-surface)]/60 text-[color:var(--jai-text-muted)]"
+                            }`}
+                            data-testid={`project-thread-item-${t.id}`}
+                          >
+                            <button
+                              onClick={() => navigate(`/chat?t=${t.id}`)}
+                              className="flex-1 text-left px-2 py-1.5 truncate"
+                              title={t.name}
+                            >
+                              {t.name}
+                            </button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-[color:var(--jai-surface-2)]" data-testid={`project-thread-menu-${t.id}`}>
+                                <MoreHorizontal size={13} />
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="bg-[color:var(--jai-surface)] border-[color:var(--jai-border)]">
+                                <DropdownMenuItem onClick={() => openRename(t)} data-testid={`project-rename-${t.id}`}>
+                                  <Pencil size={12} className="mr-2" /> Rename
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setDeleteTarget(t)} className="text-red-700" data-testid={`project-delete-${t.id}`}>
+                                  <Trash2 size={12} className="mr-2" /> Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        ))}
+                        {!projectThreadsLoading[p.key] && (projectThreads[p.key] || []).length === 0 && (
+                          <div className="px-2 py-1.5 text-xs text-[color:var(--jai-text-muted)]">No chats yet</div>
+                        )}
+                        <button
+                          onClick={() => createProjectThread(p.key, p.label)}
+                          className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-[color:var(--jai-gold)] hover:text-[color:var(--jai-green-deep)]"
+                          data-testid={`project-new-thread-${p.key}`}
+                        >
+                          <Plus size={12} /> New chat
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </div>
