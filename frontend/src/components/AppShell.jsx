@@ -149,7 +149,7 @@ export default function AppShell({ children }) {
   };
 
   const nav = [
-    { to: "/dashboard", label: "Kundali", Icon: LayoutGrid, testId: "nav-dashboard" },
+    { to: "/dashboard", label: "Dashboard", Icon: LayoutGrid, testId: "nav-dashboard" },
     { to: "/library", label: "Library", Icon: BookOpen, testId: "nav-library" },
   ];
 
@@ -183,7 +183,7 @@ export default function AppShell({ children }) {
 
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {/* Dashboard */}
-          <SideItem to="/dashboard" label="Kundali" Icon={LayoutGrid} collapsed={collapsed} testId="nav-dashboard" />
+          <SideItem to="/dashboard" label="Dashboard" Icon={LayoutGrid} collapsed={collapsed} testId="nav-dashboard" />
 
           {/* Conversation (expandable) */}
           <div>
