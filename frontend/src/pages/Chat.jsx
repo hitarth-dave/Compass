@@ -51,6 +51,7 @@ export default function Chat() {
   const [uploading, setUploading] = useState(false);
   const [listening, setListening] = useState(false);
   const [sessionId, setSessionId] = useState(null);
+  const [threadMeta, setThreadMeta] = useState(null); // { name, project_key, project_label }
   const endRef = useRef(null);
   const scrollContainerRef = useRef(null);
   const userScrolledUpRef = useRef(false);
@@ -96,6 +97,21 @@ export default function Chat() {
       .then((r) => r.json())
       .then((d) => setMessages(d.messages || []))
       .catch(() => {});
+  }, [sessionId]);
+
+  // Project badge — which life-area (if any) this thread is scoped to.
+  const [projectLabels, setProjectLabels] = useState({});
+  useEffect(() => {
+    axios.get(`${API}/projects`).then((res) => {
+      const map = {};
+      (res.data.projects || []).forEach((p) => { map[p.key] = p.label; });
+      setProjectLabels(map);
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!sessionId) { setThreadMeta(null); return; }
+    axios.get(`${API}/threads/${sessionId}`).then((res) => setThreadMeta(res.data)).catch(() => setThreadMeta(null));
   }, [sessionId]);
 
   // Previously this ran scrollIntoView on every streamed chunk unconditionally,
@@ -290,7 +306,17 @@ export default function Chat() {
   return (
     <div className="flex flex-col h-screen max-w-5xl mx-auto px-6 lg:px-12" data-testid="chat-page">
       <div className="py-8 border-b border-[color:var(--jai-border)]">
-        <div className="overline">Conversation with the Shastras</div>
+        <div className="overline flex items-center gap-2">
+          Conversation with the Shastras
+          {threadMeta?.project_key && projectLabels[threadMeta.project_key] && (
+            <span
+              className="normal-case tracking-normal text-xs px-2 py-0.5 rounded-full border border-[color:var(--jai-border-gold)] text-[color:var(--jai-gold)]"
+              data-testid="chat-project-badge"
+            >
+              {projectLabels[threadMeta.project_key]}
+            </span>
+          )}
+        </div>
         <h1 className="font-serif-display text-3xl sm:text-4xl mt-2 text-[color:var(--jai-parchment)]">
           Ask, and the classics answer.
         </h1>
