@@ -1043,36 +1043,84 @@ def _summarize_prior_messages(prior: List[dict], max_turns: int = 6) -> str:
     return "\n\nPRIOR CONVERSATION (for continuity):\n" + "\n".join(lines)
 
 
-async def _extract_search_query(raw_message: str) -> str:
+DOMAIN_SIGNIFICATORS = {
+    # domain -> (houses to check, karaka planets to check)
+    "marriage": ([7], ["Venus"]),
+    "career": ([10], ["Saturn", "Sun", "Mercury"]),
+    "wealth": ([2, 11], ["Jupiter"]),
+    "health": ([6, 8, 1], ["Saturn", "Mars"]),
+    "children": ([5], ["Jupiter"]),
+    "education": ([4, 5, 9], ["Mercury", "Jupiter"]),
+    "spirituality": ([9, 12], ["Jupiter", "Ketu"]),
+    "family": ([2, 3, 4], ["Moon", "Mars"]),
+    "travel": ([12, 9], ["Rahu"]),
+}
+
+
+def _build_chart_driven_query(domain: str, chart: dict) -> str:
+    """Classical texts are organized by CONFIGURATION ('Venus in the 8th
+    house', 'Saturn aspecting the 7th lord') — not by question topic. Search
+    was previously built entirely from the question's wording ('marriage
+    timing'), which misses exactly the passages that are about the person's
+    actual placements. This builds a second, placement-based query from real
+    chart data for the relevant domain, run alongside the topic query."""
+    if domain not in DOMAIN_SIGNIFICATORS:
+        return ""
+    houses, karakas = DOMAIN_SIGNIFICATORS[domain]
+    by_name = {p["name"]: p for p in chart["planets"]}
+    terms = []
+    for h in houses:
+        hl = next((x for x in chart.get("house_lords", []) if x["house"] == h), None)
+        if hl:
+            terms.append(f"{hl['lord']} in {hl['lord_sits_in_sign_en']} house {hl['lord_sits_in_house']}")
+    for k in karakas:
+        kp = by_name.get(k)
+        if kp:
+            dignity = f" {kp['dignity'][0]}" if kp.get("dignity") else ""
+            terms.append(f"{k} in {kp['sign_en']} house {kp['house']}{dignity}")
+    return " ".join(dict.fromkeys(terms))  # dedupe while preserving order, e.g. same lord for two houses
+
+
+
+async def _extract_search_query(raw_message: str) -> tuple[str, str]:
     """The raw chat message (with conversational filler — 'can you', 'please',
     'reconfirm', trailing '?', etc.) makes a poor search query against the
     classical texts: those extra words dilute the one or two terms that
     actually matter (e.g. 'Muhurta') and pull in irrelevant passages. This
     extracts a short, focused search query before retrieval, using the same
     lightweight/cheap model pattern already used for thread auto-naming.
-    Falls back to the raw message if the call fails, so retrieval never
-    breaks because of this step."""
+    Also classifies the question's domain in the same call (no added cost),
+    used to build a second, chart-placement-driven search query — see
+    _build_chart_driven_query. Falls back to (raw message, "general") if the
+    call fails, so retrieval never breaks because of this step."""
+    domains = list(DOMAIN_SIGNIFICATORS.keys()) + ["general"]
     try:
-        query = ""
+        raw = ""
         async with anthropic_client.messages.stream(
             model=CLAUDE_TITLE_MODEL,
-            max_tokens=40,
+            max_tokens=50,
             system=(
                 "Extract a short, focused search query (3-8 words) capturing the core "
                 "astrological topic in this message, for searching classical Vedic "
                 "astrology texts. Strip conversational filler (please, can you, thanks, "
-                "reconfirm, etc.) and keep only the substantive topic/terms. Reply with "
-                "ONLY the query text, no quotes, no punctuation."
+                "reconfirm, etc.) and keep only the substantive topic/terms. Also classify "
+                f"the question's life-domain as exactly one of: {', '.join(domains)}. "
+                "Reply with ONLY two lines: the query text on line 1, the domain word on "
+                "line 2. No quotes, no punctuation, no extra text."
             ),
             messages=[{"role": "user", "content": raw_message.strip()[:500]}],
         ) as stream:
             async for text_delta in stream.text_stream:
-                query += text_delta
-        query = query.strip().strip('"').strip("'").split("\n")[0][:150]
-        return query or raw_message
+                raw += text_delta
+        lines = [l.strip().strip('"').strip("'") for l in raw.strip().split("\n") if l.strip()]
+        query = (lines[0][:150] if lines else "") or raw_message
+        domain = lines[1].lower() if len(lines) > 1 else "general"
+        if domain not in domains:
+            domain = "general"
+        return query, domain
     except Exception as e:
         logging.exception("query extraction failed, falling back to raw message: %s", e)
-        return raw_message
+        return raw_message, "general"
 
 
 async def _auto_name_thread(session_id: str, first_question: str):
@@ -1128,8 +1176,32 @@ async def chat_stream(req: ChatRequest, user: User = Depends(get_current_user)):
     books_avail = await list_books_for_user(db, user.user_id)
     book_names = [b["book"] for b in books_avail["seed"]] + [b["book"] for b in books_avail["custom"]]
     scoped = detect_book_scope(req.message, book_names)
-    search_query = await _extract_search_query(req.message)
-    retrieved = await search_for_user(db, user.user_id, search_query, k=8, book_names=scoped)
+    search_query, domain = await _extract_search_query(req.message)
+    chart_driven_query = _build_chart_driven_query(domain, chart)
+
+    if chart_driven_query:
+        # Two searches run concurrently: the existing topic-phrase query, and
+        # a new one built from the person's actual placements for this
+        # domain — classical texts are organized by configuration ("Venus in
+        # the 8th"), not by question wording, so the topic query alone was
+        # missing exactly the passages most relevant to THIS chart.
+        topic_results, chart_results = await asyncio.gather(
+            search_for_user(db, user.user_id, search_query, k=5, book_names=scoped),
+            search_for_user(db, user.user_id, chart_driven_query, k=5, book_names=scoped),
+        )
+        seen = set()
+        retrieved = []
+        # Chart-driven results first — they're the more classically precise
+        # signal for this specific chart, so they get priority when both
+        # searches return more than fits in the final cap of 8.
+        for r in chart_results + topic_results:
+            key = (r.get("book"), r.get("chapter"), r.get("text", "")[:80])
+            if key not in seen:
+                seen.add(key)
+                retrieved.append(r)
+        retrieved = retrieved[:8]
+    else:
+        retrieved = await search_for_user(db, user.user_id, search_query, k=8, book_names=scoped)
 
     context_block = _build_context(chart, transits, retrieved, timing_windows)
 
