@@ -129,6 +129,10 @@ class ThreadRename(BaseModel):
     name: str
 
 
+class CustomProjectCreate(BaseModel):
+    name: str
+
+
 # ---------- Routes ----------
 @api_router.get("/")
 async def root():
@@ -430,7 +434,7 @@ def _summarize_prior_messages(prior: List[dict], max_turns: int = 6) -> str:
     return "\n\nPRIOR CONVERSATION (for continuity):\n" + "\n".join(lines)
 
 
-async def _project_memory_block(user_id: str, project_key: str, exclude_session_id: str, max_turns: int = 8) -> str:
+async def _project_memory_block(user_id: str, project_key: str, exclude_session_id: str, label: str, max_turns: int = 8) -> str:
     """Pulls recent exchanges from OTHER threads within the same project so a
     follow-up in a brand-new chat still recalls prior predictions made under
     this life area (e.g. a career timing estimate given last week)."""
@@ -448,7 +452,6 @@ async def _project_memory_block(user_id: str, project_key: str, exclude_session_
         return ""
     msgs = list(reversed(msgs))  # back to chronological order
     block = _summarize_prior_messages(msgs, max_turns=max_turns)
-    label = PROJECTS.get(project_key, {}).get("label", project_key)
     return block.replace(
         "PRIOR CONVERSATION (for continuity):",
         f"PROJECT MEMORY — prior {label} conversations, possibly from other chats (use this to recalibrate follow-ups rather than starting fresh):",
@@ -501,15 +504,32 @@ async def chat_stream(req: ChatRequest, user: User = Depends(get_current_user)):
 
     context_block = _build_context(chart, transits, retrieved)
 
-    # If this thread lives under a life-area Project, foreground the
-    # classically relevant houses/varga chart and pull memory from that
-    # project's other chats (not just this thread) so recalibration works.
+    # If this thread lives under a Project (a fixed life-area, or a custom
+    # one the person created themselves), foreground the relevant lens and
+    # pull memory from that project's other chats so recalibration works.
     project_key = thread.get("project_key")
     project_block = ""
-    if project_key and project_key in PROJECTS:
-        lens = PROJECTS[project_key]
-        project_block = f"\n\nPROJECT FOCUS: {lens['label']}\n{lens['lens']}\n"
-        project_block += await _project_memory_block(user.user_id, project_key, req.session_id)
+    if project_key:
+        label = None
+        lens_text = None
+        if project_key in PROJECTS:
+            lens = PROJECTS[project_key]
+            label = lens["label"]
+            lens_text = lens["lens"]
+        else:
+            custom_doc = await db.custom_projects.find_one(
+                {"id": project_key, "user_id": user.user_id}, {"_id": 0, "name": 1}
+            )
+            if custom_doc:
+                label = custom_doc["name"]
+                lens_text = (
+                    "This is a person-defined focus area with no fixed classical "
+                    "house mapping — infer what's relevant from the question itself "
+                    "and from the project memory below."
+                )
+        if label:
+            project_block = f"\n\nPROJECT FOCUS: {label}\n{lens_text}\n"
+            project_block += await _project_memory_block(user.user_id, project_key, req.session_id, label)
 
     # Load prior conversation for memory
     prior = await db.messages.find(
@@ -613,8 +633,44 @@ async def chat_history(session_id: str, user: User = Depends(get_current_user)):
 
 # ---------- Projects ----------
 @api_router.get("/projects")
-async def list_projects():
-    return {"projects": [{"key": k, "label": v["label"]} for k, v in PROJECTS.items()]}
+async def list_projects(user: User = Depends(get_current_user)):
+    fixed = [{"key": k, "label": v["label"], "custom": False} for k, v in PROJECTS.items()]
+    custom_docs = await db.custom_projects.find(
+        {"user_id": user.user_id}, {"_id": 0}
+    ).sort("created_at", 1).to_list(100)
+    custom = [{"key": d["id"], "label": d["name"], "custom": True} for d in custom_docs]
+    return {"projects": fixed + custom}
+
+
+@api_router.post("/projects")
+async def create_project(payload: CustomProjectCreate, user: User = Depends(get_current_user)):
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(400, "Name required")
+    doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": user.user_id,
+        "name": name,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.custom_projects.insert_one({**doc})
+    return {"key": doc["id"], "label": doc["name"], "custom": True}
+
+
+@api_router.delete("/projects/{project_id}")
+async def delete_project(project_id: str, user: User = Depends(get_current_user)):
+    if project_id in PROJECTS:
+        raise HTTPException(400, "Built-in projects can't be deleted")
+    res = await db.custom_projects.delete_one({"id": project_id, "user_id": user.user_id})
+    if not res.deleted_count:
+        raise HTTPException(404, "Project not found")
+    # Don't delete the chats — just unfile them back into the general
+    # Conversation list so nothing the person wrote is lost.
+    await db.threads.update_many(
+        {"user_id": user.user_id, "project_key": project_id},
+        {"$set": {"project_key": None, "updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    return {"ok": True}
 
 
 # ---------- Threads ----------
@@ -644,7 +700,11 @@ async def get_thread(thread_id: str, user: User = Depends(get_current_user)):
 @api_router.post("/threads")
 async def create_thread(payload: ThreadCreate, user: User = Depends(get_current_user)):
     if payload.project_key and payload.project_key not in PROJECTS:
-        raise HTTPException(400, "Unknown project")
+        owned_custom = await db.custom_projects.find_one(
+            {"id": payload.project_key, "user_id": user.user_id}
+        )
+        if not owned_custom:
+            raise HTTPException(400, "Unknown project")
     thread = {
         "id": str(uuid.uuid4()),
         "user_id": user.user_id,
