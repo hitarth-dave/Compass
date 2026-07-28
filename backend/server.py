@@ -122,6 +122,7 @@ class ChatRequest(BaseModel):
 
 class ThreadCreate(BaseModel):
     name: str = "New chat"
+    project_key: Optional[str] = None
 
 
 class ThreadRename(BaseModel):
@@ -277,6 +278,66 @@ async def search_books(q: str, k: int = 5, user: User = Depends(get_current_user
 
 
 # ---------- Chat (with per-message book scoping, auto-name, memory) ----------
+# ---------- Projects (life-area chat scopes) ----------
+# A fixed set rather than free-form user-created projects — keeps the chart
+# lens mapping (which houses/varga charts to foreground) well-defined and
+# classically grounded instead of guessed per user-typed label.
+PROJECTS = {
+    "marriage": {
+        "label": "Marriage & Relationships",
+        "lens": (
+            "Foreground the 7th house (marriage/partnership) and its lord, "
+            "Venus and Jupiter's condition, and the Navamsa (D9) chart — the "
+            "classical chart of marriage. Note the 7th lord's dasha/antardasha "
+            "windows and any transits touching the 7th house or its lord."
+        ),
+    },
+    "career": {
+        "label": "Career & Job",
+        "lens": (
+            "Foreground the 10th house (career) and 6th house (service/job), "
+            "their lords, and the Dasamsa (D10) chart — the classical chart "
+            "of profession. Note the 10th lord's dasha/antardasha and any "
+            "transits touching the 10th house."
+        ),
+    },
+    "business": {
+        "label": "Business",
+        "lens": (
+            "Foreground the 10th house (profession), 3rd house (initiative/"
+            "self-effort) and 11th house (gains), plus the Dasamsa (D10) "
+            "chart. Weigh the dasha/antardasha of these house lords and any "
+            "transits touching them."
+        ),
+    },
+    "finance": {
+        "label": "Finance & Wealth",
+        "lens": (
+            "Foreground the 2nd house (accumulated wealth) and 11th house "
+            "(income/gains), their lords, and any yogas involving them. Note "
+            "dasha/antardasha and transits touching these houses."
+        ),
+    },
+    "family": {
+        "label": "Family & Home",
+        "lens": (
+            "Foreground the 4th house (home, mother, domestic peace) and "
+            "2nd house (family), their lords, and the Moon's condition. Note "
+            "dasha/antardasha and transits touching the 4th house."
+        ),
+    },
+    "mental_health": {
+        "label": "Mental Health",
+        "lens": (
+            "Foreground the Moon's condition (the mind), the 6th house "
+            "(struggles) and 12th house (isolation/rest), and any afflictions "
+            "from Saturn, Rahu or Ketu. Note dasha/antardasha and transits "
+            "affecting the Moon or these houses."
+        ),
+    },
+}
+
+
 SYSTEM_PROMPT = """You are Compass Astro — a warm, calm Vedic astrology guide. You speak like a wise friend, not a scholar.
 
 ## HARD RULES FOR THE ANSWER YOU SHOW THE USER
@@ -369,6 +430,31 @@ def _summarize_prior_messages(prior: List[dict], max_turns: int = 6) -> str:
     return "\n\nPRIOR CONVERSATION (for continuity):\n" + "\n".join(lines)
 
 
+async def _project_memory_block(user_id: str, project_key: str, exclude_session_id: str, max_turns: int = 8) -> str:
+    """Pulls recent exchanges from OTHER threads within the same project so a
+    follow-up in a brand-new chat still recalls prior predictions made under
+    this life area (e.g. a career timing estimate given last week)."""
+    thread_docs = await db.threads.find(
+        {"user_id": user_id, "project_key": project_key}, {"_id": 0, "id": 1}
+    ).to_list(200)
+    ids = [t["id"] for t in thread_docs if t["id"] != exclude_session_id]
+    if not ids:
+        return ""
+    msgs = await db.messages.find(
+        {"session_id": {"$in": ids}, "role": {"$in": ["user", "assistant"]}},
+        {"_id": 0},
+    ).sort("created_at", -1).to_list(max_turns * 2)
+    if not msgs:
+        return ""
+    msgs = list(reversed(msgs))  # back to chronological order
+    block = _summarize_prior_messages(msgs, max_turns=max_turns)
+    label = PROJECTS.get(project_key, {}).get("label", project_key)
+    return block.replace(
+        "PRIOR CONVERSATION (for continuity):",
+        f"PROJECT MEMORY — prior {label} conversations, possibly from other chats (use this to recalibrate follow-ups rather than starting fresh):",
+    )
+
+
 async def _auto_name_thread(session_id: str, first_question: str):
     """Fire-and-forget: ask Claude to generate a 2-4 word title. Update thread name."""
     try:
@@ -415,6 +501,16 @@ async def chat_stream(req: ChatRequest, user: User = Depends(get_current_user)):
 
     context_block = _build_context(chart, transits, retrieved)
 
+    # If this thread lives under a life-area Project, foreground the
+    # classically relevant houses/varga chart and pull memory from that
+    # project's other chats (not just this thread) so recalibration works.
+    project_key = thread.get("project_key")
+    project_block = ""
+    if project_key and project_key in PROJECTS:
+        lens = PROJECTS[project_key]
+        project_block = f"\n\nPROJECT FOCUS: {lens['label']}\n{lens['lens']}\n"
+        project_block += await _project_memory_block(user.user_id, project_key, req.session_id)
+
     # Load prior conversation for memory
     prior = await db.messages.find(
         {"session_id": req.session_id, "role": {"$in": ["user", "assistant"]}},
@@ -433,7 +529,7 @@ async def chat_stream(req: ChatRequest, user: User = Depends(get_current_user)):
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
 
-    system_message = SYSTEM_PROMPT + "\n\n" + context_block + memory_block
+    system_message = SYSTEM_PROMPT + "\n\n" + context_block + project_block + memory_block
     if scoped:
         system_message += f"\n\nBOOK SCOPE FOR THIS ANSWER ONLY: The user requested you draw exclusively from: {', '.join(scoped)}. Only cite excerpts from these books.\n"
 
@@ -515,19 +611,45 @@ async def chat_history(session_id: str, user: User = Depends(get_current_user)):
     return {"messages": msgs}
 
 
+# ---------- Projects ----------
+@api_router.get("/projects")
+async def list_projects():
+    return {"projects": [{"key": k, "label": v["label"]} for k, v in PROJECTS.items()]}
+
+
 # ---------- Threads ----------
 @api_router.get("/threads")
-async def list_threads(user: User = Depends(get_current_user)):
-    docs = await db.threads.find({"user_id": user.user_id}, {"_id": 0}).sort("updated_at", -1).to_list(100)
+async def list_threads(project_key: Optional[str] = None, user: User = Depends(get_current_user)):
+    query = {"user_id": user.user_id}
+    if project_key:
+        query["project_key"] = project_key
+    else:
+        # Unfiled/general chats only — project chats live under their own
+        # project list so the two views don't duplicate each other. Mongo
+        # matches missing fields against None, so pre-Projects threads
+        # (which have no project_key at all) still show up here.
+        query["project_key"] = {"$in": [None, ""]}
+    docs = await db.threads.find(query, {"_id": 0}).sort("updated_at", -1).to_list(100)
     return {"threads": docs}
+
+
+@api_router.get("/threads/{thread_id}")
+async def get_thread(thread_id: str, user: User = Depends(get_current_user)):
+    doc = await db.threads.find_one({"id": thread_id, "user_id": user.user_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Thread not found")
+    return doc
 
 
 @api_router.post("/threads")
 async def create_thread(payload: ThreadCreate, user: User = Depends(get_current_user)):
+    if payload.project_key and payload.project_key not in PROJECTS:
+        raise HTTPException(400, "Unknown project")
     thread = {
         "id": str(uuid.uuid4()),
         "user_id": user.user_id,
         "name": payload.name,
+        "project_key": payload.project_key,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
