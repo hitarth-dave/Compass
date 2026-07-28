@@ -538,6 +538,21 @@ ASHTAKAVARGA_TABLE = {
 }
 ASHTAKAVARGA_PLANETS = ["Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn"]
 
+# Classical house/karaka significators per life-domain — BPHS-standard
+# assignments. Used both for chart-driven search queries and for the
+# deterministic domain-verdict scoring (see compute_domain_verdict below).
+DOMAIN_SIGNIFICATORS = {
+    "marriage": ([7], ["Venus"]),
+    "career": ([10], ["Saturn", "Sun", "Mercury"]),
+    "wealth": ([2, 11], ["Jupiter"]),
+    "health": ([6, 8, 1], ["Saturn", "Mars"]),
+    "children": ([5], ["Jupiter"]),
+    "education": ([4, 5, 9], ["Mercury", "Jupiter"]),
+    "spirituality": ([9, 12], ["Jupiter", "Ketu"]),
+    "family": ([2, 3, 4], ["Moon", "Mars"]),
+    "travel": ([12, 9], ["Rahu"]),
+}
+
 
 def compute_ashtakavarga(planet_signs: Dict[str, int], asc_sign: int) -> Dict:
     """Compute Bhinnashtakavarga (per-planet bindu tables) and Sarvashtakavarga
@@ -1220,6 +1235,122 @@ def compute_bhava_bala(house_lords_list: List[Dict], shadbala: Dict, house_aspec
             "dig_bala_rupas": dig_bala_rupas,
         }
     return result
+
+
+def compute_domain_verdict(domain: str, chart: Dict, transits: Dict) -> Dict | None:
+    """Computes a structured, deterministic verdict for a life-domain
+    (marriage, career, etc.) from five independent classical signals, rather
+    than leaving the model to reason freely over raw chart data every time.
+    This mirrors the same principle already proven out for Muhurta windows
+    and retrograde stations: hand the model a real computed answer to
+    EXPLAIN, don't ask it to derive one from scratch each time.
+
+    The five signals:
+      A. House-lord strength   — lord's own Shadbala vs. the classical
+         minimum (MINIMUM_SHADBALA_RUPAS) for the relevant house(s).
+      B. Karaka strength       — same check for the domain's karaka planet(s).
+      C. Ashtakavarga support  — Sarvashtakavarga bindus in the relevant
+         house(s); ~28 is roughly the average across 12 houses (337 total),
+         so >=28 is used as the "supported" threshold.
+      D. Dasha alignment       — is the CURRENT dasha lord (at any of the
+         three levels this app tracks) the house lord or a karaka? Classical
+         principle: a significator's own dasha activates its house.
+      E. Transit support       — is a house-lord/karaka planet currently
+         transiting one of the relevant houses (from Lagna) with decent
+         (>=4) Ashtakavarga bindus in that transit sign?
+
+    Returns None for "general" or an unrecognized domain (nothing domain-
+    specific to compute). Each signal is independently True/False/None
+    (None = insufficient data, e.g. no current dasha) — convergence is the
+    count of True signals out of the signals that were actually resolvable
+    (None signals are excluded from both the numerator and denominator,
+    rather than counted as failures)."""
+    if domain not in DOMAIN_SIGNIFICATORS:
+        return None
+    houses, karakas = DOMAIN_SIGNIFICATORS[domain]
+    house_lords_list = chart.get("house_lords", [])
+    shadbala = chart.get("shadbala", {})
+    sav = chart.get("ashtakavarga", {}).get("sav", [])
+    by_name = {p["name"]: p for p in chart.get("planets", [])}
+
+    relevant_lords = []
+    for h in houses:
+        hl = next((x for x in house_lords_list if x["house"] == h), None)
+        if hl:
+            relevant_lords.append(hl["lord"])
+
+    # Signal A — house-lord strength
+    lord_checks = [
+        (lord, shadbala[lord]["total_rupas"], MINIMUM_SHADBALA_RUPAS.get(lord, 5.0))
+        for lord in relevant_lords if lord in shadbala
+    ]
+    signal_a = any(rupas >= minimum for _, rupas, minimum in lord_checks) if lord_checks else None
+
+    # Signal B — karaka strength
+    karaka_checks = [
+        (k, shadbala[k]["total_rupas"], MINIMUM_SHADBALA_RUPAS.get(k, 5.0))
+        for k in karakas if k in shadbala
+    ]
+    signal_b = any(rupas >= minimum for _, rupas, minimum in karaka_checks) if karaka_checks else None
+
+    # Signal C — Ashtakavarga house support
+    house_sav = [sav[h - 1] for h in houses if sav and h - 1 < len(sav)]
+    signal_c = any(s >= 28 for s in house_sav) if house_sav else None
+
+    # Signal D — dasha alignment (any of the 3 levels this app tracks)
+    dasha_lords = {
+        chart.get("current_dasha", {}).get("lord") if chart.get("current_dasha") else None,
+        chart.get("current_antardasha", {}).get("lord") if chart.get("current_antardasha") else None,
+        chart.get("current_pratyantardasha", {}).get("lord") if chart.get("current_pratyantardasha") else None,
+    }
+    dasha_lords.discard(None)
+    significators = set(relevant_lords) | set(karakas)
+    signal_d = bool(dasha_lords & significators) if dasha_lords else None
+
+    # Signal E — transit support
+    natal_bav = chart.get("ashtakavarga", {}).get("bav", {})
+    signal_e = None
+    transiting_significators = []
+    for t in transits.get("planets", []):
+        if t["name"] not in significators:
+            continue
+        house_from_lagna = t.get("house_from_lagna")
+        if house_from_lagna in houses:
+            bindus = natal_bav.get(t["name"], [0] * 12)[t["sign_idx"]] if t["name"] in natal_bav else None
+            transiting_significators.append({"planet": t["name"], "house": house_from_lagna, "bindus": bindus})
+            if bindus is not None and bindus >= 4:
+                signal_e = True
+    if transiting_significators and signal_e is None:
+        signal_e = False
+
+    signals = {"house_lord_strong": signal_a, "karaka_strong": signal_b,
+               "ashtakavarga_supportive": signal_c, "dasha_aligned": signal_d,
+               "transit_supportive": signal_e}
+    resolvable = [v for v in signals.values() if v is not None]
+    convergence_count = sum(1 for v in resolvable if v)
+    convergence_total = len(resolvable)
+    if convergence_total == 0:
+        verdict = "insufficient data"
+    elif convergence_count / convergence_total >= 0.75:
+        verdict = "strong convergence"
+    elif convergence_count / convergence_total >= 0.4:
+        verdict = "mixed signals"
+    else:
+        verdict = "weak convergence"
+
+    return {
+        "domain": domain,
+        "houses_checked": houses,
+        "karakas_checked": karakas,
+        "signals": signals,
+        "convergence": f"{convergence_count}/{convergence_total}",
+        "verdict": verdict,
+        "house_lord_checks": lord_checks,
+        "karaka_checks": karaka_checks,
+        "house_sav": house_sav,
+        "dasha_lords_active": sorted(dasha_lords),
+        "transiting_significators": transiting_significators,
+    }
 
 
 def _compute_house_aspects(planets: List[Dict]) -> Dict[int, List[str]]:

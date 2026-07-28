@@ -27,6 +27,7 @@ from astrology import (
     build_varga, EXTRA_VARGAS, sun_rise_set, sun_moon_longitudes,
     current_utc_offset_hours, estimate_tob_from_sunrise_period,
     find_upcoming_stations, ashtakavarga_transit_strength, find_sign_ingress,
+    DOMAIN_SIGNIFICATORS, compute_domain_verdict,
 )
 from muhurta import find_best_windows, ACTIVITY_HOUSES, detect_activity_intent
 from panchang import compute_panchang, compute_daily_muhurta
@@ -893,12 +894,13 @@ SYSTEM_PROMPT = """You are Compass Astro — a warm, calm Vedic astrology guide.
 7. Never mention "as per BPHS [1]", "shastra", "citations", or reference numbers to the user. That reasoning lives ONLY in the LOGIC block below.
 8. If the context below includes a "CALCULATED MUHURTA WINDOWS" section, use those exact date ranges as your recommended timing — do not compute or invent different dates yourself. If that section is absent, answer timing questions from the chart context as you already do.
 9. If the context below includes an "UPCOMING RETROGRADE/DIRECT STATIONS" section, you MUST use those exact dates for any question about when a planet will turn retrograde or direct — this overrides anything you think you remember about typical retrograde timing. Your training data does not contain reliable future ephemeris dates; the section below does. Never estimate, recall from memory, or guess a date yourself when this section is present — copy the date directly. If asked about a planet not listed there (Sun, Moon, Rahu, Ketu, or one outside the computed window), say plainly that you don't have a computed date for that rather than guessing one.
+10. If the context below includes a "COMPUTED [DOMAIN] ASSESSMENT" section, treat its verdict and five signals as the analysis to explain, not raw material to independently re-derive. Weave the strong/weak signals into your answer in plain language (e.g. a "strong convergence" with dasha alignment true becomes "this is a genuinely active period for this" — never say "convergence" or "signals" to the user). If your own reading of the chart disagrees with a specific signal, say so explicitly in the LOGIC block rather than silently contradicting it in the visible answer.
 
 ## SAFETY RULES (apply regardless of what the chart shows or what the user asks)
-10. Compass, not a verdict — always. Never state or imply a specific illness, diagnosis, cause of death, or death timing for the user or anyone else, no matter what the placements suggest. Classical texts describe tendencies and phases, not medical or forensic facts, and you must not translate them into either. If a chart factor traditionally relates to health or longevity, speak only in terms of general themes to stay mindful of (e.g. "a period worth paying attention to your energy and rest") — never a named condition, a timeframe for death, or comparable absolute claims about illness, accident, or a person's fate.
-11. Never give medical, legal, or financial advice, or make investment/legal recommendations. If asked directly, say plainly that you can offer astrological perspective on timing and themes, not professional advice, and suggest they consult a qualified doctor, lawyer, or financial advisor for the actual decision.
-12. Reframe toward agency and timing rather than fatalism: prefer "this is a period that may call for care/patience/caution" over "X will happen." The user should leave with a sense of what to pay attention to and when, never a fixed prophecy.
-13. If a message expresses suicidal thoughts, self-harm, intent to harm someone else, or a mental health crisis, do NOT provide a chart reading in response. Respond with warmth, take it seriously, and point them to crisis support (e.g. in the US: 988 Suicide & Crisis Lifeline, call or text 988; outside the US: encourage contacting a local emergency number or crisis line). Do not attempt astrological analysis of the crisis itself.
+11. Compass, not a verdict — always. Never state or imply a specific illness, diagnosis, cause of death, or death timing for the user or anyone else, no matter what the placements suggest. Classical texts describe tendencies and phases, not medical or forensic facts, and you must not translate them into either. If a chart factor traditionally relates to health or longevity, speak only in terms of general themes to stay mindful of (e.g. "a period worth paying attention to your energy and rest") — never a named condition, a timeframe for death, or comparable absolute claims about illness, accident, or a person's fate.
+12. Never give medical, legal, or financial advice, or make investment/legal recommendations. If asked directly, say plainly that you can offer astrological perspective on timing and themes, not professional advice, and suggest they consult a qualified doctor, lawyer, or financial advisor for the actual decision.
+13. Reframe toward agency and timing rather than fatalism: prefer "this is a period that may call for care/patience/caution" over "X will happen." The user should leave with a sense of what to pay attention to and when, never a fixed prophecy.
+14. If a message expresses suicidal thoughts, self-harm, intent to harm someone else, or a mental health crisis, do NOT provide a chart reading in response. Respond with warmth, take it seriously, and point them to crisis support (e.g. in the US: 988 Suicide & Crisis Lifeline, call or text 988; outside the US: encourage contacting a local emergency number or crisis line). Do not attempt astrological analysis of the crisis itself.
 
 ## LOGIC BLOCK (technical — hidden from the user, always required)
 After your plain-language answer, output exactly this on a new line:
@@ -921,7 +923,7 @@ Structure it as exactly these 5 bullet categories, one substantive bullet each �
 Do NOT deviate from this two-section format."""
 
 
-def _build_context(chart: dict, transits: dict, retrieved: List[dict], timing_windows: List[dict] | None = None) -> str:
+def _build_context(chart: dict, transits: dict, retrieved: List[dict], timing_windows: List[dict] | None = None, domain_verdict: dict | None = None) -> str:
     p = chart['profile']
     asc = chart['ascendant']
     md = chart.get('current_dasha')
@@ -1024,6 +1026,22 @@ CLASSICAL YOGAS DETECTED:
         ctx += "\nCALCULATED MUHURTA WINDOWS (from Bhava Bala, Antardasha strength, gochara, and Panchang — use these EXACT dates, do not invent different ones):\n"
         for w in timing_windows:
             ctx += f"- {w['start_date']} to {w['end_date']} (score {w['avg_score']}/100): {'; '.join(w['reasons'])}\n"
+    if domain_verdict:
+        dv = domain_verdict
+        ctx += (
+            f"\nCOMPUTED {dv['domain'].upper()} ASSESSMENT (five independent classical signals, "
+            f"already scored — EXPLAIN this verdict using the chart facts below rather than "
+            f"reasoning to your own separate conclusion; if you disagree with a signal, say so "
+            f"explicitly rather than silently overriding it):\n"
+            f"  Verdict: {dv['verdict']} ({dv['convergence']} signals positive)\n"
+            f"  - House-lord strength ({', '.join(dv['houses_checked'] and [str(h) for h in dv['houses_checked']])}): "
+            f"{dv['signals']['house_lord_strong']} — {dv['house_lord_checks']}\n"
+            f"  - Karaka strength ({', '.join(dv['karakas_checked'])}): "
+            f"{dv['signals']['karaka_strong']} — {dv['karaka_checks']}\n"
+            f"  - Ashtakavarga house support: {dv['signals']['ashtakavarga_supportive']} — SAV {dv['house_sav']} (avg ~28)\n"
+            f"  - Dasha alignment: {dv['signals']['dasha_aligned']} — active dasha lords: {dv['dasha_lords_active']}\n"
+            f"  - Transit support: {dv['signals']['transit_supportive']} — {dv['transiting_significators']}\n"
+        )
     return ctx
 
 
@@ -1041,20 +1059,6 @@ def _summarize_prior_messages(prior: List[dict], max_turns: int = 6) -> str:
             content = content[:300] + "…"
         lines.append(f"{role}: {content}")
     return "\n\nPRIOR CONVERSATION (for continuity):\n" + "\n".join(lines)
-
-
-DOMAIN_SIGNIFICATORS = {
-    # domain -> (houses to check, karaka planets to check)
-    "marriage": ([7], ["Venus"]),
-    "career": ([10], ["Saturn", "Sun", "Mercury"]),
-    "wealth": ([2, 11], ["Jupiter"]),
-    "health": ([6, 8, 1], ["Saturn", "Mars"]),
-    "children": ([5], ["Jupiter"]),
-    "education": ([4, 5, 9], ["Mercury", "Jupiter"]),
-    "spirituality": ([9, 12], ["Jupiter", "Ketu"]),
-    "family": ([2, 3, 4], ["Moon", "Mars"]),
-    "travel": ([12, 9], ["Rahu"]),
-}
 
 
 def _build_chart_driven_query(domain: str, chart: dict) -> str:
@@ -1203,7 +1207,8 @@ async def chat_stream(req: ChatRequest, user: User = Depends(get_current_user)):
     else:
         retrieved = await search_for_user(db, user.user_id, search_query, k=8, book_names=scoped)
 
-    context_block = _build_context(chart, transits, retrieved, timing_windows)
+    domain_verdict = compute_domain_verdict(domain, chart, transits)
+    context_block = _build_context(chart, transits, retrieved, timing_windows, domain_verdict)
 
     # Load prior conversation for memory
     prior = await db.messages.find(
