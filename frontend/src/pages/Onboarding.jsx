@@ -3,7 +3,7 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { CalendarIcon, MapPin, Loader2 } from "lucide-react";
+import { CalendarIcon, Loader2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import LocationAutocomplete from "@/components/LocationAutocomplete";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -38,7 +39,6 @@ export default function Onboarding() {
   const [place, setPlace] = useState("");
   const [lat, setLat] = useState(null);
   const [lon, setLon] = useState(null);
-  const [geocoding, setGeocoding] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   // If user already has a profile, redirect to dashboard
@@ -50,26 +50,6 @@ export default function Onboarding() {
       } catch {}
     })();
   }, [navigate]);
-
-  const geocode = async () => {
-    if (!place.trim()) return toast.error("Enter a place first");
-    setGeocoding(true);
-    try {
-      const res = await axios.get(`${API}/geocode`, { params: { q: place } });
-      if (res.data.results?.length) {
-        const r = res.data.results[0];
-        setLat(r.lat);
-        setLon(r.lon);
-        toast.success(`Found: ${r.place.split(",").slice(0, 3).join(",")}`);
-      } else {
-        toast.error("Place not found — try adding country/state");
-      }
-    } catch (e) {
-      toast.error("Geocoding failed");
-    } finally {
-      setGeocoding(false);
-    }
-  };
 
   const submit = async () => {
     if (!name.trim() || !dob || !lat || !lon) {
@@ -249,26 +229,19 @@ export default function Onboarding() {
 
           <div>
             <Label className="overline">Place of Birth</Label>
-            <div className="mt-3 flex items-end gap-3 border-b border-[color:var(--jai-border)] pb-1">
-              <MapPin size={16} className="text-[color:var(--jai-gold)] mb-3" />
-              <Input
+            <div className="mt-3">
+              <LocationAutocomplete
                 value={place}
-                onChange={(e) => { setPlace(e.target.value); setLat(null); setLon(null); }}
-                onKeyDown={(e) => e.key === "Enter" && geocode()}
+                onQueryChange={(text) => { setPlace(text); setLat(null); setLon(null); }}
+                onSelect={(r) => {
+                  setPlace(r.place);
+                  setLat(r.lat);
+                  setLon(r.lon);
+                  toast.success(`Selected: ${r.place.split(",").slice(0, 3).join(",")}`);
+                }}
                 placeholder="Varanasi, India"
-                className="bg-transparent border-0 rounded-none px-0 text-lg font-serif-display placeholder:text-[color:var(--jai-text-muted)]/60 focus-visible:ring-0"
-                data-testid="onboarding-place"
+                inputTestId="onboarding-place"
               />
-              <Button
-                onClick={geocode}
-                disabled={geocoding}
-                size="sm"
-                variant="ghost"
-                className="text-[color:var(--jai-gold)] hover:text-[color:var(--jai-gold-soft)] hover:bg-transparent -mb-1"
-                data-testid="onboarding-geocode-btn"
-              >
-                {geocoding ? <Loader2 size={14} className="animate-spin" /> : "Locate"}
-              </Button>
             </div>
             {lat !== null && (
               <div className="mt-2 text-xs text-[color:var(--jai-gold)]/80" data-testid="geocode-result">
