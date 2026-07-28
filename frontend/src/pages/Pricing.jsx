@@ -9,7 +9,7 @@ import { useAuth } from "@/context/AuthContext";
 const FAQ_ITEMS = [
   {
     q: "Is Compass Astro really free right now?",
-    a: "Yes — every feature on Seeker is free and unlimited while we're in beta. Sadhaka and Acharya are paid tiers we're building checkout for; join the waitlist and we'll email you the moment they're live.",
+    a: "Yes — every feature on Basic is free and unlimited while we're in beta. Standard and Advanced are paid tiers we're building checkout for; join the waitlist and we'll email you the moment they're live.",
   },
   {
     q: "Can I cancel anytime?",
@@ -31,7 +31,7 @@ const FAQ_ITEMS = [
 
 const TIERS = [
   {
-    name: "Seeker",
+    name: "Basic",
     price: "Free",
     cadence: "",
     tagline: "Cast your chart and start asking.",
@@ -46,12 +46,12 @@ const TIERS = [
     featured: false,
   },
   {
-    name: "Sadhaka",
-    price: "$9",
-    cadence: "/ month",
+    name: "Standard",
+    price: "$0.99",
+    cadence: "/ week",
     tagline: "For steady, ongoing counsel.",
     features: [
-      "Everything in Seeker",
+      "Everything in Basic",
       "Divisional (varga) charts",
       "Upload your own PDF texts",
       "Transit alerts for key periods (coming soon)",
@@ -61,12 +61,12 @@ const TIERS = [
     featured: true,
   },
   {
-    name: "Acharya",
-    price: "$29",
-    cadence: "/ month",
-    tagline: "Depth for the serious student.",
+    name: "Advanced",
+    price: "$2.49",
+    cadence: "/ week",
+    tagline: "The astrologer's tier — coming soon.",
     features: [
-      "Everything in Sadhaka",
+      "Everything in Standard",
       "Yearly Varshaphala reading (coming soon)",
       "Muhurta (timing) requests",
       "Priority model & longer answers",
@@ -75,6 +75,7 @@ const TIERS = [
     cta: "Join waitlist",
     kind: "waitlist",
     featured: false,
+    comingSoon: true,
   },
 ];
 
@@ -86,7 +87,7 @@ export default function Pricing() {
       <title>Pricing — Compass Astro</title>
       <meta
         name="description"
-        content="Compass Astro is free while in beta. See what's on Seeker, Sadhaka and Acharya, and join the waitlist for paid plans."
+        content="Compass Astro is free while in beta. See what's on Basic, Standard and Advanced, and join the waitlist for paid plans."
       />
 
       <section className="max-w-3xl mx-auto px-6 lg:px-12 pt-6 text-center fade-up">
@@ -108,6 +109,7 @@ export default function Pricing() {
             data-testid={`tier-${t.name.toLowerCase()}`}
           >
             {t.featured && <div className="overline mb-3">Recommended</div>}
+            {t.comingSoon && <div className="overline mb-3 text-[color:var(--jai-text-muted)]">Coming soon</div>}
             <h3 className="font-serif-display text-2xl text-[color:var(--jai-green-deep)]">{t.name}</h3>
             <p className="mt-1 text-sm text-[color:var(--jai-text-muted)]">{t.tagline}</p>
             <div className="mt-6 flex items-baseline gap-1">
@@ -131,7 +133,7 @@ export default function Pricing() {
 
       <section className="max-w-2xl mx-auto px-6 lg:px-12 mt-24 text-center fade-up">
         <p className="text-sm text-[color:var(--jai-text-muted)]">
-          Compass Astro is free to use in full while we're in beta. Sadhaka and Acharya are taking
+          Compass Astro is free to use in full while we're in beta. Standard and Advanced are taking
           waitlist signups — you'll be the first to know when checkout opens.
         </p>
         <div className="mt-8 flex justify-center">
