@@ -274,6 +274,19 @@ export default function Dashboard() {
             <div className="font-serif-display text-base mt-1 mb-4 text-[color:var(--jai-parchment)] leading-snug min-h-[3.5rem]">
               {todaysTransitNote(transits) || "Today's sky, mapped against your birth chart."}
             </div>
+            {(() => {
+              const retro = transits.planets.filter((p) => p.retrograde && p.name !== "Ketu" && p.name !== "Rahu");
+              if (retro.length === 0) return null;
+              return (
+                <div
+                  className="mb-4 px-4 py-2.5 rounded-lg border border-[color:var(--jai-gold)]/40 bg-[color:var(--jai-gold)]/10 text-sm text-[color:var(--jai-green-deep)]"
+                  data-testid="retrograde-banner"
+                >
+                  <strong>{retro.map((p) => p.name).join(", ")}</strong>
+                  {retro.length === 1 ? " is" : " are"} retrograde right now.
+                </div>
+              );
+            })()}
             <div className="flex-1 flex items-center">
               <KundaliChart
                 planets={transits.planets
