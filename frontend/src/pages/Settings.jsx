@@ -3,8 +3,9 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { CalendarIcon, MapPin, Loader2, User as UserIcon, Sparkles, Navigation, AlertTriangle } from "lucide-react";
+import { CalendarIcon, Loader2, User as UserIcon, Sparkles, Navigation, AlertTriangle } from "lucide-react";
 import { useAuth, clearStoredToken } from "@/context/AuthContext";
+import LocationAutocomplete from "@/components/LocationAutocomplete";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,14 +70,12 @@ export default function Settings() {
   const [place, setPlace] = useState("");
   const [lat, setLat] = useState(null);
   const [lon, setLon] = useState(null);
-  const [geocoding, setGeocoding] = useState(false);
   const [savingBirth, setSavingBirth] = useState(false);
 
   // Current location
   const [curPlace, setCurPlace] = useState(user?.current_place || "");
   const [curLat, setCurLat] = useState(user?.current_lat ?? null);
   const [curLon, setCurLon] = useState(user?.current_lon ?? null);
-  const [curGeocoding, setCurGeocoding] = useState(false);
   const [savingLocation, setSavingLocation] = useState(false);
 
   // Danger zone
@@ -118,26 +117,6 @@ export default function Settings() {
     }
   };
 
-  const geocodeBirth = async () => {
-    if (!place.trim()) return toast.error("Enter a place first");
-    setGeocoding(true);
-    try {
-      const res = await axios.get(`${API}/geocode`, { params: { q: place } });
-      if (res.data.results?.length) {
-        const r = res.data.results[0];
-        setLat(r.lat);
-        setLon(r.lon);
-        toast.success(`Found: ${r.place.split(",").slice(0, 3).join(",")}`);
-      } else {
-        toast.error("Place not found — try adding country/state");
-      }
-    } catch {
-      toast.error("Geocoding failed");
-    } finally {
-      setGeocoding(false);
-    }
-  };
-
   const saveBirth = async () => {
     if (!birthName.trim() || !dob || !tob || !lat || !lon) {
       toast.error("Please fill all fields and confirm the birth place");
@@ -153,26 +132,6 @@ export default function Settings() {
       toast.error("Could not update birth details");
     } finally {
       setSavingBirth(false);
-    }
-  };
-
-  const geocodeCurrent = async () => {
-    if (!curPlace.trim()) return toast.error("Enter a place first");
-    setCurGeocoding(true);
-    try {
-      const res = await axios.get(`${API}/geocode`, { params: { q: curPlace } });
-      if (res.data.results?.length) {
-        const r = res.data.results[0];
-        setCurLat(r.lat);
-        setCurLon(r.lon);
-        toast.success(`Found: ${r.place.split(",").slice(0, 3).join(",")}`);
-      } else {
-        toast.error("Place not found — try adding country/state");
-      }
-    } catch {
-      toast.error("Geocoding failed");
-    } finally {
-      setCurGeocoding(false);
     }
   };
 
@@ -312,18 +271,18 @@ export default function Settings() {
           </div>
           <div>
             <Label className="overline">Place of Birth</Label>
-            <div className="mt-3 flex items-end gap-3 border-b border-[color:var(--jai-border)] pb-1">
-              <MapPin size={16} className="text-[color:var(--jai-gold)] mb-3" />
-              <Input
+            <div className="mt-3">
+              <LocationAutocomplete
                 value={place}
-                onChange={(e) => { setPlace(e.target.value); setLat(null); setLon(null); }}
-                onKeyDown={(e) => e.key === "Enter" && geocodeBirth()}
-                className="bg-transparent border-0 rounded-none px-0 text-lg font-serif-display focus-visible:ring-0"
-                data-testid="settings-place"
+                onQueryChange={(text) => { setPlace(text); setLat(null); setLon(null); }}
+                onSelect={(r) => {
+                  setPlace(r.place);
+                  setLat(r.lat);
+                  setLon(r.lon);
+                  toast.success(`Selected: ${r.place.split(",").slice(0, 3).join(",")}`);
+                }}
+                inputTestId="settings-place"
               />
-              <Button onClick={geocodeBirth} disabled={geocoding} size="sm" variant="ghost" className="text-[color:var(--jai-gold)] hover:text-[color:var(--jai-gold-soft)] hover:bg-transparent -mb-1" data-testid="settings-geocode-btn">
-                {geocoding ? <Loader2 size={14} className="animate-spin" /> : "Locate"}
-              </Button>
             </div>
             {lat !== null && (
               <div className="mt-2 text-xs text-[color:var(--jai-gold)]/80">{lat.toFixed(4)}°, {lon.toFixed(4)}° confirmed</div>
@@ -338,20 +297,18 @@ export default function Settings() {
 
       {/* Current Location */}
       <SectionCard icon={Navigation} title="Current Location" subtitle="Used for accurate daily transits and Panchang — separate from your birth place">
-        <div className="flex items-end gap-3 border-b border-[color:var(--jai-border)] pb-1">
-          <MapPin size={16} className="text-[color:var(--jai-gold)] mb-3" />
-          <Input
-            value={curPlace}
-            onChange={(e) => { setCurPlace(e.target.value); setCurLat(null); setCurLon(null); }}
-            onKeyDown={(e) => e.key === "Enter" && geocodeCurrent()}
-            placeholder="Where are you now?"
-            className="bg-transparent border-0 rounded-none px-0 text-lg font-serif-display placeholder:text-[color:var(--jai-text-muted)]/60 focus-visible:ring-0"
-            data-testid="settings-current-place"
-          />
-          <Button onClick={geocodeCurrent} disabled={curGeocoding} size="sm" variant="ghost" className="text-[color:var(--jai-gold)] hover:text-[color:var(--jai-gold-soft)] hover:bg-transparent -mb-1" data-testid="settings-current-geocode-btn">
-            {curGeocoding ? <Loader2 size={14} className="animate-spin" /> : "Locate"}
-          </Button>
-        </div>
+        <LocationAutocomplete
+          value={curPlace}
+          onQueryChange={(text) => { setCurPlace(text); setCurLat(null); setCurLon(null); }}
+          onSelect={(r) => {
+            setCurPlace(r.place);
+            setCurLat(r.lat);
+            setCurLon(r.lon);
+            toast.success(`Selected: ${r.place.split(",").slice(0, 3).join(",")}`);
+          }}
+          placeholder="Where are you now?"
+          inputTestId="settings-current-place"
+        />
         {curLat !== null && (
           <div className="text-xs text-[color:var(--jai-gold)]/80">{curLat.toFixed(4)}°, {curLon.toFixed(4)}° confirmed</div>
         )}
