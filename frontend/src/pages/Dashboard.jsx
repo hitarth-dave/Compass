@@ -10,6 +10,18 @@ import { useDisplayMode } from "@/context/DisplayModeContext";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
+// Safety net for birth places saved before the geocode fix, which stored the
+// full Nominatim address (house/road/taluka/postal code and all). New
+// selections already save a clean "City, State, Country" label — this just
+// keeps old profiles from showing the long form until they re-save it.
+function shortenPlace(full) {
+  if (!full) return full;
+  const parts = full.split(",").map((s) => s.trim()).filter(Boolean);
+  if (parts.length <= 3) return parts.join(", ");
+  const meaningful = parts.filter((p) => !/^\d[\d\s-]*$/.test(p)); // drop bare postal codes
+  return meaningful.slice(-3).join(", ");
+}
+
 // Short, deterministic one-liners keyed by where transiting Moon sits from
 // Lagna today — purely derived from data already on the page (no extra API
 // call), just enough to fill the header space with something useful rather
@@ -166,7 +178,7 @@ export default function Dashboard() {
             {chart.profile.name}<span className="text-[color:var(--jai-gold)]">.</span>
           </h1>
           <div className="mt-3 text-[color:var(--jai-text-muted)] text-sm tracking-wide">
-            {chart.profile.dob} · {chart.profile.tob}{chart.profile.tob_unknown ? " (approx.)" : ""} · {chart.profile.place} · Lagna lord: <span className="text-[color:var(--jai-green-deep)] font-semibold">{asc.lord}</span>
+            {chart.profile.dob} · {chart.profile.tob}{chart.profile.tob_unknown ? " (approx.)" : ""} · {shortenPlace(chart.profile.place)} · Lagna lord: <span className="text-[color:var(--jai-green-deep)] font-semibold">{asc.lord}</span>
           </div>
         </div>
         <div className="flex items-center gap-3">
