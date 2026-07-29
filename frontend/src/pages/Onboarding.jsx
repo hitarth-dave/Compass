@@ -234,10 +234,10 @@ export default function Onboarding() {
                 value={place}
                 onQueryChange={(text) => { setPlace(text); setLat(null); setLon(null); }}
                 onSelect={(r) => {
-                  setPlace(r.place);
+                  setPlace(r.short_place || r.place);
                   setLat(r.lat);
                   setLon(r.lon);
-                  toast.success(`Selected: ${r.place.split(",").slice(0, 3).join(",")}`);
+                  toast.success(`Selected: ${r.short_place || r.place}`);
                 }}
                 placeholder="Varanasi, India"
                 inputTestId="onboarding-place"
