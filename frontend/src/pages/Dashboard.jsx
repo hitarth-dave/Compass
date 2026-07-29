@@ -187,10 +187,10 @@ export default function Dashboard() {
             disabled={downloadingCard}
             className="rounded-full px-5 py-3 font-serif-display text-base border border-[color:var(--jai-border)] text-[color:var(--jai-green-deep)] inline-flex items-center gap-2 hover:border-[color:var(--jai-gold)] hover:text-[color:var(--jai-gold)] transition-colors disabled:opacity-60"
             data-testid="download-share-card-btn"
-            title="Download a shareable image of your chart"
+            title="Download a one-page image of your chart — D1 & D9, planets, strengths and yogas"
           >
             {downloadingCard ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-            Share my chart
+            {downloadingCard ? "Preparing…" : "My chart card"}
           </button>
           <Link
             to="/chat"
