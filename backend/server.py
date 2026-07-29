@@ -1552,8 +1552,16 @@ async def chat_stream(req: ChatRequest, user: User = Depends(get_current_user)):
             answer_only = parts[0].strip()
             logic_only = parts[1].split("</LOGIC>", 1)[0].strip() if "</LOGIC>" in parts[1] else parts[1].strip()
 
-        # Persist AND schedule auto-name under shield so client-disconnect
-        # (user navigates away mid-stream) doesn't drop the assistant reply.
+        follow_ups = await _generate_follow_ups(req.message, answer_only, proj_label)
+
+        # Persist AND auto-name under shield so client-disconnect (user
+        # navigates away mid-stream) doesn't drop the assistant reply.
+        # Suggestions are saved on the message itself (not just streamed)
+        # so they survive a page reload instead of vanishing once the
+        # in-memory SSE state is gone. Auto-naming is awaited (not fired off
+        # in the background) so the rename is already in the DB by the time
+        # the frontend gets 'done' and refreshes the sidebar — otherwise the
+        # thread name change wouldn't show up until a manual refresh.
         async def _persist():
             await db.messages.insert_one({
                 "session_id": req.session_id,
@@ -1563,15 +1571,15 @@ async def chat_stream(req: ChatRequest, user: User = Depends(get_current_user)):
                 "answer": answer_only,
                 "logic": logic_only,
                 "citations": citations_payload,
+                "suggestions": follow_ups,
                 "created_at": datetime.now(timezone.utc).isoformat(),
             })
             await db.threads.update_one({"id": req.session_id}, {"$set": {"updated_at": datetime.now(timezone.utc).isoformat()}})
             if is_first_user_msg and re.match(r"^(new chat|chat \d+|general)$", (thread.get("name") or "").strip(), re.IGNORECASE):
-                asyncio.create_task(_auto_name_thread(req.session_id, req.message))
+                await _auto_name_thread(req.session_id, req.message)
 
         await asyncio.shield(_persist())
 
-        follow_ups = await _generate_follow_ups(req.message, answer_only, proj_label)
         if follow_ups:
             yield f"event: suggestions\ndata: {json.dumps({'questions': follow_ups})}\n\n"
 
