@@ -31,12 +31,66 @@ import {
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
-const SUGGESTIONS = [
+const DEFAULT_SUGGESTIONS = [
   "How's my career going right now?",
   "Any advice on my love life?",
   "What should I focus on this year?",
   "Is a big change coming for me?",
 ];
+
+// Starter prompts for the blank-chat screen, keyed by the fixed Project
+// life-areas — otherwise every new chat showed the same generic 4 questions
+// even inside e.g. a Mental Health project, which felt unrelated.
+const PROJECT_SUGGESTIONS = {
+  marriage: [
+    "When is a good time for marriage?",
+    "How does my current relationship look?",
+    "What does my 7th house say about partnership?",
+    "Any relationship challenges I should prepare for?",
+  ],
+  career: [
+    "How's my career looking right now?",
+    "When should I consider a job change?",
+    "What field suits my chart best?",
+    "Is a promotion coming soon?",
+  ],
+  business: [
+    "Is this a good time to start a business?",
+    "How will my business perform this year?",
+    "What kind of business suits my chart?",
+    "Any financial risks I should watch for in business?",
+  ],
+  finance: [
+    "How does my financial outlook look this year?",
+    "Is this a good time to invest?",
+    "When will my finances improve?",
+    "What does my chart say about long-term wealth?",
+  ],
+  family: [
+    "How are things looking at home right now?",
+    "What does my chart say about family relationships?",
+    "Any family matters I should pay attention to?",
+    "Is this a good time to move or renovate?",
+  ],
+  mental_health: [
+    "How's my mental well-being looking right now?",
+    "What's contributing to my current stress, astrologically?",
+    "Any upcoming period I should be gentle with myself during?",
+    "What brings peace of mind for my chart?",
+  ],
+};
+
+// Custom (user-created) projects have no fixed key, so build 4 reasonable
+// starters from whatever they named it.
+function suggestionsForCustomProject(label) {
+  const l = label.toLowerCase();
+  return [
+    `How's my ${l} looking right now?`,
+    `What should I focus on for ${l}?`,
+    `Any upcoming period relevant to ${l}?`,
+    `What does my chart say about ${l}?`,
+  ];
+}
 
 export default function Chat() {
   const location = useLocation();
@@ -260,6 +314,10 @@ export default function Chat() {
             // Server signaled completion — bail immediately even if reader
             // hasn't seen {done:true} (some proxies keep the SSE conn open).
             setStreaming(false);
+            // First-message auto-naming is awaited server-side before this
+            // fires, so the sidebar can safely refresh now and immediately
+            // show the real name instead of "New chat" until a manual reload.
+            window.dispatchEvent(new CustomEvent("compass:threads-changed"));
             return;
           } else if (evtName === "error") {
             toast.error(`Claude API: ${data.error}`);
@@ -308,6 +366,11 @@ export default function Chat() {
   };
 
   const hasMessages = messages.length > 0;
+  const activeProjectKey = threadMeta?.project_key;
+  const activeProjectLabel = activeProjectKey ? projectLabels[activeProjectKey] : null;
+  const activeSuggestions = activeProjectKey
+    ? (PROJECT_SUGGESTIONS[activeProjectKey] || (activeProjectLabel ? suggestionsForCustomProject(activeProjectLabel) : DEFAULT_SUGGESTIONS))
+    : DEFAULT_SUGGESTIONS;
 
   return (
     <div className="flex flex-col h-screen max-w-5xl mx-auto px-6 lg:px-12" data-testid="chat-page">
@@ -341,7 +404,7 @@ export default function Chat() {
               {" "}Curious about the reasoning? Tap <span className="text-[color:var(--jai-gold)]">Why?</span> on any reply.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl">
-              {SUGGESTIONS.map((s) => (
+              {activeSuggestions.map((s) => (
                 <button
                   key={s}
                   onClick={() => send(s)}
