@@ -113,6 +113,17 @@ export default function AppShell({ children }) {
     loadProjects();
   }, []);
 
+  useEffect(() => {
+    const onThreadsChanged = () => {
+      loadThreads();
+      Object.keys(expandedProjects).forEach((key) => {
+        if (expandedProjects[key]) loadProjectThreads(key);
+      });
+    };
+    window.addEventListener("compass:threads-changed", onThreadsChanged);
+    return () => window.removeEventListener("compass:threads-changed", onThreadsChanged);
+  }, [expandedProjects]);
+
   const [addingProject, setAddingProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [deleteProjectTarget, setDeleteProjectTarget] = useState(null);
