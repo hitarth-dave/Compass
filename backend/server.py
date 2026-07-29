@@ -29,6 +29,7 @@ from astrology import (
     find_upcoming_stations, ashtakavarga_transit_strength, find_sign_ingress,
     DOMAIN_SIGNIFICATORS, compute_domain_verdict,
 )
+from chartcard import generate_chart_card_pdf, generate_chart_card_png
 from muhurta import find_best_windows, ACTIVITY_HOUSES, detect_activity_intent
 from panchang import compute_panchang, compute_daily_muhurta
 _KNOWLEDGE_SOURCE = os.environ.get('KNOWLEDGE_SOURCE', 'original')
@@ -57,7 +58,6 @@ UPLOAD_DIR = Path(os.environ.get('UPLOAD_DIR', '/app/backend/uploads'))
 ATTACH_DIR = UPLOAD_DIR / 'attachments'
 ATTACH_DIR.mkdir(parents=True, exist_ok=True)
 
-FONTS_DIR = ROOT_DIR / 'assets' / 'fonts'
 
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
@@ -278,72 +278,6 @@ async def _send_contact_email(name: str, from_email: str, message: str) -> None:
     if r.status_code >= 400:
         logging.error("Resend send failed (%s): %s", r.status_code, r.text)
         raise HTTPException(status_code=502, detail="Could not send your message. Please try again shortly.")
-
-
-def _share_card_font(size: int, bold: bool = False):
-    from PIL import ImageFont
-    name = f"PT_Serif-Web-{'Bold' if bold else 'Regular'}.ttf"
-    path = FONTS_DIR / name
-    if path.exists():
-        return ImageFont.truetype(str(path), size)
-    # Falls back to PIL's bitmap font if the TTF is ever missing on a
-    # deploy — ugly but never crashes the endpoint.
-    return ImageFont.load_default()
-
-
-def generate_share_card(name: str, lagna: str, moon_sign: str, nakshatra: str, mahadasha_lord: Optional[str]) -> bytes:
-    """Renders a shareable PNG summary of a chart — this is Compass Astro's
-    cheapest growth loop (people screenshot and send astrology readings
-    constantly; give them a real one instead of a browser-tab screenshot
-    with the sidebar in it)."""
-    from PIL import Image, ImageDraw
-    import io
-
-    W, H = 1080, 1350
-    BG = (247, 241, 225)
-    INK2 = (15, 61, 46)
-    GOLD = (122, 90, 7)
-    MUTED = (92, 106, 90)
-
-    img = Image.new("RGB", (W, H), BG)
-    d = ImageDraw.Draw(img)
-
-    def centered(text, y, font, fill):
-        bbox = d.textbbox((0, 0), text, font=font)
-        d.text(((W - (bbox[2] - bbox[0])) / 2, y), text, font=font, fill=fill)
-
-    margin = 48
-    d.rectangle([margin, margin, W - margin, H - margin], outline=INK2, width=2)
-
-    centered("C O M P A S S   A S T R O", 110, _share_card_font(28), GOLD)
-
-    cx, cy, r = W / 2, 330, 90
-    d.ellipse([cx - r, cy - r, cx + r, cy + r], outline=GOLD, width=2)
-    d.ellipse([cx - r + 18, cy - r + 18, cx + r - 18, cy + r - 18], outline=GOLD, width=1)
-    d.polygon([(cx, cy - r), (cx + r, cy), (cx, cy + r), (cx - r, cy)], outline=INK2, width=2)
-    tick_font = _share_card_font(30, bold=True)
-    for label, pos in [("N", (cx - 12, cy - r - 40)), ("S", (cx - 8, cy + r + 6)),
-                        ("E", (cx + r + 14, cy - 18)), ("W", (cx - r - 40, cy - 18))]:
-        d.text(pos, label, font=tick_font, fill=GOLD)
-
-    centered(name[:28], 480, _share_card_font(72, bold=True), INK2)
-    d.line([(W / 2 - 140, 580), (W / 2 + 140, 580)], fill=GOLD, width=2)
-
-    facts = [("LAGNA", lagna), ("MOON SIGN", moon_sign), ("NAKSHATRA", nakshatra)]
-    if mahadasha_lord:
-        facts.append(("CURRENT MAHADASHA", mahadasha_lord))
-    y = 640
-    for label, value in facts:
-        centered(label, y, _share_card_font(24), MUTED)
-        centered(value, y + 34, _share_card_font(36, bold=True), INK2)
-        y += 110
-
-    centered("Your birth chart, read from the classical shastras", H - 180, _share_card_font(22), MUTED)
-    centered("compass-vert-one.vercel.app", H - 140, _share_card_font(22, bold=True), GOLD)
-
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-    return buf.getvalue()
 
 
 async def _find_or_create_user(email: str, name: str, picture: Optional[str] = None) -> str:
@@ -786,26 +720,121 @@ async def get_chart(user: User = Depends(get_current_user)):
     return chart
 
 
+async def _chart_card_about_lines(chart: dict, name: str) -> List[str]:
+    """Four short lines describing the chart in plain language, for the card.
+    Deliberately framed as what the classical texts say about these
+    configurations rather than flat assertions about the person — it's more
+    honest, and it's the framing the rest of the product already uses."""
+    asc = chart["ascendant"]
+    by_name = {p["name"]: p for p in chart["planets"]}
+    moon = by_name.get("Moon", {})
+    facts = [
+        f"Lagna: {asc.get('sign_en')} (lord {asc.get('lord')})",
+        f"Moon: {moon.get('sign_en')} in {moon.get('nakshatra')} pada {moon.get('pada')}",
+    ]
+    for p in chart["planets"]:
+        tags = p.get("dignity") or []
+        if tags:
+            facts.append(f"{p['name']} in {p.get('sign_en')} (house {p.get('house')}) — {', '.join(tags)}")
+    for yg in (chart.get("yogas") or [])[:3]:
+        facts.append(f"Yoga: {yg.get('name')} — {yg.get('detail')}")
+
+    prompt = (
+        "You are writing 4 short lines for a one-page birth-chart card that "
+        "someone will show to friends or hand to an astrologer.\n\n"
+        "Chart facts:\n- " + "\n- ".join(facts[:14]) + "\n\n"
+        "Write exactly 4 lines describing what classical Vedic astrology "
+        "associates with these placements — temperament, natural strengths, "
+        "and where the chart suggests friction. Each line must be under 115 "
+        "characters, a complete sentence, and reference a real placement from "
+        "the facts above. Be specific and warm, never generic or flattering. "
+        "Do not predict events or give advice.\n\n"
+        "Respond with ONLY a JSON array of 4 strings, no other text."
+    )
+    try:
+        resp = await anthropic_client.messages.create(
+            model=CLAUDE_MODEL,
+            max_tokens=600,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = "".join(b.text for b in resp.content if getattr(b, "type", None) == "text").strip()
+        if text.startswith("```"):
+            text = text.strip("`")
+            if text.startswith("json"):
+                text = text[4:]
+            text = text.strip()
+        arr = json.loads(text)
+        if isinstance(arr, list):
+            return [str(s).strip() for s in arr[:4] if str(s).strip()]
+    except Exception:
+        pass
+    # Deterministic fallback so the card never renders with an empty section.
+    return [
+        f"{asc.get('sign_en')} Lagna, ruled by {asc.get('lord')} — the lens the whole chart is read through.",
+        f"Moon in {moon.get('sign_en')}, {moon.get('nakshatra')} pada {moon.get('pada')} — the classical seat of the mind.",
+    ]
+
+
 @api_router.get("/profile/share-card")
-async def profile_share_card(user: User = Depends(get_current_user)):
-    """PNG summary card for sharing — see generate_share_card() above."""
+async def profile_share_card(format: str = "png", user: User = Depends(get_current_user)):
+    """One-page birth-chart card — D1 + D9 charts, full planetary table,
+    Shadbala strengths, yogas, Ashtakavarga and a short written summary.
+
+    Defaults to PNG so it saves to the camera roll and shares like a photo.
+    The layout is drawn as vector and only rasterized at the last step, so
+    it stays sharp — unlike the old card, which was drawn straight to a
+    low-resolution bitmap. `?format=pdf` returns the vector original, which
+    is the better choice for printing or emailing to an astrologer."""
     doc = await db.profiles.find_one({"user_id": user.user_id}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Set up your birth details first")
+
     chart = compute_chart(doc['dob'], doc['tob'], doc['tz_offset'], doc['lat'], doc['lon'])
-    moon = next((p for p in chart['planets'] if p['name'] == 'Moon'), None)
+    navamsa = build_navamsa(chart['planets'], chart['ascendant']['longitude'])
+
     md = current_dasha(chart['dashas'])
-    png_bytes = generate_share_card(
+    dasha_parts = []
+    if md:
+        dasha_parts.append(f"{md['lord']} Mahadasha ({str(md.get('start'))[:10]} to {str(md.get('end'))[:10]})")
+        ad = current_antardasha(md)
+        if ad:
+            dasha_parts.append(f"{ad['lord']} Antardasha until {str(ad.get('end'))[:10]}")
+            pd = current_antardasha(ad)
+            if pd:
+                dasha_parts.append(f"{pd['lord']} Pratyantardasha")
+    dasha_line = "  \u00b7  ".join(dasha_parts) if dasha_parts else "\u2014"
+
+    tob_txt = doc.get('tob') or "time unknown"
+    if doc.get('tob_unknown'):
+        tob_txt += " (approx.)"
+    place = doc.get('place', '')
+    if place.count(",") > 2:
+        parts = [p.strip() for p in place.split(",") if p.strip() and not p.strip().isdigit()]
+        place = ", ".join(parts[-3:])
+    birth_line = f"{doc.get('dob', '')}  \u00b7  {tob_txt}  \u00b7  {place}"
+
+    about_lines = await _chart_card_about_lines(chart, doc['name'])
+
+    card_kwargs = dict(
         name=doc['name'],
-        lagna=chart['ascendant']['sign_en'],
-        moon_sign=moon['sign_en'] if moon else "—",
-        nakshatra=moon['nakshatra'] if moon else "—",
-        mahadasha_lord=md['lord'] if md else None,
+        birth_line=birth_line,
+        chart=chart,
+        navamsa=navamsa,
+        dasha_line=dasha_line,
+        about_lines=about_lines,
     )
+    base_name = f"{doc['name'].replace(' ', '-')}-compass-astro-chart"
+
+    if format.lower() == "pdf":
+        return Response(
+            content=generate_chart_card_pdf(**card_kwargs),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{base_name}.pdf"'},
+        )
     return Response(
-        content=png_bytes,
+        content=generate_chart_card_png(**card_kwargs),
         media_type="image/png",
-        headers={"Content-Disposition": f'attachment; filename="{doc["name"].replace(" ", "-")}-compass-astro-chart.png"'},
+        headers={"Content-Disposition": f'attachment; filename="{base_name}.png"'},
     )
 
 
