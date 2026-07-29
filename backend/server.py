@@ -1178,6 +1178,54 @@ async def _project_memory_block(user_id: str, project_key: str, exclude_session_
     )
 
 
+async def _generate_follow_ups(user_message: str, answer_text: str, project_label: Optional[str] = None) -> List[str]:
+    """Generates exactly 3 short, clickable follow-up questions. These are
+    tied to THIS specific answer (a natural next question given what was
+    just said — a tighter timeframe, a next step, a detail the answer
+    itself raised) rather than generic boilerplate, and are kept inside the
+    active Project's domain when the thread is scoped to one (e.g. a
+    Marriage-project chat gets marriage-relevant follow-ups, not career
+    ones), using a fast model call so it doesn't add real latency."""
+    if not answer_text.strip():
+        return []
+    domain_hint = (
+        f" This conversation is scoped to the '{project_label}' focus area — "
+        f"every follow-up must stay relevant to that domain, not drift into "
+        f"unrelated life areas." if project_label else ""
+    )
+    prompt = (
+        "Given this question-and-answer exchange, write exactly 3 short "
+        "follow-up questions the PERSON might naturally want to ask next. "
+        "Each must be a direct continuation of THIS answer — e.g. asking "
+        "for a more precise timeframe, a next step, or a detail the answer "
+        "itself raised — never a generic or unrelated question." + domain_hint +
+        "\n\nQuestion asked: " + user_message[:500] +
+        "\n\nAnswer given: " + answer_text[:1500] +
+        "\n\nRespond with ONLY a JSON array of exactly 3 short strings, each "
+        "under 12 words, phrased as something the person would say. No "
+        "other text. Example: "
+        '["When exactly will this begin?", "What can I do to prepare?", "Does this affect my career too?"]'
+    )
+    try:
+        resp = await anthropic_client.messages.create(
+            model=CLAUDE_TITLE_MODEL,
+            max_tokens=200,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = "".join(b.text for b in resp.content if getattr(b, "type", None) == "text").strip()
+        if text.startswith("```"):
+            text = text.strip("`")
+            if text.startswith("json"):
+                text = text[4:]
+            text = text.strip()
+        arr = json.loads(text)
+        if isinstance(arr, list):
+            return [str(q).strip() for q in arr[:3] if str(q).strip()]
+    except Exception:
+        pass
+    return []
+
+
 def _build_chart_driven_query(domain: str, chart: dict) -> str:
     """Classical texts are organized by CONFIGURATION ('Venus in the 8th
     house', 'Saturn aspecting the 7th lord') — not by question topic. Search
@@ -1410,8 +1458,8 @@ async def chat_stream(req: ChatRequest, user: User = Depends(get_current_user)):
     # pull memory from that project's other chats so recalibration works.
     project_key = thread.get("project_key")
     project_block = ""
+    proj_label = None
     if project_key:
-        proj_label = None
         proj_lens_text = None
         if project_key in PROJECTS:
             lens = PROJECTS[project_key]
@@ -1522,6 +1570,10 @@ async def chat_stream(req: ChatRequest, user: User = Depends(get_current_user)):
                 asyncio.create_task(_auto_name_thread(req.session_id, req.message))
 
         await asyncio.shield(_persist())
+
+        follow_ups = await _generate_follow_ups(req.message, answer_only, proj_label)
+        if follow_ups:
+            yield f"event: suggestions\ndata: {json.dumps({'questions': follow_ups})}\n\n"
 
         yield f"event: done\ndata: {json.dumps({'ok': True})}\n\n"
 
@@ -1702,10 +1754,34 @@ async def geocode(q: str, request: Request):
     from geopy.geocoders import Nominatim
     geolocator = Nominatim(user_agent="compass-astro")
     try:
-        loc = geolocator.geocode(q, timeout=10)
-        if not loc:
+        # exactly_one=False + limit returns every plausible match (e.g. the
+        # several "Ahmednagar"s across different states/countries) instead of
+        # silently locking onto whichever one Nominatim ranks first.
+        # addressdetails=1 gives structured components so we can build a
+        # short "City, State, Country" label — the full Nominatim address
+        # (house number, road, taluka, postal code...) is too noisy to show
+        # or to store as the person's place, so it's kept only as a
+        # disambiguation aid in the dropdown, never as what gets saved.
+        locs = geolocator.geocode(q, exactly_one=False, limit=8, timeout=10, addressdetails=True)
+        if not locs:
             return {"results": []}
-        return {"results": [{"place": loc.address, "lat": loc.latitude, "lon": loc.longitude}]}
+        results = []
+        for loc in locs:
+            addr = loc.raw.get("address", {}) if hasattr(loc, "raw") else {}
+            locality = (
+                addr.get("city") or addr.get("town") or addr.get("village")
+                or addr.get("hamlet") or addr.get("suburb") or addr.get("county") or ""
+            )
+            state = addr.get("state", "")
+            country = addr.get("country", "")
+            short_place = ", ".join(p for p in [locality, state, country] if p)
+            results.append({
+                "place": loc.address,
+                "short_place": short_place or loc.address,
+                "lat": loc.latitude,
+                "lon": loc.longitude,
+            })
+        return {"results": results}
     except Exception as e:
         return {"results": [], "error": str(e)}
 
