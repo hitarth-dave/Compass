@@ -276,10 +276,10 @@ export default function Settings() {
                 value={place}
                 onQueryChange={(text) => { setPlace(text); setLat(null); setLon(null); }}
                 onSelect={(r) => {
-                  setPlace(r.place);
+                  setPlace(r.short_place || r.place);
                   setLat(r.lat);
                   setLon(r.lon);
-                  toast.success(`Selected: ${r.place.split(",").slice(0, 3).join(",")}`);
+                  toast.success(`Selected: ${r.short_place || r.place}`);
                 }}
                 inputTestId="settings-place"
               />
@@ -301,10 +301,10 @@ export default function Settings() {
           value={curPlace}
           onQueryChange={(text) => { setCurPlace(text); setCurLat(null); setCurLon(null); }}
           onSelect={(r) => {
-            setCurPlace(r.place);
+            setCurPlace(r.short_place || r.place);
             setCurLat(r.lat);
             setCurLon(r.lon);
-            toast.success(`Selected: ${r.place.split(",").slice(0, 3).join(",")}`);
+            toast.success(`Selected: ${r.short_place || r.place}`);
           }}
           placeholder="Where are you now?"
           inputTestId="settings-current-place"
