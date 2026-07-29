@@ -8,12 +8,12 @@ import { useAuth } from "@/context/AuthContext";
 
 const FAQ_ITEMS = [
   {
-    q: "Is Compass Astro really free right now?",
-    a: "Yes — every feature on Basic is free and unlimited while we're in beta. Standard and Advanced are paid tiers we're building checkout for; join the waitlist and we'll email you the moment they're live.",
+    q: "Is there a free tier?",
+    a: "Not right now — all three tiers (Basic, Standard, Advanced) are opening through a waitlist as we finish checkout. Join the tier you want and we'll email you the moment it's live.",
   },
   {
     q: "Can I cancel anytime?",
-    a: "Yes — there's no lock-in. Once paid plans launch, cancel from Settings and you'll keep access through the end of your current billing period.",
+    a: "Yes — there's no lock-in. Once billing launches, cancel from Settings and you'll keep access through the end of your current billing period.",
   },
   {
     q: "Is my birth data and chat history private?",
@@ -32,22 +32,22 @@ const FAQ_ITEMS = [
 const TIERS = [
   {
     name: "Basic",
-    price: "Free",
-    cadence: "",
+    price: "$0.99",
+    cadence: "/ week",
     tagline: "Cast your chart and start asking.",
     features: [
       "Full sidereal Kundali",
       "Current Mahadasha & today's transits",
-      "Unlimited questions — free while in beta",
+      "Unlimited questions",
       "Reasoning panel on any answer",
     ],
-    cta: "Start free",
-    kind: "free",
+    cta: "Join waitlist",
+    kind: "waitlist",
     featured: false,
   },
   {
     name: "Standard",
-    price: "$0.99",
+    price: "$2.99",
     cadence: "/ week",
     tagline: "For steady, ongoing counsel.",
     features: [
@@ -62,7 +62,7 @@ const TIERS = [
   },
   {
     name: "Advanced",
-    price: "$2.49",
+    price: "$6.99",
     cadence: "/ week",
     tagline: "The astrologer's tier — coming soon.",
     features: [
@@ -87,13 +87,13 @@ export default function Pricing() {
       <title>Pricing — Compass Astro</title>
       <meta
         name="description"
-        content="Compass Astro is free while in beta. See what's on Basic, Standard and Advanced, and join the waitlist for paid plans."
+        content="See what's on Basic, Standard and Advanced, and join the waitlist — checkout is opening soon."
       />
 
       <section className="max-w-3xl mx-auto px-6 lg:px-12 pt-6 text-center fade-up">
         <div className="overline mb-6">Pricing</div>
         <h1 className="font-serif-display text-5xl sm:text-6xl text-[color:var(--jai-parchment)]">
-          Free while in beta. <em className="text-[color:var(--jai-gold-display)]">Go deeper when you're ready.</em>
+          Simple pricing. <em className="text-[color:var(--jai-gold-display)]">Go as deep as you need.</em>
         </h1>
         <p className="mt-6 text-lg text-[color:var(--jai-text-muted)] leading-relaxed">
           Every plan reads from the same classical corpus. You're paying for depth and volume, never
@@ -133,11 +133,11 @@ export default function Pricing() {
 
       <section className="max-w-2xl mx-auto px-6 lg:px-12 mt-24 text-center fade-up">
         <p className="text-sm text-[color:var(--jai-text-muted)]">
-          Compass Astro is free to use in full while we're in beta. Standard and Advanced are taking
-          waitlist signups — you'll be the first to know when checkout opens.
+          All three tiers are taking waitlist signups while we finish checkout — you'll be the first
+          to know when your tier opens.
         </p>
         <div className="mt-8 flex justify-center">
-          <AuthButtons label="Start free, no card needed" />
+          <AuthButtons label="Already have an account? Sign in" />
         </div>
       </section>
 
@@ -150,9 +150,8 @@ export default function Pricing() {
   );
 }
 
-// A single button that either opens the shared auth modal (free tier) or
-// the waitlist modal (paid tiers with no checkout wired yet) — styled by
-// prominence either way.
+// A single button that opens the waitlist modal — all three tiers are
+// waitlist-only until checkout is wired up.
 function AuthButtonsInline({ tier, onWaitlist }) {
   const { openAuthModal } = useAuth();
   return (
