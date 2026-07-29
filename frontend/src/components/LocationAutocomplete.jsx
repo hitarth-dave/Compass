@@ -13,7 +13,10 @@ const DEBOUNCE_MS = 400;
  * getting whichever one the geocoder liked best.
  *
  * Controlled: the parent owns `value` (the free-text query). This component
- * only renders the dropdown and reports back the chosen candidate.
+ * only renders the dropdown and reports back the chosen candidate as
+ * { place, short_place, lat, lon } — `short_place` is a clean "City, State,
+ * Country" label meant for display/storage; `place` is the full Nominatim
+ * address, useful only as a disambiguation hint in the dropdown itself.
  */
 export default function LocationAutocomplete({
   value,
@@ -29,6 +32,13 @@ export default function LocationAutocomplete({
   const wrapRef = useRef(null);
   const debounceRef = useRef(null);
   const requestSeq = useRef(0);
+  // Two cases where a `value` change should NOT trigger a new search:
+  // (1) the very first render, which may already hold a saved place from a
+  //     loaded profile — nobody typed that, so don't reopen a dropdown for it.
+  // (2) right after picking a result — selecting sets `value` to the chosen
+  //     label, which would otherwise immediately re-trigger this effect and
+  //     pop the dropdown back open with the same single match.
+  const skipNextSearch = useRef(true);
 
   // Close the dropdown on outside click.
   useEffect(() => {
@@ -41,11 +51,16 @@ export default function LocationAutocomplete({
 
   // Debounced search as the person types.
   useEffect(() => {
+    if (skipNextSearch.current) {
+      skipNextSearch.current = false;
+      return;
+    }
     if (debounceRef.current) clearTimeout(debounceRef.current);
     const q = (value || "").trim();
 
     if (q.length < MIN_QUERY_LENGTH) {
       setResults([]);
+      setOpen(false);
       setLoading(false);
       setErrored(false);
       return;
@@ -75,6 +90,7 @@ export default function LocationAutocomplete({
   }, [value]);
 
   const pick = (r) => {
+    skipNextSearch.current = true; // the value change this causes shouldn't re-search
     onSelect(r);
     setOpen(false);
     setResults([]);
@@ -84,7 +100,7 @@ export default function LocationAutocomplete({
   const showEmptyState = open && !loading && q.length >= MIN_QUERY_LENGTH && results.length === 0;
 
   return (
-    <div ref={wrapRef} className="relative w-full">
+    <div ref={wrapRef} className="relative w-full min-w-0">
       <div className="flex items-end gap-3 border-b border-[color:var(--jai-border)] pb-1">
         <MapPin size={16} className="text-[color:var(--jai-gold)] mb-3 shrink-0" />
         <input
@@ -101,7 +117,7 @@ export default function LocationAutocomplete({
           }}
           placeholder={placeholder}
           autoComplete="off"
-          className="flex-1 bg-transparent border-0 rounded-none px-0 text-lg font-serif-display placeholder:text-[color:var(--jai-text-muted)]/60 focus-visible:ring-0 focus:outline-none"
+          className="flex-1 min-w-0 bg-transparent border-0 rounded-none px-0 text-lg font-serif-display placeholder:text-[color:var(--jai-text-muted)]/60 focus-visible:ring-0 focus:outline-none truncate"
           data-testid={inputTestId}
         />
         {loading && <Loader2 size={14} className="animate-spin text-[color:var(--jai-gold)] mb-3 shrink-0" />}
@@ -117,10 +133,13 @@ export default function LocationAutocomplete({
               key={`${r.lat}-${r.lon}-${i}`}
               type="button"
               onClick={() => pick(r)}
-              className="w-full text-left px-4 py-2.5 text-sm text-[color:var(--jai-green-deep)] hover:bg-[color:var(--jai-surface-2)] border-b border-[color:var(--jai-border)] last:border-0 transition-colors"
+              className="w-full text-left px-4 py-2.5 hover:bg-[color:var(--jai-surface-2)] border-b border-[color:var(--jai-border)] last:border-0 transition-colors"
               data-testid={`location-option-${i}`}
             >
-              {r.place}
+              <div className="text-sm text-[color:var(--jai-green-deep)]">{r.short_place || r.place}</div>
+              {r.short_place && r.short_place !== r.place && (
+                <div className="text-xs text-[color:var(--jai-text-muted)] truncate mt-0.5">{r.place}</div>
+              )}
             </button>
           ))}
         </div>
