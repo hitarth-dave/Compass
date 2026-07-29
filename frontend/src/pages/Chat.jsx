@@ -250,6 +250,12 @@ export default function Chat() {
               c[c.length - 1] = { ...c[c.length - 1], content: c[c.length - 1].content + data.text };
               return c;
             });
+          } else if (evtName === "suggestions") {
+            setMessages((m) => {
+              const c = [...m];
+              c[c.length - 1] = { ...c[c.length - 1], suggestions: data.questions || [] };
+              return c;
+            });
           } else if (evtName === "done") {
             // Server signaled completion — bail immediately even if reader
             // hasn't seen {done:true} (some proxies keep the SSE conn open).
@@ -351,7 +357,7 @@ export default function Chat() {
         )}
 
         {messages.map((m, i) => (
-          <MessageBubble key={i} msg={m} idx={i} onWhy={openLogic} advanced={isAdvanced} />
+          <MessageBubble key={i} msg={m} idx={i} onWhy={openLogic} advanced={isAdvanced} onSuggest={(q) => send(q)} />
         ))}
         {streaming && (
           <div className="text-[color:var(--jai-text-muted)] text-sm flex items-center gap-2">
@@ -437,7 +443,7 @@ export default function Chat() {
   );
 }
 
-function MessageBubble({ msg, idx, onWhy, advanced }) {
+function MessageBubble({ msg, idx, onWhy, advanced, onSuggest }) {
   if (msg.role === "user") {
     return (
       <div className="flex justify-end">
@@ -500,6 +506,20 @@ function MessageBubble({ msg, idx, onWhy, advanced }) {
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
+            ))}
+          </div>
+        )}
+        {msg.suggestions?.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2" data-testid={`suggestions-${idx}`}>
+            {msg.suggestions.map((q, si) => (
+              <button
+                key={si}
+                onClick={() => onSuggest(q)}
+                className="text-xs px-3 py-1.5 rounded-full border border-[color:var(--jai-border)] text-[color:var(--jai-green-deep)] hover:border-[color:var(--jai-gold)] hover:bg-[color:var(--jai-surface-2)] transition-colors text-left"
+                data-testid={`suggestion-${idx}-${si}`}
+              >
+                {q}
+              </button>
             ))}
           </div>
         )}
