@@ -83,6 +83,26 @@ def _letterspaced(text: str, spacing: str = " ") -> str:
     return spacing.join(list(text))
 
 
+def _wrap_text(c, text: str, font: str, size: float, max_width: float) -> List[str]:
+    """Word-wraps text to fit max_width, measured with the actual font
+    metrics rather than a guessed character count — replaces the old blunt
+    text[:118] truncation, which could cut a sentence off mid-word."""
+    words = text.split()
+    if not words:
+        return []
+    lines: List[str] = []
+    current = words[0]
+    for word in words[1:]:
+        candidate = current + " " + word
+        if c.stringWidth(candidate, font, size) <= max_width:
+            current = candidate
+        else:
+            lines.append(current)
+            current = word
+    lines.append(current)
+    return lines
+
+
 def _draw_north_indian_chart(c, x, y, size, title, asc_sign_idx, planets, subtitle=""):
     """Draws one North Indian diamond chart with its outer square, both
     diagonals and the inner diamond, then places the sign number and the
@@ -127,17 +147,20 @@ def _draw_north_indian_chart(c, x, y, size, title, asc_sign_idx, planets, subtit
         cx, cy = px(fx, fy)
         sign_idx = (asc_sign_idx + house - 1) % 12
 
-        _text_center(c, cx, cy + 5, SIGN_ABBR[sign_idx], SANS_BOLD, 5.6, GOLD)
+        _text_center(c, cx, cy + 5, f"{SIGN_ABBR[sign_idx]} {sign_idx + 1}", SANS_BOLD, 5.6, GOLD)
 
         occupants = by_house.get(house, [])
         if not occupants:
             continue
         # Two per line keeps busy houses from overflowing their triangle.
+        # Retrograde uses a plain ASCII "R" — the previous superscript-R
+        # character (U+1D3F) isn't in the base PDF font's encoding, so it
+        # silently rendered as a missing-glyph box instead of a letter.
         rows: List[str] = []
         for i in range(0, len(occupants), 2):
             pair = occupants[i:i + 2]
             rows.append(" ".join(
-                p["symbol"] + ("\u1d3f" if p.get("retrograde") else "") for p in pair
+                p["symbol"] + ("R" if p.get("retrograde") else "") for p in pair
             ))
         line_y = cy - 3
         for row in rows:
@@ -193,7 +216,7 @@ def generate_chart_card_pdf(
     _text_center(c, PAGE_W / 2, cursor, name[:42], SERIF_BOLD, 25, INK)
     cursor -= 15
     _text_center(c, PAGE_W / 2, cursor, birth_line, SANS, 7.6, MUTED)
-    cursor -= 12
+    cursor -= 10
 
     asc = chart["ascendant"]
     planets = chart["planets"]
@@ -207,12 +230,12 @@ def generate_chart_card_pdf(
         f"{moon.get('nakshatra', '')} {moon.get('pada', '')}"
     )
     _text_center(c, PAGE_W / 2, cursor, headline, SERIF_ITALIC, 10, GOLD)
-    cursor -= 16
+    cursor -= 13
 
     c.setStrokeColor(GOLD)
     c.setLineWidth(0.8)
     c.line(PAGE_W / 2 - 60, cursor, PAGE_W / 2 + 60, cursor)
-    cursor -= 26
+    cursor -= 20
 
     # ---------- Charts (D1 + D9) ----------
     chart_size = 196
@@ -311,20 +334,22 @@ def generate_chart_card_pdf(
             _text_left(c, right_l, cursor, yg.get("name", "")[:46], SANS_BOLD, 7.4, INK)
             cursor -= 9
             detail = (yg.get("detail") or "")
-            _text_left(c, right_l, cursor, detail[:62], SANS, 6.4, MUTED)
-            cursor -= 11
+            for line in _wrap_text(c, detail, SANS, 6.4, col_w)[:2]:
+                _text_left(c, right_l, cursor, line, SANS, 6.4, MUTED)
+                cursor -= 8
+            cursor -= 3
     else:
         _text_left(c, right_l, cursor, "No major yogas in the detected set.", SANS, 7.4, MUTED)
         cursor -= 10
 
-    cursor = min(left_bottom, cursor) - 10
+    cursor = min(left_bottom, cursor) - 4
 
     # ---------- Ashtakavarga ----------
     sav = (chart.get("ashtakavarga") or {}).get("sav") or []
     if sav:
         total = sum(sav)
         _draw_section_label(c, inner_l, cursor, f"Ashtakavarga \u00b7 SAV by house (total {total})", inner_w)
-        cursor -= 16
+        cursor -= 24
         cell_w = inner_w / 12
         asc_sign = asc["sign_idx"]
         best = max(sav) if sav else 0
@@ -341,45 +366,26 @@ def generate_chart_card_pdf(
         c.setStrokeColor(HAIRLINE)
         c.setLineWidth(0.5)
         c.line(inner_l, cursor, inner_r, cursor)
-        cursor -= 14
-
-    # ---------- Key life areas ----------
-    # Which planet rules each major domain and where it actually sits — the
-    # first thing an astrologer looks up, and the quickest way for a lay
-    # reader to see "this is where my career/marriage/money is governed from".
-    house_lords = chart.get("house_lords") or []
-    lord_by_house = {hl.get("house"): hl for hl in house_lords}
-    domains = [
-        ("Self", 1), ("Wealth", 2), ("Home", 4),
-        ("Marriage", 7), ("Career", 10), ("Gains", 11),
-    ]
-    available = [(lbl, h) for lbl, h in domains if lord_by_house.get(h)]
-    if available:
-        _draw_section_label(c, inner_l, cursor, "Key life areas \u00b7 ruling planet and where it sits", inner_w)
-        cursor -= 16
-        cell_w = inner_w / len(available)
-        for i, (label, h) in enumerate(available):
-            hl = lord_by_house[h]
-            cx_ = inner_l + i * cell_w + cell_w / 2
-            lord = hl.get("lord", "")
-            sits_house = hl.get("lord_sits_in_house", "")
-            sits_sign = hl.get("lord_sits_in_sign_en", "")
-            _text_center(c, cx_, cursor + 10, f"{label} \u00b7 H{h}", SANS, 5.8, MUTED)
-            _text_center(c, cx_, cursor, lord, SANS_BOLD, 8.2, INK)
-            _text_center(c, cx_, cursor - 9, f"in {sits_sign} (H{sits_house})", SANS, 6.2, GOLD)
-        cursor -= 22
-        c.setStrokeColor(HAIRLINE)
-        c.setLineWidth(0.5)
-        c.line(inner_l, cursor, inner_r, cursor)
-        cursor -= 14
+        cursor -= 8
 
     # ---------- About ----------
+    # Bigger type, word-wrapped (not blunt character-truncated — the old
+    # version could cut a line off mid-word), and capped by how much room
+    # is actually left above the footer so this can never overlap it
+    # regardless of how much text the model returns.
     if about_lines:
         _draw_section_label(c, inner_l, cursor, "What the classics say about this chart", inner_w)
-        cursor -= 14
-        for line in about_lines[:4]:
-            _text_left(c, inner_l, cursor, line[:118], SERIF, 8.4, INK)
-            cursor -= 11.5
+        cursor -= 16
+        about_font_size = 9.4
+        line_height = 13.5
+        footer_safe_top = MARGIN + 22 + 20  # foot_y + clearance above the rule
+        wrapped: List[str] = []
+        for line in about_lines:
+            wrapped.extend(_wrap_text(c, line, SERIF, about_font_size, inner_w))
+        max_lines = max(1, int((cursor - footer_safe_top) / line_height))
+        for line in wrapped[:max_lines]:
+            _text_left(c, inner_l, cursor, line, SERIF, about_font_size, INK)
+            cursor -= line_height
 
     # ---------- Footer ----------
     foot_y = MARGIN + 22
