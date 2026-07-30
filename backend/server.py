@@ -73,6 +73,7 @@ RESEND_FROM_EMAIL = os.environ.get('RESEND_FROM_EMAIL', 'Compass Astro <onboardi
 # Where contact-form submissions land. Set CONTACT_TO_EMAIL in Render's env
 # vars once you have a domain email — no code change needed to update it.
 CONTACT_TO_EMAIL = os.environ.get('CONTACT_TO_EMAIL', 'daveastroanalyst@gmail.com')
+ADMIN_SECRET = os.environ.get('ADMIN_SECRET')  # required to call /admin/set-plan
 
 app = FastAPI(title="Compass Astro")
 api_router = APIRouter(prefix="/api")
@@ -88,12 +89,19 @@ class User(BaseModel):
     current_lat: Optional[float] = None
     current_lon: Optional[float] = None
     current_place: Optional[str] = None
+    plan: str = "basic"  # "basic" | "standard" | "advanced" — no billing yet, so
+    # this only ever changes via /admin/set-plan until checkout exists.
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class AccountUpdate(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
+
+
+class AdminPlanUpdate(BaseModel):
+    email: str
+    plan: str  # "basic" | "standard" | "advanced"
 
 
 class LocationUpdate(BaseModel):
@@ -298,6 +306,7 @@ async def _find_or_create_user(email: str, name: str, picture: Optional[str] = N
         user_id = f"user_{uuid.uuid4().hex[:12]}"
         await db.users.insert_one({
             "user_id": user_id, "email": email, "name": name, "picture": picture,
+            "plan": "basic",
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
     return user_id
@@ -490,6 +499,7 @@ async def verify_signup(payload: VerifyCodeRequest, response: Response):
             "name": pending["name"],
             "picture": None,
             "password_hash": pending["password_hash"],
+            "plan": "basic",
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
 
@@ -600,6 +610,28 @@ async def reset_password(payload: ResetPasswordRequest, response: Response):
 @api_router.get("/auth/me", response_model=User)
 async def me(user: User = Depends(get_current_user)):
     return user
+
+
+@api_router.post("/admin/set-plan")
+async def admin_set_plan(payload: AdminPlanUpdate, x_admin_secret: Optional[str] = Header(default=None)):
+    """Manually sets a user's plan. There's no billing/checkout yet, so this
+    is the only way a plan ever changes — gate it behind ADMIN_SECRET (set
+    on Render) rather than building a full admin panel before there's
+    anything for it to actually manage. Call it yourself with curl:
+        curl -X POST https://<backend>/api/admin/set-plan \\
+             -H "X-Admin-Secret: <ADMIN_SECRET>" \\
+             -H "Content-Type: application/json" \\
+             -d '{"email":"you@example.com","plan":"advanced"}'
+    """
+    if not ADMIN_SECRET or x_admin_secret != ADMIN_SECRET:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    if payload.plan not in ("basic", "standard", "advanced"):
+        raise HTTPException(status_code=400, detail="plan must be basic, standard, or advanced")
+    email = payload.email.strip().lower()
+    res = await db.users.update_one({"email": email}, {"$set": {"plan": payload.plan}})
+    if not res.matched_count:
+        raise HTTPException(status_code=404, detail="No user with that email")
+    return {"ok": True, "email": email, "plan": payload.plan}
 
 
 @api_router.post("/auth/logout")
@@ -721,17 +753,34 @@ async def get_chart(user: User = Depends(get_current_user)):
 
 
 async def _chart_card_about_lines(chart: dict, name: str) -> List[str]:
-    """Four short lines describing the chart in plain language, for the card.
+    """Seven short lines describing the chart in plain language, for the
+    card — covering characteristics, life approach, likely professional
+    direction, and health tendencies, alongside temperament and strengths.
     Deliberately framed as what the classical texts say about these
     configurations rather than flat assertions about the person — it's more
     honest, and it's the framing the rest of the product already uses."""
     asc = chart["ascendant"]
     by_name = {p["name"]: p for p in chart["planets"]}
     moon = by_name.get("Moon", {})
+    house_lords = chart.get("house_lords") or []
+    lord_by_house = {hl.get("house"): hl for hl in house_lords}
+
     facts = [
         f"Lagna: {asc.get('sign_en')} (lord {asc.get('lord')})",
         f"Moon: {moon.get('sign_en')} in {moon.get('nakshatra')} pada {moon.get('pada')}",
     ]
+    tenth = lord_by_house.get(10)
+    if tenth:
+        facts.append(
+            f"10th house (career/profession) lord {tenth.get('lord')} sits in "
+            f"{tenth.get('lord_sits_in_sign_en')} (house {tenth.get('lord_sits_in_house')})"
+        )
+    sixth = lord_by_house.get(6)
+    if sixth:
+        facts.append(
+            f"6th house (health/daily discipline) lord {sixth.get('lord')} sits in "
+            f"{sixth.get('lord_sits_in_sign_en')} (house {sixth.get('lord_sits_in_house')})"
+        )
     for p in chart["planets"]:
         tags = p.get("dignity") or []
         if tags:
@@ -740,21 +789,33 @@ async def _chart_card_about_lines(chart: dict, name: str) -> List[str]:
         facts.append(f"Yoga: {yg.get('name')} — {yg.get('detail')}")
 
     prompt = (
-        "You are writing 6 short lines for a one-page birth-chart card that "
+        "You are writing 7 short lines for a one-page birth-chart card that "
         "someone will show to friends or hand to an astrologer.\n\n"
-        "Chart facts:\n- " + "\n- ".join(facts[:14]) + "\n\n"
-        "Write exactly 6 lines describing what classical Vedic astrology "
-        "associates with these placements — temperament, natural strengths, "
-        "and where the chart suggests friction. Each line must be under 110 "
-        "characters, a complete sentence, and reference a real placement from "
-        "the facts above. Be specific and warm, never generic or flattering. "
-        "Do not predict events or give advice.\n\n"
-        "Respond with ONLY a JSON array of 6 strings, no other text."
+        "Chart facts:\n- " + "\n- ".join(facts[:16]) + "\n\n"
+        "Write exactly 7 lines, each covering a DIFFERENT one of these "
+        "angles (in roughly this order, one line per angle, skip an angle "
+        "only if the facts truly don't support it):\n"
+        "1. Core personality/characteristics (from the Lagna and its lord)\n"
+        "2. Emotional nature and inner life (from the Moon)\n"
+        "3. General life approach or temperament\n"
+        "4. Likely professional direction or working style (from the 10th "
+        "house lord's placement)\n"
+        "5. Health tendencies or constitution (from the 6th house lord's "
+        "placement) — general constitution only, never diagnostic or "
+        "alarming\n"
+        "6. A natural strength (from a yoga or a well-placed/dignified "
+        "planet)\n"
+        "7. Where the chart suggests friction or a growth edge\n\n"
+        "Each line must be under 110 characters, a complete sentence, and "
+        "reference a real placement from the facts above. Be specific and "
+        "warm, never generic or flattering. Do not predict events, give "
+        "medical advice, or make diagnostic claims.\n\n"
+        "Respond with ONLY a JSON array of 7 strings, no other text."
     )
     try:
         resp = await anthropic_client.messages.create(
             model=CLAUDE_MODEL,
-            max_tokens=700,
+            max_tokens=800,
             messages=[{"role": "user", "content": prompt}],
         )
         text = "".join(b.text for b in resp.content if getattr(b, "type", None) == "text").strip()
@@ -765,7 +826,7 @@ async def _chart_card_about_lines(chart: dict, name: str) -> List[str]:
             text = text.strip()
         arr = json.loads(text)
         if isinstance(arr, list):
-            return [str(s).strip() for s in arr[:6] if str(s).strip()]
+            return [str(s).strip() for s in arr[:7] if str(s).strip()]
     except Exception:
         pass
     # Deterministic fallback so the card never renders with an empty section.
@@ -785,6 +846,11 @@ async def profile_share_card(format: str = "png", user: User = Depends(get_curre
     it stays sharp — unlike the old card, which was drawn straight to a
     low-resolution bitmap. `?format=pdf` returns the vector original, which
     is the better choice for printing or emailing to an astrologer."""
+    if user.plan != "advanced":
+        raise HTTPException(
+            status_code=403,
+            detail="The chart card is an Advanced-tier feature. Join the Advanced waitlist to unlock it.",
+        )
     doc = await db.profiles.find_one({"user_id": user.user_id}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Set up your birth details first")
