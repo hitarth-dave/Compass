@@ -841,16 +841,17 @@ async def profile_share_card(format: str = "png", user: User = Depends(get_curre
     """One-page birth-chart card — D1 + D9 charts, full planetary table,
     Shadbala strengths, yogas, Ashtakavarga and a short written summary.
 
+    Access is gated on the frontend's Simple/Advanced view toggle, not an
+    account plan, so this endpoint itself is open to any authenticated user
+    — the same as every other chart-data endpoint. (The `plan` field on
+    User and /admin/set-plan are left in place for whenever real billing
+    exists; nothing currently reads `plan` to restrict this feature.)
+
     Defaults to PNG so it saves to the camera roll and shares like a photo.
     The layout is drawn as vector and only rasterized at the last step, so
     it stays sharp — unlike the old card, which was drawn straight to a
     low-resolution bitmap. `?format=pdf` returns the vector original, which
     is the better choice for printing or emailing to an astrologer."""
-    if user.plan != "advanced":
-        raise HTTPException(
-            status_code=403,
-            detail="The chart card is an Advanced-tier feature. Join the Advanced waitlist to unlock it.",
-        )
     doc = await db.profiles.find_one({"user_id": user.user_id}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Set up your birth details first")
