@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Loader2, MoveRight, ChevronDown, Info, Download } from "lucide-react";
+import { Loader2, MoveRight, ChevronDown, Info, Download, Lock } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import KundaliChart from "@/components/KundaliChart";
 import DashaExplorer from "@/components/DashaExplorer";
 import WhyPanel from "@/components/WhyPanel";
 import { useDisplayMode } from "@/context/DisplayModeContext";
+import { useAuth } from "@/context/AuthContext";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -88,6 +89,8 @@ const dateOnly = (str) => (str ? str.split(" ")[0] : str);
 export default function Dashboard() {
   const navigate = useNavigate();
   const { isAdvanced } = useDisplayMode();
+  const { user } = useAuth();
+  const hasAdvancedPlan = user?.plan === "advanced";
   const [chart, setChart] = useState(null);
   const [transits, setTransits] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -101,6 +104,13 @@ export default function Dashboard() {
   const [downloadingCard, setDownloadingCard] = useState(false);
 
   const downloadShareCard = async () => {
+    if (!hasAdvancedPlan) {
+      toast.message("The chart card is an Advanced-tier feature", {
+        description: "Join the Advanced waitlist to unlock it.",
+      });
+      navigate("/pricing");
+      return;
+    }
     setDownloadingCard(true);
     try {
       const res = await axios.get(`${API}/profile/share-card`, { responseType: "blob" });
@@ -112,8 +122,15 @@ export default function Dashboard() {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-    } catch {
-      toast.error("Could not generate your share card — try again in a moment.");
+    } catch (err) {
+      if (err?.response?.status === 403) {
+        toast.message("The chart card is an Advanced-tier feature", {
+          description: "Join the Advanced waitlist to unlock it.",
+        });
+        navigate("/pricing");
+      } else {
+        toast.error("Could not generate your share card — try again in a moment.");
+      }
     } finally {
       setDownloadingCard(false);
     }
@@ -187,10 +204,25 @@ export default function Dashboard() {
             disabled={downloadingCard}
             className="rounded-full px-5 py-3 font-serif-display text-base border border-[color:var(--jai-border)] text-[color:var(--jai-green-deep)] inline-flex items-center gap-2 hover:border-[color:var(--jai-gold)] hover:text-[color:var(--jai-gold)] transition-colors disabled:opacity-60"
             data-testid="download-share-card-btn"
-            title="Download a one-page image of your chart — D1 & D9, planets, strengths and yogas"
+            title={
+              hasAdvancedPlan
+                ? "Download a one-page image of your chart — D1 & D9, planets, strengths and yogas"
+                : "Advanced-tier feature — join the waitlist to unlock it"
+            }
           >
-            {downloadingCard ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+            {downloadingCard ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : hasAdvancedPlan ? (
+              <Download size={16} />
+            ) : (
+              <Lock size={13} />
+            )}
             {downloadingCard ? "Preparing…" : "My chart card"}
+            {!hasAdvancedPlan && !downloadingCard && (
+              <span className="text-[10px] tracking-wide uppercase px-2 py-0.5 rounded-full border border-[color:var(--jai-gold)] text-[color:var(--jai-gold)]">
+                Advanced
+              </span>
+            )}
           </button>
           <Link
             to="/chat"
