@@ -212,9 +212,9 @@ def generate_chart_card_pdf(
 
     # ---------- Header ----------
     _text_center(c, PAGE_W / 2, cursor, _letterspaced("COMPASS ASTRO"), SANS_BOLD, 7.5, GOLD)
-    cursor -= 27
+    cursor -= 24
     _text_center(c, PAGE_W / 2, cursor, name[:42], SERIF_BOLD, 25, INK)
-    cursor -= 15
+    cursor -= 13
     _text_center(c, PAGE_W / 2, cursor, birth_line, SANS, 7.6, MUTED)
     cursor -= 10
 
@@ -238,7 +238,7 @@ def generate_chart_card_pdf(
     cursor -= 20
 
     # ---------- Charts (D1 + D9) ----------
-    chart_size = 196
+    chart_size = 186
     gap = inner_w - 2 * chart_size
     chart_y = cursor - chart_size
     _draw_north_indian_chart(
@@ -376,9 +376,9 @@ def generate_chart_card_pdf(
     if about_lines:
         _draw_section_label(c, inner_l, cursor, "What the classics say about this chart", inner_w)
         cursor -= 16
-        about_font_size = 9.4
-        line_height = 13.5
-        footer_safe_top = MARGIN + 22 + 20  # foot_y + clearance above the rule
+        about_font_size = 9.2
+        line_height = 12.8
+        footer_safe_top = MARGIN + 22 + 18  # foot_y + clearance above the rule
         wrapped: List[str] = []
         for line in about_lines:
             wrapped.extend(_wrap_text(c, line, SERIF, about_font_size, inner_w))
