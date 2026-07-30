@@ -536,18 +536,14 @@ export default function AppShell({ children }) {
         </div>
       </aside>
 
-      {/* Simple / Detailed — switches how much technical chart detail is
-          shown across Dashboard, Chat and Muhurta. Left = Simple (default,
-          for everyday users), right = Detailed (for astrologers who want the
-          full technical readout: Shadbala, Ashtakavarga, dignity, yogas,
-          the full Dasha tree, the "Why?" reasoning panel in Chat, and the
-          tomorrow view in Muhurta).
-          Deliberately NOT labeled "Basic/Advanced" — those words are also
-          the names of the paid pricing tiers, and reusing them here for an
-          unrelated free display toggle is exactly what made someone think
-          switching this to "Advanced" should unlock Advanced-tier features
-          like the chart card. Internal mode value stays "advanced" (just
-          the visible label changed) so no stored preference is lost. */}
+      {/* Simple / Advanced — switches how much technical chart detail is
+          shown across Dashboard, Chat and Muhurta (Shadbala, Ashtakavarga,
+          dignity, yogas, the full Dasha tree, the "Why?" panel in Chat, the
+          tomorrow view in Muhurta). Advanced mode ALSO unlocks the chart
+          card download on Dashboard — that's intentional: this toggle is
+          the actual gate for that feature, not a paid plan. It's a free,
+          per-browser preference (localStorage), not tied to the account
+          at all. */}
       <div className="fixed top-4 right-16 z-20" data-testid="display-mode-toggle-wrap">
         {showAdvancedHint && (
           <div
@@ -562,9 +558,9 @@ export default function AppShell({ children }) {
             >
               <X size={12} />
             </button>
-            <strong className="block mb-1">Try Detailed →</strong>
-            Unlocks Shadbala, Ashtakavarga, detected yogas, House Lords, and full divisional charts —
-            the deepest part of your reading.
+            <strong className="block mb-1">Try Advanced →</strong>
+            Unlocks Shadbala, Ashtakavarga, detected yogas, House Lords, full divisional charts,
+            and your downloadable chart card.
           </div>
         )}
         <div
@@ -589,10 +585,10 @@ export default function AppShell({ children }) {
               ? "bg-[color:var(--jai-gold)] text-[color:var(--jai-surface)]"
               : "text-[color:var(--jai-text-muted)] hover:text-[color:var(--jai-green-deep)]"
           }`}
-          title="Full technical chart data — for astrologers. This is a free display view, unrelated to your account plan."
+          title="Full technical chart data, plus your downloadable chart card"
           data-testid="display-mode-advanced-btn"
         >
-          Detailed
+          Advanced
         </button>
         </div>
       </div>
