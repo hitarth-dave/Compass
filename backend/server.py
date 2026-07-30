@@ -740,21 +740,21 @@ async def _chart_card_about_lines(chart: dict, name: str) -> List[str]:
         facts.append(f"Yoga: {yg.get('name')} — {yg.get('detail')}")
 
     prompt = (
-        "You are writing 4 short lines for a one-page birth-chart card that "
+        "You are writing 6 short lines for a one-page birth-chart card that "
         "someone will show to friends or hand to an astrologer.\n\n"
         "Chart facts:\n- " + "\n- ".join(facts[:14]) + "\n\n"
-        "Write exactly 4 lines describing what classical Vedic astrology "
+        "Write exactly 6 lines describing what classical Vedic astrology "
         "associates with these placements — temperament, natural strengths, "
-        "and where the chart suggests friction. Each line must be under 115 "
+        "and where the chart suggests friction. Each line must be under 110 "
         "characters, a complete sentence, and reference a real placement from "
         "the facts above. Be specific and warm, never generic or flattering. "
         "Do not predict events or give advice.\n\n"
-        "Respond with ONLY a JSON array of 4 strings, no other text."
+        "Respond with ONLY a JSON array of 6 strings, no other text."
     )
     try:
         resp = await anthropic_client.messages.create(
             model=CLAUDE_MODEL,
-            max_tokens=600,
+            max_tokens=700,
             messages=[{"role": "user", "content": prompt}],
         )
         text = "".join(b.text for b in resp.content if getattr(b, "type", None) == "text").strip()
@@ -765,7 +765,7 @@ async def _chart_card_about_lines(chart: dict, name: str) -> List[str]:
             text = text.strip()
         arr = json.loads(text)
         if isinstance(arr, list):
-            return [str(s).strip() for s in arr[:4] if str(s).strip()]
+            return [str(s).strip() for s in arr[:6] if str(s).strip()]
     except Exception:
         pass
     # Deterministic fallback so the card never renders with an empty section.
