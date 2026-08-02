@@ -3,8 +3,9 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { CalendarIcon, Loader2, User as UserIcon, Sparkles, Navigation, AlertTriangle } from "lucide-react";
+import { CalendarIcon, Loader2, User as UserIcon, Sparkles, Navigation, AlertTriangle, Languages } from "lucide-react";
 import { useAuth, clearStoredToken } from "@/context/AuthContext";
+import { useLocale } from "@/context/LocaleContext";
 import LocationAutocomplete from "@/components/LocationAutocomplete";
 
 import { Button } from "@/components/ui/button";
@@ -55,6 +56,27 @@ function SectionCard({ icon: Icon, title, subtitle, children }) {
 export default function Settings() {
   const navigate = useNavigate();
   const { user, setUser, logout } = useAuth();
+  const { t, locale, setLocale } = useLocale();
+
+  // Language
+  const [languages, setLanguages] = useState([]);
+  const [savingLanguage, setSavingLanguage] = useState(false);
+
+  useEffect(() => {
+    axios.get(`${API}/languages`).then((res) => setLanguages(res.data.languages || [])).catch(() => {});
+  }, []);
+
+  const changeLanguage = async (code) => {
+    setSavingLanguage(true);
+    try {
+      await setLocale(code);
+      toast.success("Language updated");
+    } catch {
+      toast.error("Could not save language preference");
+    } finally {
+      setSavingLanguage(false);
+    }
+  };
 
   // Profile
   const [name, setName] = useState(user?.name || "");
@@ -176,15 +198,15 @@ export default function Settings() {
   return (
     <div className="max-w-3xl mx-auto px-6 py-12 space-y-8" data-testid="settings-page">
       <div>
-        <div className="overline mb-2">Settings</div>
+        <div className="overline mb-2">{t("settings.title")}</div>
         <h1 className="font-serif-display text-4xl text-[color:var(--jai-green-deep)]">Your Compass</h1>
       </div>
 
       {/* Profile */}
-      <SectionCard icon={UserIcon} title="Profile" subtitle="Your account details">
+      <SectionCard icon={UserIcon} title={t("settings.profile_section")} subtitle="Your account details">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
           <div>
-            <Label className="overline">Name</Label>
+            <Label className="overline">{t("settings.name_label")}</Label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -193,7 +215,7 @@ export default function Settings() {
             />
           </div>
           <div>
-            <Label className="overline">Phone</Label>
+            <Label className="overline">{t("settings.phone_label")}</Label>
             <Input
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
@@ -215,7 +237,7 @@ export default function Settings() {
 
       {/* Birth Details */}
       {birthLoaded && (
-        <SectionCard icon={Sparkles} title="Birth Details" subtitle="Edit the details behind your Kundali">
+        <SectionCard icon={Sparkles} title={t("settings.birth_details_section")} subtitle="Edit the details behind your Kundali">
           <div>
             <Label className="overline">Name at Birth</Label>
             <Input
@@ -227,7 +249,7 @@ export default function Settings() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div>
-              <Label className="overline">Date of Birth</Label>
+              <Label className="overline">{t("settings.date_of_birth")}</Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
@@ -245,7 +267,7 @@ export default function Settings() {
               </Popover>
             </div>
             <div>
-              <Label className="overline">Time of Birth (24h)</Label>
+              <Label className="overline">{t("settings.time_of_birth")} (24h)</Label>
               <Input
                 type="time"
                 value={tob}
@@ -256,7 +278,7 @@ export default function Settings() {
             </div>
           </div>
           <div>
-            <Label className="overline">Timezone at Birth</Label>
+            <Label className="overline">{t("settings.timezone_at_birth")}</Label>
             <Select value={String(tz)} onValueChange={(v) => setTz(parseFloat(v))}>
               <SelectTrigger
                 className="mt-3 bg-transparent border-0 border-b border-[color:var(--jai-border)] rounded-none px-0 text-lg font-serif-display focus:ring-0 focus:border-[color:var(--jai-gold)]"
@@ -270,7 +292,7 @@ export default function Settings() {
             </Select>
           </div>
           <div>
-            <Label className="overline">Place of Birth</Label>
+            <Label className="overline">{t("settings.place_of_birth")}</Label>
             <div className="mt-3">
               <LocationAutocomplete
                 value={place}
@@ -296,7 +318,7 @@ export default function Settings() {
       )}
 
       {/* Current Location */}
-      <SectionCard icon={Navigation} title="Current Location" subtitle="Used for accurate daily transits and Panchang — separate from your birth place">
+      <SectionCard icon={Navigation} title={t("settings.current_location_section")} subtitle={t("settings.current_location_hint")}>
         <LocationAutocomplete
           value={curPlace}
           onQueryChange={(text) => { setCurPlace(text); setCurLat(null); setCurLon(null); }}
@@ -314,16 +336,36 @@ export default function Settings() {
         )}
         <Button onClick={saveLocation} disabled={savingLocation} className="gold-btn" data-testid="settings-save-location">
           {savingLocation ? <Loader2 size={14} className="mr-2 animate-spin" /> : null}
-          Save Location
+          {t("settings.save_location")}
         </Button>
       </SectionCard>
 
+      {/* Language */}
+      <SectionCard icon={Languages} title={t("settings.language_section")} subtitle={t("settings.language_hint")}>
+        <Select value={locale} onValueChange={changeLanguage} disabled={savingLanguage}>
+          <SelectTrigger
+            className="w-full sm:w-72 bg-transparent border-[color:var(--jai-border)] font-serif-display text-lg"
+            data-testid="settings-language-select"
+          >
+            <SelectValue placeholder={t("settings.language_label")} />
+          </SelectTrigger>
+          <SelectContent className="bg-[color:var(--jai-surface)] border-[color:var(--jai-border)]">
+            {languages.map((l) => (
+              <SelectItem key={l.code} value={l.code} data-testid={`language-option-${l.code}`}>
+                {l.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {savingLanguage && <Loader2 size={14} className="animate-spin text-[color:var(--jai-gold)] mt-3" />}
+      </SectionCard>
+
       {/* Danger Zone */}
-      <SectionCard icon={AlertTriangle} title="Danger Zone" subtitle="Careful — these actions are permanent">
+      <SectionCard icon={AlertTriangle} title={t("settings.danger_zone")} subtitle={t("settings.danger_zone_hint")}>
         <div className="flex flex-wrap gap-3">
-          <Button variant="outline" onClick={signOut} data-testid="settings-signout-btn">Sign out</Button>
+          <Button variant="outline" onClick={signOut} data-testid="settings-signout-btn">{t("common.sign_out")}</Button>
           <Button variant="outline" onClick={() => setDeleteOpen(true)} className="text-red-700 border-red-300 hover:bg-red-50" data-testid="settings-delete-btn">
-            Delete Account
+            {t("settings.delete_account")}
           </Button>
         </div>
       </SectionCard>
