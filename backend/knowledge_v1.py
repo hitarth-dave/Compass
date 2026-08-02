@@ -34,14 +34,22 @@ VEDASTRO_TIMEOUT = 8.0  # seconds — don't let a slow external call stall a cha
 # Verified 2026-07-16 by live-querying the API directly (NOT just the marketing
 # page, which lists Saravali/Brihat Samhita — those two slugs returned empty
 # results in testing and are excluded until VedAstro confirms the correct slug).
+# Re-verified 2026-08-01 against VedAstro's own live API (not just their
+# marketing page) and their public Teacher tool's source dropdown:
+#   - Saravali and Brihat Samhita STILL return zero results on every query
+#     tried (status "Pass" but an empty payload) — still excluded, this
+#     hasn't changed.
+#   - Hora Sara IS a real, working source that wasn't in this list before —
+#     added below.
+#   - Phaladeepika and Uttara Kalamrita DO have "page X of Y" markers in
+#     their OCR text after all (found in actual passage content, not just a
+#     first query) — they'd been left as None/"Live searchable" only
+#     because no query in the original pass happened to surface one.
 # page_count is real, extracted from "page X of Y" markers embedded in the OCR
-# text where available; None means not yet confirmed (shown as "Live searchable"
-# rather than a guessed number).
-# sample: a short (under-15-word) excerpt pulled live from each source on
-# 2026-08-01 to confirm the API actually returns real content for every one
-# of these six sources, not just some — deliberately brief (never a
-# "significant summary") since this renders on every page load, not a
-# one-off chat citation.
+# text where available; None means genuinely not available (Hindu Predictive
+# Astrology's source text has no page markers at all in VedAstro's data,
+# confirmed across multiple queries) — shown as "Live searchable" in the UI
+# rather than a guessed number.
 SEED_BOOKS = [
     {
         "book": "Brihat Parashara Hora Shastra", "source_name": "Brihat-Parashara-Hora-Shastra",
@@ -60,7 +68,7 @@ SEED_BOOKS = [
     },
     {
         "book": "Phaladeepika", "source_name": "Phaladeepika",
-        "page_count": None,
+        "page_count": 350,
         "sample": "Simha, Vrishabha, Mesha, Kanya, Dhanus, Tula and Kumbha are the Moolatrikona signs.",
     },
     {
@@ -70,8 +78,13 @@ SEED_BOOKS = [
     },
     {
         "book": "Uttara Kalamrita", "source_name": "Uttara-Kalamrita",
-        "page_count": None,
+        "page_count": 135,
         "sample": "Shani in the eighth gives long life; Kuja there disturbs the health.",
+    },
+    {
+        "book": "Hora Sara", "source_name": "Hora-Sara",
+        "page_count": 339,
+        "sample": "The 6th and the 11th houses are otherwise called Shatkona.",
     },
 ]
 _NAME_TO_SOURCE = {b["book"]: b["source_name"] for b in SEED_BOOKS}
