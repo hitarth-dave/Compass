@@ -7,6 +7,7 @@ import KundaliChart from "@/components/KundaliChart";
 import DashaExplorer from "@/components/DashaExplorer";
 import WhyPanel from "@/components/WhyPanel";
 import { useDisplayMode } from "@/context/DisplayModeContext";
+import { useLocale } from "@/context/LocaleContext";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -22,29 +23,14 @@ function shortenPlace(full) {
   return meaningful.slice(-3).join(", ");
 }
 
-// Short, deterministic one-liners keyed by where transiting Moon sits from
-// Lagna today — purely derived from data already on the page (no extra API
-// call), just enough to fill the header space with something useful rather
-// than blank air.
-const MOON_TRANSIT_NOTE = {
-  1: "Moon is transiting your own Lagna today — expect heightened emotional visibility.",
-  2: "Moon is moving through your 2nd house — a good day for finances and family conversations.",
-  3: "Moon is in your 3rd house — courage and communication are favored today.",
-  4: "Moon is transiting your 4th house — home and inner peace take center stage today.",
-  5: "Moon is in your 5th house — creativity and romance get a gentle boost today.",
-  6: "Moon is moving through your 6th house — a productive day for routine and resolving conflicts.",
-  7: "Moon is transiting your 7th house — partnerships and one-on-one connections are highlighted.",
-  8: "Moon is in your 8th house — a more introspective, low-key day is likely.",
-  9: "Moon is transiting your 9th house — good day for learning, travel, or seeking guidance.",
-  10: "Moon is in your 10th house — career visibility and public matters are in focus today.",
-  11: "Moon is moving through your 11th house — favorable for gains, networking, and social plans.",
-  12: "Moon is transiting your 12th house — a quieter day suited for rest and reflection.",
-};
+// Moon-transit notes now live in the translation files (dashboard.moon_transit_1..12)
+// instead of a hardcoded English dict here, so they follow the person's
+// language preference — see todaysTransitNote below.
 
-function todaysTransitNote(transits) {
+function todaysTransitNote(transits, t) {
   const moon = transits.planets.find((p) => p.name === "Moon");
   if (!moon || !moon.house_from_lagna) return null;
-  return MOON_TRANSIT_NOTE[moon.house_from_lagna] || null;
+  return t(`dashboard.moon_transit_${moon.house_from_lagna}`);
 }
 
 // Chandra Kundali (Moon chart) — same natal planets, houses recomputed
@@ -88,6 +74,7 @@ const dateOnly = (str) => (str ? str.split(" ")[0] : str);
 export default function Dashboard() {
   const navigate = useNavigate();
   const { isAdvanced } = useDisplayMode();
+  const { t } = useLocale();
   const [chart, setChart] = useState(null);
   const [transits, setTransits] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -179,12 +166,12 @@ export default function Dashboard() {
     <div className="max-w-7xl mx-auto px-8 py-12" data-testid="dashboard-page">
       <div className="mb-12 flex items-end justify-between gap-6 flex-wrap fade-up">
         <div>
-          <div className="overline mb-4">Namaste · Your Vedic Chart</div>
+          <div className="overline mb-4">{t("dashboard.header")}</div>
           <h1 className="font-serif-display text-5xl sm:text-6xl leading-[0.95] text-[color:var(--jai-parchment)]" data-testid="dashboard-title">
             {chart.profile.name}<span className="text-[color:var(--jai-gold)]">.</span>
           </h1>
           <div className="mt-3 text-[color:var(--jai-text-muted)] text-sm tracking-wide">
-            {chart.profile.dob} · {chart.profile.tob}{chart.profile.tob_unknown ? " (approx.)" : ""} · {shortenPlace(chart.profile.place)} · Lagna lord: <span className="text-[color:var(--jai-green-deep)] font-semibold">{asc.lord}</span>
+            {chart.profile.dob} · {chart.profile.tob}{chart.profile.tob_unknown ? " (approx.)" : ""} · {shortenPlace(chart.profile.place)} · {t("dashboard.lagna_lord_prefix")} <span className="text-[color:var(--jai-green-deep)] font-semibold">{asc.lord}</span>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -206,10 +193,10 @@ export default function Dashboard() {
             ) : (
               <Lock size={13} />
             )}
-            {downloadingCard ? "Preparing…" : "My chart card"}
+            {downloadingCard ? t("dashboard.preparing") : t("dashboard.chart_card")}
             {!isAdvanced && !downloadingCard && (
               <span className="text-[10px] tracking-wide uppercase px-2 py-0.5 rounded-full border border-[color:var(--jai-gold)] text-[color:var(--jai-gold)]">
-                Advanced
+                {t("display_mode.advanced")}
               </span>
             )}
           </button>
@@ -218,7 +205,7 @@ export default function Dashboard() {
             className="gold-btn rounded-full px-6 py-3 font-serif-display text-lg inline-flex items-center gap-2 glow-hover"
             data-testid="cta-open-chat"
           >
-            Ask the Shastras <MoveRight size={16} />
+            {t("dashboard.ask_the_shastras")} <MoveRight size={16} />
           </Link>
         </div>
       </div>
@@ -236,7 +223,7 @@ export default function Dashboard() {
 
       {dasha && (
         <div className="card-surface px-8 py-4 fade-up flex items-center justify-between flex-wrap gap-4" data-testid="current-dasha">
-          <div className="overline shrink-0">Current Dasha</div>
+          <div className="overline shrink-0">{t("dashboard.current_dasha")}</div>
           <div className="flex items-center gap-6 flex-wrap">
             <div className="flex items-baseline gap-2">
               <span className="font-serif-display text-2xl text-[color:var(--jai-gold)]">{dasha.lord}</span>
@@ -278,12 +265,12 @@ export default function Dashboard() {
                 />
               </button>
               <div>
-                <div className="overline">Rasi Chakra · D1</div>
-                <div className="font-serif-display text-2xl mt-1 text-[color:var(--jai-parchment)]">Lagna: {asc.sign_en}</div>
+                <div className="overline">{t("dashboard.rasi_chakra")}</div>
+                <div className="font-serif-display text-2xl mt-1 text-[color:var(--jai-parchment)]">{t("dashboard.lagna_prefix")} {asc.sign_en}</div>
               </div>
             </div>
             <div className="text-right">
-              <div className="overline">Degree</div>
+              <div className="overline">{t("dashboard.degree")}</div>
               <div className="font-serif-display text-xl text-[color:var(--jai-gold)]">{asc.degree_in_sign}°</div>
             </div>
           </div>
@@ -295,7 +282,7 @@ export default function Dashboard() {
         {showAll && (
           <div className="lg:col-span-6 card-surface p-8 flex flex-col" data-testid="transits-card">
             <div className="flex items-center justify-between mb-1">
-              <div className="overline">Live Transits · Today</div>
+              <div className="overline">{t("dashboard.live_transits")}</div>
               <div className="text-[10px] text-[color:var(--jai-text-muted)]">
                 {new Date(transits.as_of).toLocaleString(undefined, {
                   timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -305,7 +292,7 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="font-serif-display text-base mt-1 mb-4 text-[color:var(--jai-parchment)] leading-snug min-h-[3.5rem]">
-              {todaysTransitNote(transits) || "Today's sky, mapped against your birth chart."}
+              {todaysTransitNote(transits, t) || t("dashboard.default_transit_note")}
             </div>
             {(() => {
               const retro = transits.planets.filter((p) => p.retrograde && p.name !== "Ketu" && p.name !== "Rahu");
@@ -316,7 +303,7 @@ export default function Dashboard() {
                   data-testid="retrograde-banner"
                 >
                   <strong>{retro.map((p) => p.name).join(", ")}</strong>
-                  {retro.length === 1 ? " is" : " are"} retrograde right now.
+                  {" "}{retro.length === 1 ? t("dashboard.retrograde_is") : t("dashboard.retrograde_are")}
                 </div>
               );
             })()}
@@ -340,11 +327,11 @@ export default function Dashboard() {
             <div className="lg:col-span-6 card-surface p-8" data-testid="moon-chart-card">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <div className="overline">Chandra Kundali · Moon Chart</div>
-                  <div className="font-serif-display text-2xl mt-1 text-[color:var(--jai-parchment)]">Moon Lagna: {moonChart.ascendant.sign_en}</div>
+                  <div className="overline">{t("dashboard.moon_chart")}</div>
+                  <div className="font-serif-display text-2xl mt-1 text-[color:var(--jai-parchment)]">{t("dashboard.moon_lagna_prefix")} {moonChart.ascendant.sign_en}</div>
                 </div>
                 <div className="text-right text-[10px] text-[color:var(--jai-text-muted)] max-w-[140px]">
-                  Mind, emotions &amp; day-to-day life
+                  {t("dashboard.moon_chart_hint")}
                 </div>
               </div>
               <KundaliChart planets={moonChart.planets} ascendantSign={moonChart.ascendant.sign_idx} showNakshatra={false} testid="kundali-chart-moon" />
@@ -354,11 +341,11 @@ export default function Dashboard() {
           <div className="lg:col-span-6 card-surface p-8" data-testid="navamsa-card">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <div className="overline">Navamsa · D9</div>
-                <div className="font-serif-display text-2xl mt-1 text-[color:var(--jai-parchment)]">D9 Lagna: {navamsa.ascendant.sign_en}</div>
+                <div className="overline">{t("dashboard.navamsa")}</div>
+                <div className="font-serif-display text-2xl mt-1 text-[color:var(--jai-parchment)]">{t("dashboard.d9_lagna_prefix")} {navamsa.ascendant.sign_en}</div>
               </div>
               <div className="text-right text-[10px] text-[color:var(--jai-text-muted)] max-w-[140px]">
-                Marriage &amp; second half of life
+                {t("dashboard.navamsa_hint")}
               </div>
             </div>
             <KundaliChart planets={navamsa.planets} ascendantSign={navamsa.ascendant.sign_idx} showNakshatra={false} testid="kundali-chart-d9" />
@@ -372,7 +359,7 @@ export default function Dashboard() {
           data-testid="expand-extra-charts"
         >
           <ChevronDown size={12} className="rotate-180" />
-          Transit · Moon Chart · D9 — click to expand
+          {t("dashboard.expand_charts")}
         </button>
       )}
 
