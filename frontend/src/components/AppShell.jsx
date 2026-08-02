@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/context/AuthContext";
+import { useLocale } from "@/context/LocaleContext";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -51,6 +52,7 @@ export default function AppShell({ children }) {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { mode, setMode } = useDisplayMode();
+  const { t } = useLocale();
   const [showAdvancedHint, setShowAdvancedHint] = useState(
     () => localStorage.getItem("jyotish_seen_advanced_hint") !== "1"
   );
@@ -283,7 +285,7 @@ export default function AppShell({ children }) {
 
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {/* Dashboard */}
-          <SideItem to="/dashboard" label="Dashboard" Icon={LayoutGrid} collapsed={collapsed} testId="nav-dashboard" />
+          <SideItem to="/dashboard" label={t("nav.dashboard")} Icon={LayoutGrid} collapsed={collapsed} testId="nav-dashboard" />
 
           {/* Conversation (expandable) */}
           <div>
@@ -300,7 +302,7 @@ export default function AppShell({ children }) {
                 data-testid="nav-chat"
               >
                 <MessageSquare size={17} />
-                {!collapsed && <span className="font-medium tracking-wide flex-1">Conversation</span>}
+                {!collapsed && <span className="font-medium tracking-wide flex-1">{t("nav.conversation")}</span>}
               </button>
               {!collapsed && (
                 <button
@@ -365,7 +367,7 @@ export default function AppShell({ children }) {
                   className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-[color:var(--jai-gold)] hover:text-[color:var(--jai-green-deep)]"
                   data-testid="new-thread-btn"
                 >
-                  <Plus size={12} /> New chat
+                  <Plus size={12} /> {t("common.new_chat")}
                 </button>
               </div>
             )}
@@ -386,7 +388,7 @@ export default function AppShell({ children }) {
                 data-testid="nav-projects"
               >
                 <FolderKanban size={17} />
-                {!collapsed && <span className="font-medium tracking-wide flex-1">Projects</span>}
+                {!collapsed && <span className="font-medium tracking-wide flex-1">{t("nav.projects")}</span>}
               </button>
               {!collapsed && (
                 <button
@@ -471,7 +473,7 @@ export default function AppShell({ children }) {
                           className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-[color:var(--jai-gold)] hover:text-[color:var(--jai-green-deep)]"
                           data-testid={`project-new-thread-${p.key}`}
                         >
-                          <Plus size={12} /> New chat
+                          <Plus size={12} /> {t("common.new_chat")}
                         </button>
                       </div>
                     )}
@@ -502,16 +504,16 @@ export default function AppShell({ children }) {
                     className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-[color:var(--jai-gold)] hover:text-[color:var(--jai-green-deep)]"
                     data-testid="add-project-btn"
                   >
-                    <Plus size={12} /> Add your own project
+                    <Plus size={12} /> {t("nav.add_your_own_project")}
                   </button>
                 )}
               </div>
             )}
           </div>
 
-          <SideItem to="/muhurta" label="Muhurta" Icon={CalendarClock} collapsed={collapsed} testId="nav-muhurta" />
-          <SideItem to="/library" label="Library" Icon={BookOpen} collapsed={collapsed} testId="nav-library" />
-          <SideItem to="/settings" label="Settings" Icon={Settings} collapsed={collapsed} testId="nav-settings" />
+          <SideItem to="/muhurta" label={t("nav.muhurta")} Icon={CalendarClock} collapsed={collapsed} testId="nav-muhurta" />
+          <SideItem to="/library" label={t("nav.library")} Icon={BookOpen} collapsed={collapsed} testId="nav-library" />
+          <SideItem to="/settings" label={t("nav.settings")} Icon={Settings} collapsed={collapsed} testId="nav-settings" />
         </nav>
 
         <div className={`border-t border-[color:var(--jai-border)] ${collapsed ? "p-3 flex justify-center" : "p-5"}`}>
@@ -519,17 +521,17 @@ export default function AppShell({ children }) {
             <button
               onClick={signOut}
               className="w-9 h-9 rounded-md flex items-center justify-center text-[color:var(--jai-text-muted)] hover:text-[color:var(--jai-green-deep)] hover:bg-[color:var(--jai-surface)]"
-              title="Sign out"
+              title={t("common.sign_out")}
               data-testid="signout-btn"
             >
               <LogOut size={14} />
             </button>
           ) : (
             <>
-              <div className="text-xs text-[color:var(--jai-text-muted)] mb-1">Signed in as</div>
+              <div className="text-xs text-[color:var(--jai-text-muted)] mb-1">{t("common.signed_in_as")}</div>
               <div className="font-serif-display text-lg text-[color:var(--jai-parchment)] mb-3 truncate" data-testid="profile-name">{displayName}</div>
               <Button variant="ghost" size="sm" onClick={signOut} className="text-[color:var(--jai-text-muted)] hover:text-[color:var(--jai-gold)] px-0" data-testid="signout-btn">
-                <LogOut size={14} className="mr-2" /> Sign out
+                <LogOut size={14} className="mr-2" /> {t("common.sign_out")}
               </Button>
             </>
           )}
@@ -576,7 +578,7 @@ export default function AppShell({ children }) {
           title="Plain-language view — for everyday users"
           data-testid="display-mode-simple-btn"
         >
-          Simple
+          {t("display_mode.simple")}
         </button>
         <button
           onClick={() => { setMode("advanced"); dismissAdvancedHint(); }}
@@ -588,7 +590,7 @@ export default function AppShell({ children }) {
           title="Full technical chart data, plus your downloadable chart card"
           data-testid="display-mode-advanced-btn"
         >
-          Advanced
+          {t("display_mode.advanced")}
         </button>
         </div>
       </div>
