@@ -37,13 +37,42 @@ VEDASTRO_TIMEOUT = 8.0  # seconds — don't let a slow external call stall a cha
 # page_count is real, extracted from "page X of Y" markers embedded in the OCR
 # text where available; None means not yet confirmed (shown as "Live searchable"
 # rather than a guessed number).
+# sample: a short (under-15-word) excerpt pulled live from each source on
+# 2026-08-01 to confirm the API actually returns real content for every one
+# of these six sources, not just some — deliberately brief (never a
+# "significant summary") since this renders on every page load, not a
+# one-off chat citation.
 SEED_BOOKS = [
-    {"book": "Brihat Parashara Hora Shastra", "source_name": "Brihat-Parashara-Hora-Shastra", "page_count": 482},
-    {"book": "Brihat Jataka", "source_name": "Brihat-Jataka", "page_count": 294},
-    {"book": "Jaimini Sutras", "source_name": "Jaimini-Sutras", "page_count": 219},
-    {"book": "Phaladeepika", "source_name": "Phaladeepika", "page_count": None},
-    {"book": "Hindu Predictive Astrology", "source_name": "Hindu-Predictive-Astrology", "page_count": None},
-    {"book": "Uttara Kalamrita", "source_name": "Uttara-Kalamrita", "page_count": None},
+    {
+        "book": "Brihat Parashara Hora Shastra", "source_name": "Brihat-Parashara-Hora-Shastra",
+        "page_count": 482,
+        "sample": "The Dasas should be judged favourable by the placement of a planet.",
+    },
+    {
+        "book": "Brihat Jataka", "source_name": "Brihat-Jataka",
+        "page_count": 294,
+        "sample": "Planets in the 2nd, 12th, 11th, 3rd, 10th and 4th houses are friends.",
+    },
+    {
+        "book": "Jaimini Sutras", "source_name": "Jaimini-Sutras",
+        "page_count": 219,
+        "sample": "Fixed signs are stronger than movable signs; double-bodied signs stronger still.",
+    },
+    {
+        "book": "Phaladeepika", "source_name": "Phaladeepika",
+        "page_count": None,
+        "sample": "Simha, Vrishabha, Mesha, Kanya, Dhanus, Tula and Kumbha are the Moolatrikona signs.",
+    },
+    {
+        "book": "Hindu Predictive Astrology", "source_name": "Hindu-Predictive-Astrology",
+        "page_count": None,
+        "sample": "Choose the moment when benefic forces support the purpose of the act.",
+    },
+    {
+        "book": "Uttara Kalamrita", "source_name": "Uttara-Kalamrita",
+        "page_count": None,
+        "sample": "Shani in the eighth gives long life; Kuja there disturbs the health.",
+    },
 ]
 _NAME_TO_SOURCE = {b["book"]: b["source_name"] for b in SEED_BOOKS}
 _SOURCE_TO_NAME = {b["source_name"]: b["book"] for b in SEED_BOOKS}
@@ -162,11 +191,13 @@ async def search_for_user(db, user_id: str, query: str, k: int = 8, book_names: 
 async def list_books_for_user(db, user_id: str) -> Dict:
     """Seed list is now the static VedAstro book list. chunk_count holds a real
     page count where we've confirmed one, otherwise None (shown as "Live
-    searchable" in the UI rather than a fabricated number)."""
+    searchable" in the UI rather than a fabricated number). sample is a short,
+    live-verified excerpt (see SEED_BOOKS above) so the Library page shows a
+    real teaser instead of an empty quote block."""
     seed = [
         {
             "book_id": "seed", "book": b["book"], "is_seed": True,
-            "chunk_count": b["page_count"], "sample": None,
+            "chunk_count": b["page_count"], "sample": b.get("sample"),
         }
         for b in SEED_BOOKS
     ]
