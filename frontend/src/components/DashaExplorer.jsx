@@ -19,6 +19,10 @@ const LEVEL_ABBR = ["MD", "AD", "PD", "SD", "PR"];
  * compact shrinks the type scale for the smaller Simple-mode card.
  */
 export default function DashaExplorer({ mahadashas, currentMahadasha, maxDepth = 4, compact = false }) {
+  // currentMahadasha is no longer read — highlighting is now pure date-range
+  // math (see isCurrentRow below), which works at every depth instead of
+  // only the root level. Left in the signature so existing callers don't
+  // need to change.
   // path: array of {lord, start, end, years} selected at each level so far
   const [path, setPath] = useState([]);
   // childrenByLevel[i] = the list of sub-periods shown at depth i+1 (i.e. children of path[i])
@@ -28,9 +32,22 @@ export default function DashaExplorer({ mahadashas, currentMahadasha, maxDepth =
   const currentList = path.length === 0 ? mahadashas : childrenByLevel[path.length - 1] || [];
   const depth = path.length;
 
+  /** Backend dates are "YYYY-MM-DD HH:MM:SS" civil timestamps — swap the
+   * space for "T" so the browser parses them reliably. */
+  function parseDashaDate(str) {
+    return new Date(str.replace(" ", "T"));
+  }
+
+  // Highlights whichever row's [start, end) window actually contains this
+  // moment — checked purely by date, at whatever depth is on screen. The
+  // old version only ever compared depth 0 against a passed-in prop, so
+  // Antardasha/Pratyantardasha/Sookshma/Prana could never highlight even
+  // though those are exactly the levels someone drills down to see "today".
+  const now = new Date();
   const isCurrentRow = (d) => {
-    if (depth !== 0 || !currentMahadasha) return false;
-    return d.lord === currentMahadasha.lord && d.start === currentMahadasha.start;
+    const start = parseDashaDate(d.start);
+    const end = parseDashaDate(d.end);
+    return now >= start && now < end;
   };
 
   /** Backend returns full "YYYY-MM-DD HH:MM:SS" timestamps (needed so Prana-
