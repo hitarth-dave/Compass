@@ -218,9 +218,11 @@ function BookCard({ book, onDelete, testid }) {
       <div className="mt-3 text-[10px] uppercase tracking-widest text-[color:var(--jai-text-muted)]">
         {book.chunk_count != null ? `${book.chunk_count} indexed passages` : "Live searchable"}
       </div>
-      <p className="mt-4 text-sm text-[color:var(--jai-text-muted)] italic leading-relaxed line-clamp-3">
-        "{book.sample}..."
-      </p>
+      {book.sample && (
+        <p className="mt-4 text-sm text-[color:var(--jai-text-muted)] italic leading-relaxed line-clamp-3">
+          "{book.sample}"
+        </p>
+      )}
     </div>
   );
 }
