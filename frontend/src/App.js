@@ -5,9 +5,10 @@ import axios from "axios";
 import { Loader2 } from "lucide-react";
 import "@/App.css";
 
-import { AuthProvider } from "@/context/AuthContext";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { ThemeProvider, useTheme } from "@/context/ThemeContext";
 import { DisplayModeProvider } from "@/context/DisplayModeContext";
+import { LocaleProvider } from "@/context/LocaleContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import AppShell from "@/components/AppShell";
@@ -78,6 +79,16 @@ function ThemedToaster() {
   return <Toaster theme={theme} position="top-right" />;
 }
 
+// LocaleProvider needs the signed-in user's saved `language` field to sync
+// across devices, but it's a plain component (no dependency on AuthContext
+// internals) so it can't call useAuth itself while ALSO being the thing
+// AuthProvider wraps. This one-line bridge is simpler than making
+// LocaleProvider aware of AuthContext directly.
+function LocaleProviderBridge({ children }) {
+  const { user } = useAuth();
+  return <LocaleProvider user={user}>{children}</LocaleProvider>;
+}
+
 function App() {
   return (
     <div className="App">
@@ -85,10 +96,12 @@ function App() {
         <BrowserRouter>
           <ThemeProvider>
             <AuthProvider>
-              <DisplayModeProvider>
-                <ThemedToaster />
-                <AppRouter />
-              </DisplayModeProvider>
+              <LocaleProviderBridge>
+                <DisplayModeProvider>
+                  <ThemedToaster />
+                  <AppRouter />
+                </DisplayModeProvider>
+              </LocaleProviderBridge>
             </AuthProvider>
           </ThemeProvider>
         </BrowserRouter>
