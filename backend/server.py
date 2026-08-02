@@ -91,12 +91,19 @@ class User(BaseModel):
     current_place: Optional[str] = None
     plan: str = "basic"  # "basic" | "standard" | "advanced" — no billing yet, so
     # this only ever changes via /admin/set-plan until checkout exists.
+    language: str = "en"  # ISO 639-1 code. Drives both the UI locale (frontend
+    # reads this to pick a translation file) and the chat system prompt (see
+    # LANGUAGE_NAMES / chat_stream below) — one setting, two effects, since
+    # someone who wants a Gujarati interface almost certainly wants Gujarati
+    # chat replies by default too. They can still just ask in a different
+    # language mid-chat and Claude will follow that instead.
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class AccountUpdate(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
+    language: Optional[str] = None
 
 
 class AdminPlanUpdate(BaseModel):
@@ -987,6 +994,24 @@ async def yoga_citations(name: str, user: User = Depends(get_current_user)):
 # lens mapping (which houses/varga charts to foreground) well-defined and
 # classically grounded instead of guessed per user-typed label. Custom
 # (user-created) projects are layered on top in the /projects endpoints below.
+# ---------- Languages ----------
+# ISO 639-1 code -> the name Claude should be told to respond in. Tier 1 is
+# closest to the core audience (Indic languages), Tier 2 is nearby South
+# Asian markets, Tier 3 is broader global reach. Adding a language here does
+# NOT require a code change anywhere else in this file — chat_stream just
+# looks up user.language against this dict.
+LANGUAGES = {
+    "en": "English",
+    # Tier 1 — Indic
+    "hi": "Hindi", "gu": "Gujarati", "mr": "Marathi", "ta": "Tamil",
+    "te": "Telugu", "kn": "Kannada", "bn": "Bengali", "pa": "Punjabi",
+    # Tier 2 — nearby South Asian
+    "ur": "Urdu", "ne": "Nepali", "si": "Sinhala",
+    # Tier 3 — broader global
+    "es": "Spanish", "pt": "Portuguese", "fr": "French", "id": "Indonesian",
+}
+
+
 PROJECTS = {
     "marriage": {
         "label": "Marriage & Relationships",
@@ -1274,7 +1299,7 @@ async def _project_memory_block(user_id: str, project_key: str, exclude_session_
     )
 
 
-async def _generate_follow_ups(user_message: str, answer_text: str, project_label: Optional[str] = None) -> List[str]:
+async def _generate_follow_ups(user_message: str, answer_text: str, project_label: Optional[str] = None, language_name: str = "English") -> List[str]:
     """Generates exactly 3 short, clickable follow-up questions. These are
     tied to THIS specific answer (a natural next question given what was
     just said — a tighter timeframe, a next step, a detail the answer
@@ -1289,12 +1314,13 @@ async def _generate_follow_ups(user_message: str, answer_text: str, project_labe
         f"every follow-up must stay relevant to that domain, not drift into "
         f"unrelated life areas." if project_label else ""
     )
+    language_hint = f" Write the questions in {language_name}." if language_name != "English" else ""
     prompt = (
         "Given this question-and-answer exchange, write exactly 3 short "
         "follow-up questions the PERSON might naturally want to ask next. "
         "Each must be a direct continuation of THIS answer — e.g. asking "
         "for a more precise timeframe, a next step, or a detail the answer "
-        "itself raised — never a generic or unrelated question." + domain_hint +
+        "itself raised — never a generic or unrelated question." + domain_hint + language_hint +
         "\n\nQuestion asked: " + user_message[:500] +
         "\n\nAnswer given: " + answer_text[:1500] +
         "\n\nRespond with ONLY a JSON array of exactly 3 short strings, each "
@@ -1448,14 +1474,17 @@ async def _extract_durable_facts(raw_message: str) -> List[Dict]:
         return []
 
 
-async def _auto_name_thread(session_id: str, first_question: str):
+async def _auto_name_thread(session_id: str, first_question: str, language_name: str = "English"):
     """Fire-and-forget: ask Claude to generate a 2-4 word title. Update thread name."""
     try:
         title = ""
+        system = "Give a very short 2-5 word title for a conversation that starts with the following question. Reply with ONLY the title text, no quotes, no punctuation at the end."
+        if language_name != "English":
+            system += f" Write the title in {language_name}."
         async with anthropic_client.messages.stream(
             model=CLAUDE_TITLE_MODEL,
             max_tokens=30,
-            system="Give a very short 2-5 word title for a conversation that starts with the following question. Reply with ONLY the title text, no quotes, no punctuation at the end.",
+            system=system,
             messages=[{"role": "user", "content": first_question.strip()[:400]}],
         ) as stream:
             async for text_delta in stream.text_stream:
@@ -1594,7 +1623,20 @@ async def chat_stream(req: ChatRequest, user: User = Depends(get_current_user)):
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
 
-    system_message = SYSTEM_PROMPT + "\n\n" + context_block + project_block + memory_block
+    language_name = LANGUAGES.get(user.language, "English")
+    language_block = ""
+    if language_name != "English":
+        language_block = (
+            f"\n\nLANGUAGE: Respond in {language_name} — this is the person's set "
+            f"preference. If they explicitly write in or ask for a different "
+            f"language in this message, follow that instead for this reply. "
+            f"Keep planet names, sign names, and Sanskrit/classical terms "
+            f"(Lagna, Dasha, Nakshatra, yoga names, etc.) as-is rather than "
+            f"translating them, the way an astrologer speaking {language_name} "
+            f"naturally would.\n"
+        )
+
+    system_message = SYSTEM_PROMPT + "\n\n" + context_block + project_block + memory_block + language_block
     if scoped:
         system_message += f"\n\nBOOK SCOPE FOR THIS ANSWER ONLY: The user requested you draw exclusively from: {', '.join(scoped)}. Only cite excerpts from these books.\n"
 
@@ -1648,7 +1690,7 @@ async def chat_stream(req: ChatRequest, user: User = Depends(get_current_user)):
             answer_only = parts[0].strip()
             logic_only = parts[1].split("</LOGIC>", 1)[0].strip() if "</LOGIC>" in parts[1] else parts[1].strip()
 
-        follow_ups = await _generate_follow_ups(req.message, answer_only, proj_label)
+        follow_ups = await _generate_follow_ups(req.message, answer_only, proj_label, language_name)
 
         # Persist AND auto-name under shield so client-disconnect (user
         # navigates away mid-stream) doesn't drop the assistant reply.
@@ -1672,7 +1714,7 @@ async def chat_stream(req: ChatRequest, user: User = Depends(get_current_user)):
             })
             await db.threads.update_one({"id": req.session_id}, {"$set": {"updated_at": datetime.now(timezone.utc).isoformat()}})
             if is_first_user_msg and re.match(r"^(new chat|chat \d+|general)$", (thread.get("name") or "").strip(), re.IGNORECASE):
-                await _auto_name_thread(req.session_id, req.message)
+                await _auto_name_thread(req.session_id, req.message, language_name)
 
         await asyncio.shield(_persist())
 
@@ -1695,6 +1737,12 @@ async def chat_history(session_id: str, user: User = Depends(get_current_user)):
         raise HTTPException(404, "Thread not found")
     msgs = await db.messages.find({"session_id": session_id}, {"_id": 0}).sort("created_at", 1).to_list(200)
     return {"messages": msgs}
+
+
+# ---------- Languages ----------
+@api_router.get("/languages")
+async def list_languages():
+    return {"languages": [{"code": k, "name": v} for k, v in LANGUAGES.items()]}
 
 
 # ---------- Projects ----------
