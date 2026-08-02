@@ -1,0 +1,50 @@
+{
+  "common": {
+    "save": "સાચવો",
+    "cancel": "રદ કરો",
+    "delete": "કાઢી નાખો",
+    "sign_out": "સાઇન આઉટ કરો",
+    "sign_in": "સાઇન ઇન કરો",
+    "loading": "લોડ થઈ રહ્યું છે…",
+    "new_chat": "નવી ચેટ",
+    "add": "ઉમેરો",
+    "rename": "નામ બદલો",
+    "confirm": "પુષ્ટિ કરો",
+    "yes": "હા",
+    "no": "ના",
+    "signed_in_as": "આ રીતે સાઇન ઇન:"
+  },
+  "nav": {
+    "dashboard": "ડેશબોર્ડ",
+    "conversation": "વાતચીત",
+    "projects": "પ્રોજેક્ટ્સ",
+    "muhurta": "મુહૂર્ત",
+    "library": "લાઇબ્રેરી",
+    "settings": "સેટિંગ્સ",
+    "add_your_own_project": "તમારો પ્રોજેક્ટ ઉમેરો"
+  },
+  "display_mode": {
+    "simple": "સરળ",
+    "advanced": "એડવાન્સ્ડ"
+  },
+  "settings": {
+    "title": "સેટિંગ્સ",
+    "profile_section": "પ્રોફાઇલ",
+    "name_label": "નામ",
+    "phone_label": "ફોન",
+    "birth_details_section": "જન્મ વિગતો",
+    "place_of_birth": "જન્મ સ્થળ",
+    "date_of_birth": "જન્મ તારીખ",
+    "time_of_birth": "જન્મ સમય",
+    "timezone_at_birth": "જન્મ સમયનો સમય ઝોન",
+    "current_location_section": "વર્તમાન સ્થાન",
+    "current_location_hint": "ચોક્કસ દૈનિક ગોચર અને પંચાંગ માટે વપરાય છે — તમારા જન્મ સ્થળ કરતાં અલગ",
+    "save_location": "સ્થાન સાચવો",
+    "language_section": "ભાષા",
+    "language_label": "ઇન્ટરફેસ અને ચેટની ભાષા",
+    "language_hint": "આ એપની ભાષા અને ક્લોડના જવાબની મૂળભૂત ભાષા બદલે છે. તમે કોઈ પણ સમયે અલગ ભાષામાં પ્રશ્ન પૂછી શકો છો.",
+    "danger_zone": "ડેન્જર ઝોન",
+    "danger_zone_hint": "સાવધાન — આ ક્રિયાઓ કાયમી છે",
+    "delete_account": "એકાઉન્ટ ડિલીટ કરો"
+  }
+}

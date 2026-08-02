@@ -1,0 +1,50 @@
+{
+  "common": {
+    "save": "محفوظ کریں",
+    "cancel": "منسوخ کریں",
+    "delete": "حذف کریں",
+    "sign_out": "سائن آؤٹ کریں",
+    "sign_in": "سائن ان کریں",
+    "loading": "لوڈ ہو رہا ہے…",
+    "new_chat": "نئی گفتگو",
+    "add": "شامل کریں",
+    "rename": "نام تبدیل کریں",
+    "confirm": "تصدیق کریں",
+    "yes": "ہاں",
+    "no": "نہیں",
+    "signed_in_as": "بطور سائن ان:"
+  },
+  "nav": {
+    "dashboard": "ڈیش بورڈ",
+    "conversation": "گفتگو",
+    "projects": "پراجیکٹس",
+    "muhurta": "مُہورت",
+    "library": "لائبریری",
+    "settings": "ترتیبات",
+    "add_your_own_project": "اپنا پراجیکٹ شامل کریں"
+  },
+  "display_mode": {
+    "simple": "سادہ",
+    "advanced": "ایڈوانسڈ"
+  },
+  "settings": {
+    "title": "ترتیبات",
+    "profile_section": "پروفائل",
+    "name_label": "نام",
+    "phone_label": "فون",
+    "birth_details_section": "پیدائش کی تفصیلات",
+    "place_of_birth": "جائے پیدائش",
+    "date_of_birth": "تاریخ پیدائش",
+    "time_of_birth": "وقت پیدائش",
+    "timezone_at_birth": "پیدائش کے وقت کا ٹائم زون",
+    "current_location_section": "موجودہ مقام",
+    "current_location_hint": "درست روزانہ گوچر اور پنچانگ کے لیے استعمال ہوتا ہے — آپ کی جائے پیدائش سے الگ",
+    "save_location": "مقام محفوظ کریں",
+    "language_section": "زبان",
+    "language_label": "انٹرفیس اور چیٹ کی زبان",
+    "language_hint": "یہ ایپ کی زبان اور کلاڈ کے جواب کی ڈیفالٹ زبان کو تبدیل کرتا ہے۔ آپ کسی بھی وقت کسی اور زبان میں سوال پوچھ سکتے ہیں۔",
+    "danger_zone": "خطرے کا علاقہ",
+    "danger_zone_hint": "احتیاط — یہ اقدامات مستقل ہیں",
+    "delete_account": "اکاؤنٹ حذف کریں"
+  }
+}

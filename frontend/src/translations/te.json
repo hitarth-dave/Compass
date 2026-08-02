@@ -1,0 +1,50 @@
+{
+  "common": {
+    "save": "సేవ్ చేయి",
+    "cancel": "రద్దు చేయి",
+    "delete": "తొలగించు",
+    "sign_out": "సైన్ అవుట్ చేయి",
+    "sign_in": "సైన్ ఇన్ చేయి",
+    "loading": "లోడ్ అవుతోంది…",
+    "new_chat": "కొత్త చాట్",
+    "add": "జోడించు",
+    "rename": "పేరు మార్చు",
+    "confirm": "నిర్ధారించు",
+    "yes": "అవును",
+    "no": "కాదు",
+    "signed_in_as": "ఇలా సైన్ ఇన్ అయ్యారు:"
+  },
+  "nav": {
+    "dashboard": "డాష్‌బోర్డ్",
+    "conversation": "సంభాషణ",
+    "projects": "ప్రాజెక్ట్‌లు",
+    "muhurta": "ముహూర్తం",
+    "library": "లైబ్రరీ",
+    "settings": "సెట్టింగ్‌లు",
+    "add_your_own_project": "మీ స్వంత ప్రాజెక్ట్‌ను జోడించండి"
+  },
+  "display_mode": {
+    "simple": "సాధారణ",
+    "advanced": "అడ్వాన్స్‌డ్"
+  },
+  "settings": {
+    "title": "సెట్టింగ్‌లు",
+    "profile_section": "ప్రొఫైల్",
+    "name_label": "పేరు",
+    "phone_label": "ఫోన్",
+    "birth_details_section": "జన్మ వివరాలు",
+    "place_of_birth": "జన్మ స్థలం",
+    "date_of_birth": "జన్మ తేదీ",
+    "time_of_birth": "జన్మ సమయం",
+    "timezone_at_birth": "జననం సమయంలో టైమ్‌జోన్",
+    "current_location_section": "ప్రస్తుత స్థానం",
+    "current_location_hint": "ఖచ్చితమైన రోజువారీ గోచార మరియు పంచాంగం కోసం ఉపయోగించబడుతుంది — మీ జన్మ స్థలం నుండి వేరుగా",
+    "save_location": "స్థానాన్ని సేవ్ చేయి",
+    "language_section": "భాష",
+    "language_label": "ఇంటర్‌ఫేస్ మరియు చాట్ భాష",
+    "language_hint": "ఇది యాప్ భాషను మరియు క్లాడ్ డిఫాల్ట్ సమాధాన భాషను మారుస్తుంది. మీరు ఎప్పుడైనా వేరే భాషలో ప్రశ్న అడగవచ్చు.",
+    "danger_zone": "డేంజర్ జోన్",
+    "danger_zone_hint": "జాగ్రత్త — ఈ చర్యలు శాశ్వతమైనవి",
+    "delete_account": "ఖాతాను తొలగించు"
+  }
+}

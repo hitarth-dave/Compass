@@ -1,0 +1,50 @@
+{
+  "common": {
+    "save": "सुरक्षित गर्नुहोस्",
+    "cancel": "रद्द गर्नुहोस्",
+    "delete": "मेटाउनुहोस्",
+    "sign_out": "साइन आउट गर्नुहोस्",
+    "sign_in": "साइन इन गर्नुहोस्",
+    "loading": "लोड हुँदैछ…",
+    "new_chat": "नयाँ कुराकानी",
+    "add": "थप्नुहोस्",
+    "rename": "नाम परिवर्तन गर्नुहोस्",
+    "confirm": "पुष्टि गर्नुहोस्",
+    "yes": "हो",
+    "no": "होइन",
+    "signed_in_as": "यसरी साइन इन:"
+  },
+  "nav": {
+    "dashboard": "ड्यासबोर्ड",
+    "conversation": "कुराकानी",
+    "projects": "प्रोजेक्टहरू",
+    "muhurta": "मुहूर्त",
+    "library": "पुस्तकालय",
+    "settings": "सेटिङहरू",
+    "add_your_own_project": "आफ्नो प्रोजेक्ट थप्नुहोस्"
+  },
+  "display_mode": {
+    "simple": "सामान्य",
+    "advanced": "एडभान्स्ड"
+  },
+  "settings": {
+    "title": "सेटिङहरू",
+    "profile_section": "प्रोफाइल",
+    "name_label": "नाम",
+    "phone_label": "फोन",
+    "birth_details_section": "जन्म विवरण",
+    "place_of_birth": "जन्मस्थान",
+    "date_of_birth": "जन्म मिति",
+    "time_of_birth": "जन्म समय",
+    "timezone_at_birth": "जन्मको समयक्षेत्र",
+    "current_location_section": "हालको स्थान",
+    "current_location_hint": "सही दैनिक गोचर र पञ्चांगका लागि प्रयोग गरिन्छ — तपाईंको जन्मस्थानभन्दा फरक",
+    "save_location": "स्थान सुरक्षित गर्नुहोस्",
+    "language_section": "भाषा",
+    "language_label": "इन्टरफेस र च्याटको भाषा",
+    "language_hint": "यसले एपको भाषा र क्लडको पूर्वनिर्धारित जवाफ भाषा परिवर्तन गर्छ। तपाईं जुनसुकै बेला फरक भाषामा प्रश्न सोध्न सक्नुहुन्छ।",
+    "danger_zone": "खतरा क्षेत्र",
+    "danger_zone_hint": "सावधान — यी कार्यहरू स्थायी छन्",
+    "delete_account": "खाता मेटाउनुहोस्"
+  }
+}

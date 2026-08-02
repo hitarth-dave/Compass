@@ -1,0 +1,50 @@
+{
+  "common": {
+    "save": "Simpan",
+    "cancel": "Batal",
+    "delete": "Hapus",
+    "sign_out": "Keluar",
+    "sign_in": "Masuk",
+    "loading": "Memuat…",
+    "new_chat": "Obrolan baru",
+    "add": "Tambah",
+    "rename": "Ganti nama",
+    "confirm": "Konfirmasi",
+    "yes": "Ya",
+    "no": "Tidak",
+    "signed_in_as": "Masuk sebagai"
+  },
+  "nav": {
+    "dashboard": "Dasbor",
+    "conversation": "Percakapan",
+    "projects": "Proyek",
+    "muhurta": "Muhurta",
+    "library": "Perpustakaan",
+    "settings": "Pengaturan",
+    "add_your_own_project": "Tambahkan proyek Anda sendiri"
+  },
+  "display_mode": {
+    "simple": "Sederhana",
+    "advanced": "Lanjutan"
+  },
+  "settings": {
+    "title": "Pengaturan",
+    "profile_section": "Profil",
+    "name_label": "Nama",
+    "phone_label": "Telepon",
+    "birth_details_section": "Detail Kelahiran",
+    "place_of_birth": "Tempat Lahir",
+    "date_of_birth": "Tanggal Lahir",
+    "time_of_birth": "Waktu Lahir",
+    "timezone_at_birth": "Zona Waktu saat Lahir",
+    "current_location_section": "Lokasi Saat Ini",
+    "current_location_hint": "Digunakan untuk transit harian yang akurat dan Panchang — berbeda dari tempat lahir Anda",
+    "save_location": "Simpan Lokasi",
+    "language_section": "Bahasa",
+    "language_label": "Bahasa antarmuka & obrolan",
+    "language_hint": "Ini mengubah bahasa aplikasi dan bahasa balasan default Claude. Anda tetap bisa bertanya dalam bahasa lain kapan saja.",
+    "danger_zone": "Zona Berbahaya",
+    "danger_zone_hint": "Hati-hati — tindakan ini permanen",
+    "delete_account": "Hapus Akun"
+  }
+}

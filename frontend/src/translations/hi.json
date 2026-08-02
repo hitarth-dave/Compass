@@ -1,0 +1,50 @@
+{
+  "common": {
+    "save": "सहेजें",
+    "cancel": "रद्द करें",
+    "delete": "हटाएं",
+    "sign_out": "साइन आउट करें",
+    "sign_in": "साइन इन करें",
+    "loading": "लोड हो रहा है…",
+    "new_chat": "नई बातचीत",
+    "add": "जोड़ें",
+    "rename": "नाम बदलें",
+    "confirm": "पुष्टि करें",
+    "yes": "हाँ",
+    "no": "नहीं",
+    "signed_in_as": "इस रूप में साइन इन:"
+  },
+  "nav": {
+    "dashboard": "डैशबोर्ड",
+    "conversation": "बातचीत",
+    "projects": "प्रोजेक्ट्स",
+    "muhurta": "मुहूर्त",
+    "library": "लाइब्रेरी",
+    "settings": "सेटिंग्स",
+    "add_your_own_project": "अपना प्रोजेक्ट जोड़ें"
+  },
+  "display_mode": {
+    "simple": "सरल",
+    "advanced": "एडवांस्ड"
+  },
+  "settings": {
+    "title": "सेटिंग्स",
+    "profile_section": "प्रोफ़ाइल",
+    "name_label": "नाम",
+    "phone_label": "फ़ोन",
+    "birth_details_section": "जन्म विवरण",
+    "place_of_birth": "जन्म स्थान",
+    "date_of_birth": "जन्म तिथि",
+    "time_of_birth": "जन्म समय",
+    "timezone_at_birth": "जन्म के समय समयक्षेत्र",
+    "current_location_section": "वर्तमान स्थान",
+    "current_location_hint": "सटीक दैनिक गोचर और पंचांग के लिए उपयोग होता है — यह आपके जन्म स्थान से अलग है",
+    "save_location": "स्थान सहेजें",
+    "language_section": "भाषा",
+    "language_label": "इंटरफ़ेस और चैट की भाषा",
+    "language_hint": "यह ऐप की भाषा और क्लॉड के जवाब देने की डिफ़ॉल्ट भाषा बदल देता है। आप कभी भी किसी और भाषा में सवाल पूछ सकते हैं।",
+    "danger_zone": "खतरे का क्षेत्र",
+    "danger_zone_hint": "सावधान — ये कार्रवाइयाँ स्थायी हैं",
+    "delete_account": "खाता हटाएं"
+  }
+}

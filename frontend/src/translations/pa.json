@@ -1,0 +1,50 @@
+{
+  "common": {
+    "save": "ਸੰਭਾਲੋ",
+    "cancel": "ਰੱਦ ਕਰੋ",
+    "delete": "ਮਿਟਾਓ",
+    "sign_out": "ਸਾਈਨ ਆਊਟ ਕਰੋ",
+    "sign_in": "ਸਾਈਨ ਇਨ ਕਰੋ",
+    "loading": "ਲੋਡ ਹੋ ਰਿਹਾ ਹੈ…",
+    "new_chat": "ਨਵੀਂ ਗੱਲਬਾਤ",
+    "add": "ਜੋੜੋ",
+    "rename": "ਨਾਮ ਬਦਲੋ",
+    "confirm": "ਪੁਸ਼ਟੀ ਕਰੋ",
+    "yes": "ਹਾਂ",
+    "no": "ਨਹੀਂ",
+    "signed_in_as": "ਇਸ ਤਰ੍ਹਾਂ ਸਾਈਨ ਇਨ:"
+  },
+  "nav": {
+    "dashboard": "ਡੈਸ਼ਬੋਰਡ",
+    "conversation": "ਗੱਲਬਾਤ",
+    "projects": "ਪ੍ਰੋਜੈਕਟ",
+    "muhurta": "ਮੁਹੂਰਤ",
+    "library": "ਲਾਇਬ੍ਰੇਰੀ",
+    "settings": "ਸੈਟਿੰਗਾਂ",
+    "add_your_own_project": "ਆਪਣਾ ਪ੍ਰੋਜੈਕਟ ਜੋੜੋ"
+  },
+  "display_mode": {
+    "simple": "ਸਧਾਰਨ",
+    "advanced": "ਐਡਵਾਂਸਡ"
+  },
+  "settings": {
+    "title": "ਸੈਟਿੰਗਾਂ",
+    "profile_section": "ਪ੍ਰੋਫਾਈਲ",
+    "name_label": "ਨਾਮ",
+    "phone_label": "ਫ਼ੋਨ",
+    "birth_details_section": "ਜਨਮ ਵੇਰਵੇ",
+    "place_of_birth": "ਜਨਮ ਸਥਾਨ",
+    "date_of_birth": "ਜਨਮ ਮਿਤੀ",
+    "time_of_birth": "ਜਨਮ ਸਮਾਂ",
+    "timezone_at_birth": "ਜਨਮ ਸਮੇਂ ਦਾ ਸਮਾਂ ਖੇਤਰ",
+    "current_location_section": "ਮੌਜੂਦਾ ਸਥਾਨ",
+    "current_location_hint": "ਸਹੀ ਰੋਜ਼ਾਨਾ ਗੋਚਰ ਅਤੇ ਪੰਚਾਂਗ ਲਈ ਵਰਤਿਆ ਜਾਂਦਾ — ਤੁਹਾਡੇ ਜਨਮ ਸਥਾਨ ਤੋਂ ਵੱਖਰਾ",
+    "save_location": "ਸਥਾਨ ਸੰਭਾਲੋ",
+    "language_section": "ਭਾਸ਼ਾ",
+    "language_label": "ਇੰਟਰਫੇਸ ਅਤੇ ਚੈਟ ਦੀ ਭਾਸ਼ਾ",
+    "language_hint": "ਇਹ ਐਪ ਦੀ ਭਾਸ਼ਾ ਅਤੇ ਕਲਾਡ ਦੇ ਜਵਾਬ ਦੀ ਮੂਲ ਭਾਸ਼ਾ ਬਦਲਦਾ ਹੈ। ਤੁਸੀਂ ਕਿਸੇ ਵੀ ਸਮੇਂ ਕਿਸੇ ਹੋਰ ਭਾਸ਼ਾ ਵਿੱਚ ਸਵਾਲ ਪੁੱਛ ਸਕਦੇ ਹੋ।",
+    "danger_zone": "ਖ਼ਤਰੇ ਦਾ ਖੇਤਰ",
+    "danger_zone_hint": "ਸਾਵਧਾਨ — ਇਹ ਕਾਰਵਾਈਆਂ ਸਥਾਈ ਹਨ",
+    "delete_account": "ਖਾਤਾ ਮਿਟਾਓ"
+  }
+}

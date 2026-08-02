@@ -1,0 +1,50 @@
+{
+  "common": {
+    "save": "ಉಳಿಸಿ",
+    "cancel": "ರದ್ದುಮಾಡಿ",
+    "delete": "ಅಳಿಸಿ",
+    "sign_out": "ಸೈನ್ ಔಟ್ ಮಾಡಿ",
+    "sign_in": "ಸೈನ್ ಇನ್ ಮಾಡಿ",
+    "loading": "ಲೋಡ್ ಆಗುತ್ತಿದೆ…",
+    "new_chat": "ಹೊಸ ಚಾಟ್",
+    "add": "ಸೇರಿಸಿ",
+    "rename": "ಹೆಸರು ಬದಲಿಸಿ",
+    "confirm": "ದೃಢೀಕರಿಸಿ",
+    "yes": "ಹೌದು",
+    "no": "ಇಲ್ಲ",
+    "signed_in_as": "ಹೀಗೆ ಸೈನ್ ಇನ್ ಆಗಿದ್ದೀರಿ:"
+  },
+  "nav": {
+    "dashboard": "ಡ್ಯಾಶ್‌ಬೋರ್ಡ್",
+    "conversation": "ಸಂಭಾಷಣೆ",
+    "projects": "ಪ್ರಾಜೆಕ್ಟ್‌ಗಳು",
+    "muhurta": "ಮುಹೂರ್ತ",
+    "library": "ಗ್ರಂಥಾಲಯ",
+    "settings": "ಸೆಟ್ಟಿಂಗ್‌ಗಳು",
+    "add_your_own_project": "ನಿಮ್ಮ ಸ್ವಂತ ಪ್ರಾಜೆಕ್ಟ್ ಸೇರಿಸಿ"
+  },
+  "display_mode": {
+    "simple": "ಸರಳ",
+    "advanced": "ಸುಧಾರಿತ"
+  },
+  "settings": {
+    "title": "ಸೆಟ್ಟಿಂಗ್‌ಗಳು",
+    "profile_section": "ಪ್ರೊಫೈಲ್",
+    "name_label": "ಹೆಸರು",
+    "phone_label": "ಫೋನ್",
+    "birth_details_section": "ಜನ್ಮ ವಿವರಗಳು",
+    "place_of_birth": "ಜನ್ಮ ಸ್ಥಳ",
+    "date_of_birth": "ಜನ್ಮ ದಿನಾಂಕ",
+    "time_of_birth": "ಜನ್ಮ ಸಮಯ",
+    "timezone_at_birth": "ಜನನದ ಸಮಯದ ಸಮಯ ವಲಯ",
+    "current_location_section": "ಪ್ರಸ್ತುತ ಸ್ಥಳ",
+    "current_location_hint": "ನಿಖರವಾದ ದೈನಂದಿನ ಗೋಚಾರ ಮತ್ತು ಪಂಚಾಂಗಕ್ಕಾಗಿ ಬಳಸಲಾಗುತ್ತದೆ — ನಿಮ್ಮ ಜನ್ಮ ಸ್ಥಳಕ್ಕಿಂತ ಭಿನ್ನ",
+    "save_location": "ಸ್ಥಳವನ್ನು ಉಳಿಸಿ",
+    "language_section": "ಭಾಷೆ",
+    "language_label": "ಇಂಟರ್‌ಫೇಸ್ ಮತ್ತು ಚಾಟ್ ಭಾಷೆ",
+    "language_hint": "ಇದು ಅಪ್ಲಿಕೇಶನ್‌ನ ಭಾಷೆ ಮತ್ತು ಕ್ಲೌಡ್‌ನ ಡೀಫಾಲ್ಟ್ ಉತ್ತರ ಭಾಷೆಯನ್ನು ಬದಲಾಯಿಸುತ್ತದೆ. ನೀವು ಯಾವಾಗ ಬೇಕಾದರೂ ಬೇರೆ ಭಾಷೆಯಲ್ಲಿ ಪ್ರಶ್ನೆ ಕೇಳಬಹುದು.",
+    "danger_zone": "ಅಪಾಯ ವಲಯ",
+    "danger_zone_hint": "ಎಚ್ಚರಿಕೆ — ಈ ಕ್ರಿಯೆಗಳು ಶಾಶ್ವತ",
+    "delete_account": "ಖಾತೆ ಅಳಿಸಿ"
+  }
+}

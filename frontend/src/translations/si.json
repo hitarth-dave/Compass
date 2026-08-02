@@ -1,0 +1,50 @@
+{
+  "common": {
+    "save": "සුරකින්න",
+    "cancel": "අවලංගු කරන්න",
+    "delete": "මකන්න",
+    "sign_out": "ඉවත් වන්න",
+    "sign_in": "පිවිසෙන්න",
+    "loading": "පූරණය වෙමින්…",
+    "new_chat": "නව සංවාදය",
+    "add": "එකතු කරන්න",
+    "rename": "නම වෙනස් කරන්න",
+    "confirm": "තහවුරු කරන්න",
+    "yes": "ඔව්",
+    "no": "නැත",
+    "signed_in_as": "ලෙස පිවිසී ඇත:"
+  },
+  "nav": {
+    "dashboard": "උපකරණ පුවරුව",
+    "conversation": "සංවාදය",
+    "projects": "ව්‍යාපෘති",
+    "muhurta": "මුහූර්ත",
+    "library": "පුස්තකාලය",
+    "settings": "සැකසීම්",
+    "add_your_own_project": "ඔබේම ව්‍යාපෘතියක් එකතු කරන්න"
+  },
+  "display_mode": {
+    "simple": "සරල",
+    "advanced": "උසස්"
+  },
+  "settings": {
+    "title": "සැකසීම්",
+    "profile_section": "පැතිකඩ",
+    "name_label": "නම",
+    "phone_label": "දුරකථනය",
+    "birth_details_section": "උපන් විස්තර",
+    "place_of_birth": "උපන් ස්ථානය",
+    "date_of_birth": "උපන් දිනය",
+    "time_of_birth": "උපන් වේලාව",
+    "timezone_at_birth": "උපන් වේලාවේ කාල කලාපය",
+    "current_location_section": "වර්තමාන ස්ථානය",
+    "current_location_hint": "නිවැරදි දෛනික ගෝචර සහ පංචාංග සඳහා භාවිතා වේ — ඔබේ උපන් ස්ථානයට වඩා වෙනස්",
+    "save_location": "ස්ථානය සුරකින්න",
+    "language_section": "භාෂාව",
+    "language_label": "අතුරු මුහුණත සහ කතාබහ භාෂාව",
+    "language_hint": "මෙය යෙදුමේ භාෂාව සහ Claude ගේ පෙරනිමි පිළිතුරු භාෂාව වෙනස් කරයි. ඔබට ඕනෑම වේලාවක වෙනත් භාෂාවකින් ප්‍රශ්න අසන්න පුළුවන්.",
+    "danger_zone": "අවදානම් කලාපය",
+    "danger_zone_hint": "පරිස්සමින් — මෙම ක්‍රියා ස්ථිර වේ",
+    "delete_account": "ගිණුම මකන්න"
+  }
+}

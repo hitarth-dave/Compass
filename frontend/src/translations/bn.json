@@ -1,0 +1,50 @@
+{
+  "common": {
+    "save": "সংরক্ষণ করুন",
+    "cancel": "বাতিল করুন",
+    "delete": "মুছে ফেলুন",
+    "sign_out": "সাইন আউট করুন",
+    "sign_in": "সাইন ইন করুন",
+    "loading": "লোড হচ্ছে…",
+    "new_chat": "নতুন চ্যাট",
+    "add": "যোগ করুন",
+    "rename": "নাম পরিবর্তন করুন",
+    "confirm": "নিশ্চিত করুন",
+    "yes": "হ্যাঁ",
+    "no": "না",
+    "signed_in_as": "যেভাবে সাইন ইন করা আছে:"
+  },
+  "nav": {
+    "dashboard": "ড্যাশবোর্ড",
+    "conversation": "কথোপকথন",
+    "projects": "প্রজেক্ট",
+    "muhurta": "মুহূর্ত",
+    "library": "লাইব্রেরি",
+    "settings": "সেটিংস",
+    "add_your_own_project": "নিজের প্রজেক্ট যোগ করুন"
+  },
+  "display_mode": {
+    "simple": "সাধারণ",
+    "advanced": "অ্যাডভান্সড"
+  },
+  "settings": {
+    "title": "সেটিংস",
+    "profile_section": "প্রোফাইল",
+    "name_label": "নাম",
+    "phone_label": "ফোন",
+    "birth_details_section": "জন্ম বিবরণ",
+    "place_of_birth": "জন্মস্থান",
+    "date_of_birth": "জন্ম তারিখ",
+    "time_of_birth": "জন্ম সময়",
+    "timezone_at_birth": "জন্মকালীন সময় অঞ্চল",
+    "current_location_section": "বর্তমান অবস্থান",
+    "current_location_hint": "সঠিক দৈনিক গোচর এবং পঞ্জিকার জন্য ব্যবহৃত হয় — আপনার জন্মস্থান থেকে আলাদা",
+    "save_location": "অবস্থান সংরক্ষণ করুন",
+    "language_section": "ভাষা",
+    "language_label": "ইন্টারফেস ও চ্যাটের ভাষা",
+    "language_hint": "এটি অ্যাপের ভাষা এবং ক্লডের ডিফল্ট উত্তরের ভাষা পরিবর্তন করে। আপনি যেকোনো সময় ভিন্ন ভাষায় প্রশ্ন করতে পারেন।",
+    "danger_zone": "বিপজ্জনক অঞ্চল",
+    "danger_zone_hint": "সতর্কতা — এই ক্রিয়াগুলি স্থায়ী",
+    "delete_account": "অ্যাকাউন্ট মুছুন"
+  }
+}

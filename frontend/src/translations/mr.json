@@ -1,0 +1,50 @@
+{
+  "common": {
+    "save": "जतन करा",
+    "cancel": "रद्द करा",
+    "delete": "हटवा",
+    "sign_out": "साइन आउट करा",
+    "sign_in": "साइन इन करा",
+    "loading": "लोड होत आहे…",
+    "new_chat": "नवीन चॅट",
+    "add": "जोडा",
+    "rename": "नाव बदला",
+    "confirm": "पुष्टी करा",
+    "yes": "होय",
+    "no": "नाही",
+    "signed_in_as": "अशा प्रकारे साइन इन:"
+  },
+  "nav": {
+    "dashboard": "डॅशबोर्ड",
+    "conversation": "संभाषण",
+    "projects": "प्रोजेक्ट्स",
+    "muhurta": "मुहूर्त",
+    "library": "लायब्ररी",
+    "settings": "सेटिंग्ज",
+    "add_your_own_project": "स्वतःचा प्रोजेक्ट जोडा"
+  },
+  "display_mode": {
+    "simple": "सोपे",
+    "advanced": "प्रगत"
+  },
+  "settings": {
+    "title": "सेटिंग्ज",
+    "profile_section": "प्रोफाइल",
+    "name_label": "नाव",
+    "phone_label": "फोन",
+    "birth_details_section": "जन्म तपशील",
+    "place_of_birth": "जन्मस्थान",
+    "date_of_birth": "जन्मतारीख",
+    "time_of_birth": "जन्मवेळ",
+    "timezone_at_birth": "जन्मवेळेचा टाइमझोन",
+    "current_location_section": "सध्याचे स्थान",
+    "current_location_hint": "अचूक दैनंदिन गोचर आणि पंचांगासाठी वापरले जाते — तुमच्या जन्मस्थानापेक्षा वेगळे",
+    "save_location": "स्थान जतन करा",
+    "language_section": "भाषा",
+    "language_label": "इंटरफेस आणि चॅटची भाषा",
+    "language_hint": "हे अ‍ॅपची भाषा आणि क्लॉडच्या उत्तराची डीफॉल्ट भाषा बदलते. तुम्ही कधीही वेगळ्या भाषेत प्रश्न विचारू शकता.",
+    "danger_zone": "धोक्याचे क्षेत्र",
+    "danger_zone_hint": "सावध रहा — या क्रिया कायमस्वरूपी आहेत",
+    "delete_account": "खाते हटवा"
+  }
+}

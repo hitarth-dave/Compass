@@ -1,0 +1,50 @@
+{
+  "common": {
+    "save": "Salvar",
+    "cancel": "Cancelar",
+    "delete": "Excluir",
+    "sign_out": "Sair",
+    "sign_in": "Entrar",
+    "loading": "Carregando…",
+    "new_chat": "Nova conversa",
+    "add": "Adicionar",
+    "rename": "Renomear",
+    "confirm": "Confirmar",
+    "yes": "Sim",
+    "no": "Não",
+    "signed_in_as": "Conectado como"
+  },
+  "nav": {
+    "dashboard": "Painel",
+    "conversation": "Conversa",
+    "projects": "Projetos",
+    "muhurta": "Muhurta",
+    "library": "Biblioteca",
+    "settings": "Configurações",
+    "add_your_own_project": "Adicione seu próprio projeto"
+  },
+  "display_mode": {
+    "simple": "Simples",
+    "advanced": "Avançado"
+  },
+  "settings": {
+    "title": "Configurações",
+    "profile_section": "Perfil",
+    "name_label": "Nome",
+    "phone_label": "Telefone",
+    "birth_details_section": "Dados de nascimento",
+    "place_of_birth": "Local de nascimento",
+    "date_of_birth": "Data de nascimento",
+    "time_of_birth": "Hora de nascimento",
+    "timezone_at_birth": "Fuso horário de nascimento",
+    "current_location_section": "Localização atual",
+    "current_location_hint": "Usado para trânsitos diários precisos e o Panchang — diferente do seu local de nascimento",
+    "save_location": "Salvar localização",
+    "language_section": "Idioma",
+    "language_label": "Idioma da interface e do chat",
+    "language_hint": "Isso muda o idioma do app e o idioma padrão das respostas do Claude. Você ainda pode perguntar em outro idioma a qualquer momento.",
+    "danger_zone": "Zona de perigo",
+    "danger_zone_hint": "Cuidado — essas ações são permanentes",
+    "delete_account": "Excluir conta"
+  }
+}

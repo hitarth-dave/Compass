@@ -1,0 +1,50 @@
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "sign_out": "Sign out",
+    "sign_in": "Sign in",
+    "loading": "Loading…",
+    "new_chat": "New chat",
+    "add": "Add",
+    "rename": "Rename",
+    "confirm": "Confirm",
+    "yes": "Yes",
+    "no": "No",
+    "signed_in_as": "Signed in as"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "conversation": "Conversation",
+    "projects": "Projects",
+    "muhurta": "Muhurta",
+    "library": "Library",
+    "settings": "Settings",
+    "add_your_own_project": "Add your own project"
+  },
+  "display_mode": {
+    "simple": "Simple",
+    "advanced": "Advanced"
+  },
+  "settings": {
+    "title": "Settings",
+    "profile_section": "Profile",
+    "name_label": "Name",
+    "phone_label": "Phone",
+    "birth_details_section": "Birth Details",
+    "place_of_birth": "Place of Birth",
+    "date_of_birth": "Date of Birth",
+    "time_of_birth": "Time of Birth",
+    "timezone_at_birth": "Timezone at Birth",
+    "current_location_section": "Current Location",
+    "current_location_hint": "Used for accurate daily transits and Panchang — separate from your birth place",
+    "save_location": "Save Location",
+    "language_section": "Language",
+    "language_label": "Interface & chat language",
+    "language_hint": "Changes the app's language and Claude's default reply language. You can still ask a question in a different language any time.",
+    "danger_zone": "Danger Zone",
+    "danger_zone_hint": "Careful — these actions are permanent",
+    "delete_account": "Delete Account"
+  }
+}

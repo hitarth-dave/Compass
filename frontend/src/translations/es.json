@@ -1,0 +1,50 @@
+{
+  "common": {
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "delete": "Eliminar",
+    "sign_out": "Cerrar sesión",
+    "sign_in": "Iniciar sesión",
+    "loading": "Cargando…",
+    "new_chat": "Nuevo chat",
+    "add": "Añadir",
+    "rename": "Renombrar",
+    "confirm": "Confirmar",
+    "yes": "Sí",
+    "no": "No",
+    "signed_in_as": "Sesión iniciada como"
+  },
+  "nav": {
+    "dashboard": "Panel",
+    "conversation": "Conversación",
+    "projects": "Proyectos",
+    "muhurta": "Muhurta",
+    "library": "Biblioteca",
+    "settings": "Ajustes",
+    "add_your_own_project": "Añade tu propio proyecto"
+  },
+  "display_mode": {
+    "simple": "Simple",
+    "advanced": "Avanzado"
+  },
+  "settings": {
+    "title": "Ajustes",
+    "profile_section": "Perfil",
+    "name_label": "Nombre",
+    "phone_label": "Teléfono",
+    "birth_details_section": "Datos de nacimiento",
+    "place_of_birth": "Lugar de nacimiento",
+    "date_of_birth": "Fecha de nacimiento",
+    "time_of_birth": "Hora de nacimiento",
+    "timezone_at_birth": "Zona horaria de nacimiento",
+    "current_location_section": "Ubicación actual",
+    "current_location_hint": "Se usa para tránsitos diarios precisos y el Panchang — distinta de tu lugar de nacimiento",
+    "save_location": "Guardar ubicación",
+    "language_section": "Idioma",
+    "language_label": "Idioma de la interfaz y del chat",
+    "language_hint": "Cambia el idioma de la app y el idioma predeterminado de las respuestas de Claude. Aun así puedes preguntar en otro idioma cuando quieras.",
+    "danger_zone": "Zona de peligro",
+    "danger_zone_hint": "Cuidado — estas acciones son permanentes",
+    "delete_account": "Eliminar cuenta"
+  }
+}

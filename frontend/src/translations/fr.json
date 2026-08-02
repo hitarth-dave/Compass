@@ -1,0 +1,50 @@
+{
+  "common": {
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "delete": "Supprimer",
+    "sign_out": "Se déconnecter",
+    "sign_in": "Se connecter",
+    "loading": "Chargement…",
+    "new_chat": "Nouvelle discussion",
+    "add": "Ajouter",
+    "rename": "Renommer",
+    "confirm": "Confirmer",
+    "yes": "Oui",
+    "no": "Non",
+    "signed_in_as": "Connecté en tant que"
+  },
+  "nav": {
+    "dashboard": "Tableau de bord",
+    "conversation": "Conversation",
+    "projects": "Projets",
+    "muhurta": "Muhurta",
+    "library": "Bibliothèque",
+    "settings": "Paramètres",
+    "add_your_own_project": "Ajoutez votre propre projet"
+  },
+  "display_mode": {
+    "simple": "Simple",
+    "advanced": "Avancé"
+  },
+  "settings": {
+    "title": "Paramètres",
+    "profile_section": "Profil",
+    "name_label": "Nom",
+    "phone_label": "Téléphone",
+    "birth_details_section": "Détails de naissance",
+    "place_of_birth": "Lieu de naissance",
+    "date_of_birth": "Date de naissance",
+    "time_of_birth": "Heure de naissance",
+    "timezone_at_birth": "Fuseau horaire de naissance",
+    "current_location_section": "Position actuelle",
+    "current_location_hint": "Utilisé pour des transits quotidiens précis et le Panchang — différent de votre lieu de naissance",
+    "save_location": "Enregistrer la position",
+    "language_section": "Langue",
+    "language_label": "Langue de l'interface et du chat",
+    "language_hint": "Cela change la langue de l'application et la langue par défaut des réponses de Claude. Vous pouvez toujours poser une question dans une autre langue.",
+    "danger_zone": "Zone dangereuse",
+    "danger_zone_hint": "Attention — ces actions sont permanentes",
+    "delete_account": "Supprimer le compte"
+  }
+}
